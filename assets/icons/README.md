@@ -1,4 +1,4 @@
-# Icons
+# Icons test
 
 Planned: one atlas for room stamps + UI glyphs.
 
