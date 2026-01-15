@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MonsterItem" load_steps=3 format=3 uid="uid://bqjmbu0a2rf3x"]
+
+[ext_resource type="Script" path="res://scripts/items/Monster.gd" id="1_44ep5"]
+[ext_resource type="Texture2D" uid="uid://bsxciayar338t" path="res://assets/icons/Icon_Zombie.tres" id="2_zicon"]
+
+[resource]
+script = ExtResource("1_44ep5")
+id = "zombie"
+display_name = "Zombie"
+icon = ExtResource("2_zicon")
+max_hp = 5
+attack_damage = 1
+attack_interval = 1.0
+size = 1

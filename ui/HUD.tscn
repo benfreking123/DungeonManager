@@ -1,0 +1,170 @@
+[gd_scene load_steps=8 format=3 uid="uid://dhh6eeqqo51gg"]
+
+[ext_resource type="Script" path="res://ui/HUD.gd" id="1_2b4c7"]
+[ext_resource type="Script" path="res://scripts/DungeonView.gd" id="2_2t2p0"]
+[ext_resource type="Script" path="res://scripts/TownView.gd" id="3_5a7m1"]
+[ext_resource type="PackedScene" uid="uid://bqql0df1ll3f7" path="res://ui/InventoryBar.tscn" id="4_1l0qv"]
+[ext_resource type="Texture2D" uid="uid://2h616xe2qsmm" path="res://ui/PaperNoise.tres" id="5_paper"]
+[ext_resource type="PackedScene" uid="uid://d2m1q7p8xar3n" path="res://ui/RoomInventoryPanel.tscn" id="6_roominv"]
+[ext_resource type="PackedScene" uid="uid://c1hau6t8y2x4p" path="res://ui/GameOverPanel.tscn" id="7_gameover"]
+
+[node name="HUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+script = ExtResource("1_2b4c7")
+
+[node name="PaperBase" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.975, 0.95, 0.88, 1)
+
+[node name="PaperGrain" type="TextureRect" parent="."]
+modulate = Color(0, 0, 0, 0.055)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_paper")
+stretch_mode = 1
+
+[node name="TopBar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 44.0
+grow_horizontal = 2
+
+[node name="HBox" type="HBoxContainer" parent="TopBar"]
+custom_minimum_size = Vector2(10, 0)
+layout_mode = 2
+
+[node name="Spacer2" type="Control" parent="TopBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.03
+
+[node name="SpeedLabel" type="Label" parent="TopBar/HBox"]
+layout_mode = 2
+text = "Speed:"
+
+[node name="Speed1x" type="Button" parent="TopBar/HBox"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "1x"
+
+[node name="Speed2x" type="Button" parent="TopBar/HBox"]
+layout_mode = 2
+toggle_mode = true
+text = "2x"
+
+[node name="Speed4x" type="Button" parent="TopBar/HBox"]
+layout_mode = 2
+toggle_mode = true
+text = "4x"
+
+[node name="TreasureLabel" type="Label" parent="TopBar/HBox"]
+layout_mode = 2
+text = "Treasure: 0"
+
+[node name="Spacer" type="Control" parent="TopBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PowerLabel" type="Label" parent="TopBar/HBox"]
+layout_mode = 2
+text = "Power: 0/0"
+
+[node name="DayButton" type="Button" parent="TopBar/HBox"]
+layout_mode = 2
+text = "Start Day"
+
+[node name="DungeonFrame" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 58.0
+offset_right = -260.0
+offset_bottom = 14.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_type_variation = &"DungeonFrame"
+
+[node name="Dungeon" type="VBoxContainer" parent="DungeonFrame"]
+layout_mode = 2
+
+[node name="WorldFrame" type="Control" parent="DungeonFrame/Dungeon"]
+clip_contents = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 1
+
+[node name="WorldCanvas" type="VBoxContainer" parent="DungeonFrame/Dungeon/WorldFrame"]
+layout_mode = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Town" type="Control" parent="DungeonFrame/Dungeon/WorldFrame/WorldCanvas"]
+custom_minimum_size = Vector2(0, 110)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 1
+
+[node name="TownView" type="Control" parent="DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town"]
+layout_mode = 2
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+script = ExtResource("3_5a7m1")
+
+[node name="Grid" type="Control" parent="DungeonFrame/Dungeon/WorldFrame/WorldCanvas"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 1
+
+[node name="DungeonView" type="Control" parent="DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid"]
+layout_mode = 2
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_2t2p0")
+
+[node name="InventoryBar" parent="DungeonFrame/Dungeon" instance=ExtResource("4_1l0qv")]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RoomInventoryPanel" parent="." instance=ExtResource("6_roominv")]
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 0
+offset_left = 1000.0
+offset_top = 58.0
+offset_right = 1240.0
+offset_bottom = 645.0
+
+[node name="GameOverPanel" parent="." instance=ExtResource("7_gameover")]
+layout_mode = 1
+grow_horizontal = 2
+grow_vertical = 2

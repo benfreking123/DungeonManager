@@ -1,0 +1,15 @@
+{
+  "files.exclude": {
+    "**/.godot": true
+  },
+  "search.exclude": {
+    "**/.godot/**": true
+  },
+  "files.watcherExclude": {
+    "**/.godot/**": true
+  }
+}
+
+{
+    "godotTools.editorPath.godot4": "c:\\Users\\Ben\\Desktop\\Godot_v4.3-stable_win64.exe"
+}

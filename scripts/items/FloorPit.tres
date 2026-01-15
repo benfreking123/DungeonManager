@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="TrapItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/Trap.gd" id="1_0u8m6"]
+
+[resource]
+script = ExtResource("1_0u8m6")
+id = "floor_pit"
+display_name = "Floor Pit"
+proc_chance = 1.0
+damage = 3
+hits_all = true
+

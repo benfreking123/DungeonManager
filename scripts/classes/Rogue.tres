@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="AdventurerClass" load_steps=3 format=3 uid="uid://c2l4h22mcncv4"]
+
+[ext_resource type="Script" path="res://scripts/classes/AdventurerClass.gd" id="1_rog"]
+[ext_resource type="Texture2D" uid="uid://8o1r1bvhlpvn" path="res://assets/icons/IconClass_Rouge.tres" id="2_icon"]
+
+[resource]
+script = ExtResource("1_rog")
+id = "rogue"
+display_name = "Rogue"
+icon = ExtResource("2_icon")
+hp_max = 9
+attack_damage = 1
+attack_interval = 0.8

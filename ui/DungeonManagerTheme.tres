@@ -1,0 +1,133 @@
+[gd_resource type="Theme" load_steps=7 format=3 uid="uid://d1nyvccj27w6m"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_disabled"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0.95, 0.92, 0.84, 0.6)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.18)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0.985, 0.96, 0.9, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.42)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_normal"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0.97, 0.94, 0.86, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.32)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_pressed"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0.93, 0.89, 0.8, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.52)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frame_only"]
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.18, 0.13, 0.08, 0.5)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.975, 0.95, 0.88, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.35)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[resource]
+Button/colors/font_color = Color(0.18, 0.13, 0.08, 0.95)
+Button/colors/font_disabled_color = Color(0.18, 0.13, 0.08, 0.45)
+Button/colors/font_hover_color = Color(0.12, 0.09, 0.06, 1)
+Button/colors/font_pressed_color = Color(0.12, 0.09, 0.06, 1)
+Button/styles/disabled = SubResource("StyleBoxFlat_button_disabled")
+Button/styles/hover = SubResource("StyleBoxFlat_button_hover")
+Button/styles/normal = SubResource("StyleBoxFlat_button_normal")
+Button/styles/pressed = SubResource("StyleBoxFlat_button_pressed")
+Combat/colors/hp_back = Color(0, 0, 0, 0.22)
+Combat/colors/hp_outline = Color(0.72, 0.15, 0.12, 0.35)
+Combat/colors/monster_marker = Color(0.72, 0.15, 0.12, 0.95)
+Combat/colors/monster_marker_dim = Color(0.72, 0.15, 0.12, 0.35)
+DungeonFrame/styles/panel = SubResource("StyleBoxFlat_frame_only")
+DungeonView/colors/accent_bad = Color(1, 0.35, 0.35, 0.9)
+DungeonView/colors/accent_ok = Color(0.4, 0.95, 0.65, 0.9)
+DungeonView/colors/accent_warn = Color(1, 0.8, 0.35, 0.9)
+DungeonView/colors/grid_major = Color(0.18, 0.13, 0.08, 0.09)
+DungeonView/colors/grid_minor = Color(0.18, 0.13, 0.08, 0.05)
+DungeonView/colors/outline = Color(0.18, 0.13, 0.08, 0.6)
+DungeonView/colors/outline_dim = Color(0.18, 0.13, 0.08, 0.28)
+DungeonView/constants/grid_w = 1
+DungeonView/constants/icon_w = 2
+DungeonView/constants/outline_w = 2
+DungeonView/constants/room_outline_w = 2
+DungeonView/constants/slot_outline_w = 2
+HUD/colors/ink = Color(0.18, 0.13, 0.08, 0.95)
+HUD/colors/ink_dim = Color(0.18, 0.13, 0.08, 0.45)
+HUD/colors/paper_base = Color(0.975, 0.95, 0.88, 1)
+Label/colors/font_color = Color(0.18, 0.13, 0.08, 0.95)
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_panel")
+TownView/colors/bg = Color(0.975, 0.95, 0.88, 1)
+TownView/colors/line = Color(0.18, 0.13, 0.08, 0.6)
+TownView/colors/line_dim = Color(0.18, 0.13, 0.08, 0.28)
+TownView/constants/outline_w = 2

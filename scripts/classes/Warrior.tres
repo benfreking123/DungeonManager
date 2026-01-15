@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="AdventurerClass" load_steps=3 format=3 uid="uid://cp2uxrgw5k8tl"]
+
+[ext_resource type="Script" path="res://scripts/classes/AdventurerClass.gd" id="1_warr"]
+[ext_resource type="Texture2D" uid="uid://bx47brerkyh3d" path="res://assets/icons/IconClass_Warrior.tres" id="2_icon"]
+
+[resource]
+script = ExtResource("1_warr")
+id = "warrior"
+display_name = "Warrior"
+icon = ExtResource("2_icon")
+hp_max = 12
+attack_damage = 1
+attack_interval = 1.0

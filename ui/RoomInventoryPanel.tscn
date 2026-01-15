@@ -1,0 +1,24 @@
+[gd_scene load_steps=2 format=3 uid="uid://d2m1q7p8w9r3n"]
+
+[ext_resource type="Script" path="res://ui/RoomInventoryPanel.gd" id="1_7rpiq"]
+
+[node name="RoomInventoryPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(260, 0)
+size_flags_vertical = 3
+script = ExtResource("1_7rpiq")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Rooms"
+
+[node name="List" type="VBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="VBox"]
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+

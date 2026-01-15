@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Godot: Debug (via Godot Tools extension)",
+      "type": "godot",
+      "request": "launch",
+      "project": "${workspaceFolder}",
+      "launch_game_instance": true
+    }
+  ]
+}
+
+
+
