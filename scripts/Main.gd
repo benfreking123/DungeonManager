@@ -3,14 +3,20 @@ extends Node2D
 
 func _ready() -> void:
 	var hud := $UI/HUD
-	# Support both HUD layouts (with or without Body container).
-	var dungeon_view := get_node_or_null("UI/HUD/Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
+	# Support multiple HUD layouts (new VBoxContainer/HBoxContainer, legacy Body, flat).
+	var dungeon_view := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
+	if dungeon_view == null:
+		dungeon_view = get_node_or_null("UI/HUD/Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
 	if dungeon_view == null:
 		dungeon_view = get_node_or_null("UI/HUD/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
-	var town_view := get_node_or_null("UI/HUD/Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
+	var town_view := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
+	if town_view == null:
+		town_view = get_node_or_null("UI/HUD/Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
 	if town_view == null:
 		town_view = get_node_or_null("UI/HUD/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
-	var room_inventory_panel := get_node_or_null("UI/HUD/Body/RoomInventoryPanel")
+	var room_inventory_panel := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/RoomInventoryPanel")
+	if room_inventory_panel == null:
+		room_inventory_panel = get_node_or_null("UI/HUD/Body/RoomInventoryPanel")
 	if room_inventory_panel == null:
 		room_inventory_panel = get_node_or_null("UI/HUD/RoomInventoryPanel")
 

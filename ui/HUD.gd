@@ -1,11 +1,11 @@
 extends Control
 
-@onready var treasure_label: Label = $TopBar/HBox/TreasureLabel
-@onready var power_label: Label = $TopBar/HBox/PowerLabel
-@onready var day_button: Button = $TopBar/HBox/DayButton
-@onready var speed_1x: Button = $TopBar/HBox/Speed1x
-@onready var speed_2x: Button = $TopBar/HBox/Speed2x
-@onready var speed_4x: Button = $TopBar/HBox/Speed4x
+var treasure_label: Label = null
+var power_label: Label = null
+var day_button: Button = null
+var speed_1x: Button = null
+var speed_2x: Button = null
+var speed_4x: Button = null
 @onready var _simulation: Node = get_node("/root/Simulation")
 @onready var _game_over: PanelContainer = $GameOverPanel
 
@@ -26,9 +26,11 @@ const ZOOM_STEP := 1.12
 
 
 func _ready() -> void:
+	_resolve_topbar_nodes()
 	_resolve_world_nodes()
 	_apply_paper_theme()
-	day_button.pressed.connect(_on_day_pressed)
+	if day_button != null:
+		day_button.pressed.connect(_on_day_pressed)
 	_simulation.day_ended.connect(_on_day_ended)
 	if _simulation.has_signal("boss_killed"):
 		_simulation.connect("boss_killed", Callable(self, "_on_boss_killed"))
@@ -36,15 +38,58 @@ func _ready() -> void:
 		_game_over.connect("restart_requested", Callable(self, "_restart_game"))
 
 	var g := ButtonGroup.new()
-	speed_1x.button_group = g
-	speed_2x.button_group = g
-	speed_4x.button_group = g
+	if speed_1x != null:
+		speed_1x.button_group = g
+	if speed_2x != null:
+		speed_2x.button_group = g
+	if speed_4x != null:
+		speed_4x.button_group = g
 
-	speed_1x.pressed.connect(func(): GameState.set_speed(1.0))
-	speed_2x.pressed.connect(func(): GameState.set_speed(2.0))
-	speed_4x.pressed.connect(func(): GameState.set_speed(4.0))
+	if speed_1x != null:
+		speed_1x.pressed.connect(func(): GameState.set_speed(1.0))
+	if speed_2x != null:
+		speed_2x.pressed.connect(func(): GameState.set_speed(2.0))
+	if speed_4x != null:
+		speed_4x.pressed.connect(func(): GameState.set_speed(4.0))
 	_apply_world_transform()
 
+
+func _resolve_topbar_nodes() -> void:
+	# Support old and new layouts:
+	# - TopBar/HBox/...
+	# - VBoxContainer/TopBar/HBox/...
+	var bases := [
+		"TopBar/HBox",
+		"VBoxContainer/TopBar/HBox"
+	]
+	for base in bases:
+		var tl := get_node_or_null("%s/TreasureLabel" % base) as Label
+		var pl := get_node_or_null("%s/PowerLabel" % base) as Label
+		var db := get_node_or_null("%s/DayButton" % base) as Button
+		var s1 := get_node_or_null("%s/Speed1x" % base) as Button
+		var s2 := get_node_or_null("%s/Speed2x" % base) as Button
+		var s4 := get_node_or_null("%s/Speed4x" % base) as Button
+		if tl != null and pl != null and db != null and s1 != null and s2 != null and s4 != null:
+			treasure_label = tl
+			power_label = pl
+			day_button = db
+			speed_1x = s1
+			speed_2x = s2
+			speed_4x = s4
+			return
+	# Fallback to whatever was found, even if partial
+	if treasure_label == null:
+		treasure_label = get_node_or_null("TopBar/HBox/TreasureLabel") as Label
+	if power_label == null:
+		power_label = get_node_or_null("TopBar/HBox/PowerLabel") as Label
+	if day_button == null:
+		day_button = get_node_or_null("TopBar/HBox/DayButton") as Button
+	if speed_1x == null:
+		speed_1x = get_node_or_null("TopBar/HBox/Speed1x") as Button
+	if speed_2x == null:
+		speed_2x = get_node_or_null("TopBar/HBox/Speed2x") as Button
+	if speed_4x == null:
+		speed_4x = get_node_or_null("TopBar/HBox/Speed4x") as Button
 
 func _apply_paper_theme() -> void:
 	# Keep background nodes theme-driven (so changing the Theme updates everything).
@@ -58,9 +103,16 @@ func _apply_paper_theme() -> void:
 
 
 func _resolve_world_nodes() -> void:
-	# Support both HUD layouts (with or without Body container).
-	_world_frame = get_node_or_null("Body/DungeonFrame/Dungeon/WorldFrame") as Control
-	_world_canvas = get_node_or_null("Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas") as Control
+	# Support multiple HUD layouts.
+	# 1) New layout with VBoxContainer/HBoxContainer prefix
+	_world_frame = get_node_or_null("VBoxContainer/HBoxContainer/DungeonFrame/Dungeon/WorldFrame") as Control
+	_world_canvas = get_node_or_null("VBoxContainer/HBoxContainer/DungeonFrame/Dungeon/WorldFrame/WorldCanvas") as Control
+	# 2) Legacy layout with Body container
+	if _world_frame == null:
+		_world_frame = get_node_or_null("Body/DungeonFrame/Dungeon/WorldFrame") as Control
+	if _world_canvas == null:
+		_world_canvas = get_node_or_null("Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas") as Control
+	# 3) Flat layout without Body/VBoxContainer
 	if _world_frame == null:
 		_world_frame = get_node_or_null("DungeonFrame/Dungeon/WorldFrame") as Control
 	if _world_canvas == null:
@@ -71,21 +123,25 @@ func _on_day_pressed() -> void:
 	if GameState.phase == GameState.Phase.BUILD:
 		_simulation.call("start_day")
 		if GameState.phase == GameState.Phase.DAY:
-			day_button.text = "Day Running"
-			day_button.disabled = true
+			if day_button != null:
+				day_button.text = "Day Running"
+				day_button.disabled = true
 
 
 func _on_day_ended() -> void:
-	day_button.text = "Start Day"
-	day_button.disabled = false
+	if day_button != null:
+		day_button.text = "Start Day"
+		day_button.disabled = false
 
 
 func set_treasure(value: int) -> void:
-	treasure_label.text = "Treasure: %d" % value
+	if treasure_label != null:
+		treasure_label.text = "Treasure: %d" % value
 
 
 func set_power(used: int, cap: int) -> void:
-	power_label.text = "Power: %d/%d" % [used, cap]
+	if power_label != null:
+		power_label.text = "Power: %d/%d" % [used, cap]
 
 
 func _input(event: InputEvent) -> void:

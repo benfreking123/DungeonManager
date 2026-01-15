@@ -35,22 +35,14 @@ signal boss_killed()
 
 var _monster_scene: PackedScene = preload("res://scenes/MonsterActor.tscn")
 
-# Slightly smaller so units can pack without looking like they overlap.
-# (Non-boss units ~20% smaller than before.)
-# Adventurers a bit smaller still to avoid surface entrance jams.
 const COLLISION_RADIUS_ADV := 5.0
 const COLLISION_RADIUS_MON := 6.5
 const COLLISION_RADIUS_BOSS := 9.0
-# Softer collision resolution (less "pushing").
 const COLLISION_ITERATIONS := 1
 
-var _ai_by_adv_id: Dictionary = {} # int -> AdventurerAI
-
-# Party-level goal (all members share one goal for now).
-var _party_goal_cell_by_party_id: Dictionary = {} # int -> Vector2i
-var _party_regroup_target_by_party_id: Dictionary = {} # int -> Vector2i
-
-const PARTY_LEASH_CELLS := 2
+# New: central AI and path service
+var _party_ai: PartyAI
+var _path_service: PathService
 
 # adv_instance_id -> last reached cell (for retargeting / resume)
 var _adv_last_cell: Dictionary = {}
@@ -74,6 +66,11 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_item_db = get_node_or_null("/root/ItemDB")
 	_combat = preload("res://autoloads/Simulation_Combat.gd").new()
 	_combat.call("setup", _dungeon_view, _dungeon_grid, self)
+	# Initialize AI services
+	_path_service = preload("res://scripts/nav/PathService.gd").new()
+	_path_service.setup(_dungeon_grid)
+	_party_ai = preload("res://scripts/ai/PartyAI.gd").new()
+	_party_ai.setup(_dungeon_grid, _path_service)
 
 
 func start_day() -> void:
@@ -96,9 +93,6 @@ func start_day() -> void:
 	_adv_last_room.clear()
 	_adv_last_cell.clear()
 	_adv_was_in_combat.clear()
-	_ai_by_adv_id.clear()
-	_party_goal_cell_by_party_id.clear()
-	_party_regroup_target_by_party_id.clear()
 	room_spawners_by_room_id.clear()
 	if _combat != null:
 		_combat.call("reset")
@@ -120,8 +114,6 @@ func end_day() -> void:
 	_adv_last_room.clear()
 	_adv_last_cell.clear()
 	_adv_was_in_combat.clear()
-	_ai_by_adv_id.clear()
-	_party_regroup_target_by_party_id.clear()
 	_clear_all_monster_actors()
 	room_spawners_by_room_id.clear()
 	if _combat != null:
@@ -198,16 +190,10 @@ func _begin_party_spawn() -> void:
 		return
 
 	var start_cell: Vector2i = entrance.get("pos", Vector2i.ZERO)
-	# Party goal: weighted goals (boss/treasure/etc).
-	var initial_goal: Vector2i = start_cell
-	if _dungeon_grid != null:
-		var ai_tmp: AdventurerAI = AdventurerAI.new(1)
-		initial_goal = ai_tmp.pick_goal_cell_weighted(_dungeon_grid, start_cell)
-	_party_goal_cell_by_party_id[1] = initial_goal
+	# Party goal: decided by PartyAI (boss-first, fallback weighted).
+	var initial_goal: Vector2i = _party_ai.decide_initial_goal(1, start_cell)
 
-	var path: Array[Vector2i] = _dungeon_grid.call("find_path", start_cell, initial_goal) as Array[Vector2i]
-	if path.is_empty():
-		path = [start_cell]
+	var path: Array[Vector2i] = _party_ai.compute_initial_path(start_cell, initial_goal)
 
 	var spawn_world := _town_view.call("get_spawn_world_pos") as Vector2
 	var entrance_world := _dungeon_view.call("entrance_surface_world_pos") as Vector2
@@ -269,9 +255,6 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 	_adventurers.append(adv)
 	_adv_was_in_combat[int(adv.get_instance_id())] = false
 
-	var ai := AdventurerAI.new(int(adv.get_instance_id()))
-	_ai_by_adv_id[int(adv.get_instance_id())] = ai
-
 
 func _on_adventurer_finished(adv: Node2D) -> void:
 	# End-of-path: pick a new goal and continue exploring.
@@ -285,7 +268,24 @@ func _on_adventurer_finished(adv: Node2D) -> void:
 	var from_cell: Vector2i = _adv_last_cell.get(aid, Vector2i(-1, -1))
 	if from_cell == Vector2i(-1, -1):
 		return
-	_retarget_party_from_cell(int(adv.get("party_id")), from_cell)
+	var pid := int(adv.get("party_id"))
+	_party_ai.retarget_from_cell(pid, from_cell)
+	# Apply paths for party toward new goal
+	var cells_by_adv := {}
+	for a2 in _adventurers:
+		if not is_instance_valid(a2):
+			continue
+		if int(a2.get("party_id")) != pid:
+			continue
+		var aid2: int = int(a2.get_instance_id())
+		cells_by_adv[aid2] = _adv_last_cell.get(aid2, from_cell)
+	var updates: Dictionary = _party_ai.paths_to_current_goal(pid, cells_by_adv)
+	for k in updates.keys():
+		var aid3: int = int(k)
+		var p: Array[Vector2i] = updates[k]
+		for a3 in _adventurers:
+			if is_instance_valid(a3) and int(a3.get_instance_id()) == aid3 and not bool(a3.get("in_combat")):
+				a3.call("set_path", p)
 
 
 func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
@@ -321,39 +321,32 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 	if bool(adv.get("in_combat")):
 		return
 	var party_id: int = int(adv.get("party_id"))
-	var party_goal: Vector2i = _party_goal_cell_by_party_id.get(party_id, Vector2i(-1, -1))
+	var party_goal: Vector2i = _party_ai.get_current_goal(party_id)
 	if party_goal == Vector2i(-1, -1):
-		_party_goal_cell_by_party_id[party_id] = cell
+		_party_ai.retarget_from_cell(party_id, cell)
 		return
 	# If the party reached its current goal room, pick a new party goal.
 	if cell == party_goal:
-		_retarget_party_from_cell(party_id, cell)
+		_party_ai.retarget_from_cell(party_id, cell)
+		# Apply fresh paths to members toward the new goal.
+		var cells_by_adv := {}
+		for a2 in _adventurers:
+			if not is_instance_valid(a2):
+				continue
+			if int(a2.get("party_id")) != party_id:
+				continue
+			var aid2: int = int(a2.get_instance_id())
+			cells_by_adv[aid2] = _adv_last_cell.get(aid2, cell)
+		var updates: Dictionary = _party_ai.paths_to_current_goal(party_id, cells_by_adv)
+		for k in updates.keys():
+			var aid3: int = int(k)
+			var p: Array[Vector2i] = updates[k]
+			for a3 in _adventurers:
+				if is_instance_valid(a3) and int(a3.get_instance_id()) == aid3 and not bool(a3.get("in_combat")):
+					a3.call("set_path", p)
 
 
-func _retarget_adv(adv: Node2D, from_cell: Vector2i) -> bool:
-	if _dungeon_grid == null:
-		return false
-	if not is_instance_valid(adv):
-		return false
-	var aid: int = int(adv.get_instance_id())
-
-	var ai: AdventurerAI = _ai_by_adv_id.get(aid, null) as AdventurerAI
-	if ai == null:
-		ai = AdventurerAI.new(aid)
-		_ai_by_adv_id[aid] = ai
-	ai.mark_visited(from_cell)
-
-	var goal: Vector2i = ai.pick_goal_cell_weighted(_dungeon_grid, from_cell)
-	var new_path: Array[Vector2i] = _dungeon_grid.call("find_path", from_cell, goal) as Array[Vector2i]
-	# Only remove the current cell if there's at least one more step; otherwise the adventurer
-	# will walk back to the cell center (useful after combat formation animation) then retarget again.
-	if new_path.size() > 1 and new_path[0] == from_cell:
-		new_path.remove_at(0)
-	adv.call("set_path", new_path)
-	# If the adventurer was marked DONE, nudge them back into dungeon movement.
-	if int(adv.get("phase")) == 2 and not new_path.is_empty():
-		adv.set("phase", 1)
-	return true
+#
 
 
 func _on_party_combat_ended(adv_id: int) -> void:
@@ -374,12 +367,10 @@ func _on_party_combat_ended(adv_id: int) -> void:
 	# Determine the room the party was in last, and a regroup target cell (room center).
 	var room_id: int = int(_adv_last_room.get(adv_id, 0))
 	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary
-	var regroup: Vector2i = _room_center_cell(room, _adv_last_cell.get(adv_id, Vector2i(-1, -1)))
+	var regroup: Vector2i = _party_ai.on_combat_ended(party_id, room, _adv_last_cell.get(adv_id, Vector2i(-1, -1)))
 	if regroup == Vector2i(-1, -1):
 		return
 
-	_party_regroup_target_by_party_id[party_id] = regroup
-	_party_goal_cell_by_party_id[party_id] = regroup
 	DbgLog.log("Combat ended: party=%d regroup_to=%s" % [party_id, str(regroup)], "adventurers")
 
 	for a2 in _adventurers:
@@ -394,135 +385,28 @@ func _on_party_combat_ended(adv_id: int) -> void:
 		var one_step: Array[Vector2i] = [regroup]
 		a2.call("set_path", one_step)
 
-
-func _retarget_party_from_cell(party_id: int, from_cell: Vector2i) -> void:
-	if _dungeon_grid == null:
-		return
-	# Use a stable party AI keyed by party id.
-	var ai: AdventurerAI = _ai_by_adv_id.get(party_id, null) as AdventurerAI
-	if ai == null:
-		ai = AdventurerAI.new(party_id)
-		_ai_by_adv_id[party_id] = ai
-	ai.mark_visited(from_cell)
-
-	# Boss-first (primary win condition): if the boss room is reachable, always target it.
-	var goal: Vector2i = Vector2i(-1, -1)
-	var boss_room: Dictionary = _dungeon_grid.call("get_first_room_of_kind", "boss") as Dictionary
-	if not boss_room.is_empty():
-		var boss_pos: Vector2i = boss_room.get("pos", Vector2i(-1, -1))
-		var boss_center: Vector2i = _room_center_cell(boss_room, boss_pos)
-		var p_center: Array[Vector2i] = _dungeon_grid.call("find_path", from_cell, boss_center) as Array[Vector2i]
-		var p_pos: Array[Vector2i] = _dungeon_grid.call("find_path", from_cell, boss_pos) as Array[Vector2i]
-		if not p_center.is_empty():
-			goal = boss_center
-		elif not p_pos.is_empty():
-			goal = boss_pos
-		else:
-			DbgLog.warn("Boss not reachable from=%s boss_pos=%s boss_center=%s" % [str(from_cell), str(boss_pos), str(boss_center)], "adventurers")
-
-	if goal == Vector2i(-1, -1):
-		goal = ai.pick_goal_cell_weighted(_dungeon_grid, from_cell)
-	_party_goal_cell_by_party_id[party_id] = goal
-	DbgLog.log("Party %d new_goal=%s from=%s" % [party_id, str(goal), str(from_cell)], "adventurers")
-
-	# Assign all party members a new path from their current last cell.
+func _tick_party_regroup() -> void:
+	# Ask PartyAI for any path updates (regroup/leash) and apply them.
+	# Only one party for now (id=1), but keep generic by discovering parties from members.
+	var parties := {}
 	for a in _adventurers:
 		if not is_instance_valid(a):
 			continue
-		if int(a.get("party_id")) != party_id:
-			continue
 		if bool(a.get("in_combat")):
 			continue
-		var aid: int = int(a.get_instance_id())
-		var start: Vector2i = _adv_last_cell.get(aid, from_cell)
-		var p: Array[Vector2i] = _dungeon_grid.call("find_path", start, goal) as Array[Vector2i]
-		if p.size() > 1 and p[0] == start:
-			p.remove_at(0)
-		a.call("set_path", p)
-		DbgLog.log("Party %d path adv=%d start=%s goal=%s len=%d" % [party_id, aid, str(start), str(goal), p.size()], "adventurers")
-
-
-func _tick_party_regroup() -> void:
-	# Very simple leash: if party members are spread out by > PARTY_LEASH_CELLS (Manhattan),
-	# force the farthest ones to path toward the current party goal anchor.
-	if _dungeon_grid == null:
-		return
-	# Only one party for now, but keep it generic.
-	for party_id in _party_goal_cell_by_party_id.keys():
-		var pid: int = int(party_id)
-		var goal: Vector2i = _party_goal_cell_by_party_id.get(pid, Vector2i(-1, -1))
-		if goal == Vector2i(-1, -1):
-			continue
-
-		var regroup_target: Vector2i = _party_regroup_target_by_party_id.get(pid, Vector2i(-1, -1))
-		var members: Array[Node2D] = []
-		var cells: Array[Vector2i] = []
-		for a in _adventurers:
-			if not is_instance_valid(a):
-				continue
-			if int(a.get("party_id")) != pid:
-				continue
-			members.append(a)
-			var aid: int = int(a.get_instance_id())
-			cells.append(_adv_last_cell.get(aid, Vector2i(-1, -1)))
-		if members.size() <= 1:
-			continue
-
-		# If we're regrouping (post-combat), pull everyone toward the regroup_target and
-		# once they're close enough, pick the next party goal.
-		if regroup_target != Vector2i(-1, -1):
-			var all_close := true
-			for c in cells:
-				if c == Vector2i(-1, -1):
-					all_close = false
-					break
-				var d: int = abs(c.x - regroup_target.x) + abs(c.y - regroup_target.y)
-				if d > PARTY_LEASH_CELLS:
-					all_close = false
-					break
-			if all_close:
-				_party_regroup_target_by_party_id.erase(pid)
-				_retarget_party_from_cell(pid, regroup_target)
-				continue
-
-			# Not all close: force paths toward regroup target.
-			for i in range(members.size()):
-				var a2 := members[i]
-				if bool(a2.get("in_combat")):
-					continue
-				var c2: Vector2i = cells[i]
-				if c2 == Vector2i(-1, -1):
-					continue
-				var p_to: Array[Vector2i] = _dungeon_grid.call("find_path", c2, regroup_target) as Array[Vector2i]
-				if p_to.size() > 1 and p_to[0] == c2:
-					p_to.remove_at(0)
-				a2.call("set_path", p_to)
-			continue
-
-		# Compute a leader cell as the median-ish: use first valid.
-		var leader_cell := Vector2i(-1, -1)
-		for c in cells:
-			if c != Vector2i(-1, -1):
-				leader_cell = c
-				break
-		if leader_cell == Vector2i(-1, -1):
-			continue
-
-		for i in range(members.size()):
-			var a2 := members[i]
-			if bool(a2.get("in_combat")):
-				continue
-			var c2: Vector2i = cells[i]
-			if c2 == Vector2i(-1, -1):
-				continue
-			var dist: int = abs(c2.x - leader_cell.x) + abs(c2.y - leader_cell.y)
-			if dist <= PARTY_LEASH_CELLS:
-				continue
-			# Straggler: path toward leader_cell first (regroup).
-			var p: Array[Vector2i] = _dungeon_grid.call("find_path", c2, leader_cell) as Array[Vector2i]
-			if p.size() > 1 and p[0] == c2:
-				p.remove_at(0)
-			a2.call("set_path", p)
+		var pid := int(a.get("party_id"))
+		var aid := int(a.get_instance_id())
+		if not parties.has(pid):
+			parties[pid] = {}
+		parties[pid][aid] = _adv_last_cell.get(aid, Vector2i(-1, -1))
+	for pid2 in parties.keys():
+		var updates: Dictionary = _party_ai.tick_regroup_and_paths(int(pid2), parties[pid2])
+		for k in updates.keys():
+			var aid4: int = int(k)
+			var p4: Array[Vector2i] = updates[k]
+			for a4 in _adventurers:
+				if is_instance_valid(a4) and int(a4.get_instance_id()) == aid4 and not bool(a4.get("in_combat")):
+					a4.call("set_path", p4)
 
 
 func _room_center_cell(room: Dictionary, fallback: Vector2i) -> Vector2i:
