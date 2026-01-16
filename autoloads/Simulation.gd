@@ -13,8 +13,12 @@ const DUNGEON_SPEED := 52.0
 const SPAWN_SECONDS_PER_SIZE := 5.0
 const PARTY_SPAWN_INTERVAL := 0.1
 
+# Render above the grid paper/lines (which live under WorldCanvas/Grid with z_index=1).
+const ACTOR_Z_INDEX := 5
+
 var _town_view: Control
 var _dungeon_view: Control
+var _world_canvas: CanvasItem
 
 var _active: bool = false
 var _adventurers: Array[Node2D] = []
@@ -35,9 +39,9 @@ signal boss_killed()
 
 var _monster_scene: PackedScene = preload("res://scenes/MonsterActor.tscn")
 
-const COLLISION_RADIUS_ADV := 5.0
-const COLLISION_RADIUS_MON := 6.5
-const COLLISION_RADIUS_BOSS := 9.0
+const COLLISION_RADIUS_ADV := 2.5
+const COLLISION_RADIUS_MON := 3.25
+const COLLISION_RADIUS_BOSS := 4.5
 const COLLISION_ITERATIONS := 1
 
 # New: central AI and path service
@@ -61,6 +65,14 @@ var _adv_scene: PackedScene = preload("res://scenes/Adventurer.tscn")
 func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_town_view = town_view
 	_dungeon_view = dungeon_view
+	# Use the shared WorldCanvas (parent of Town and Grid) as the simulation space.
+	# This keeps pan/zoom purely aesthetic: zoom scales WorldCanvas, but local positions remain stable.
+	var wc: Node = null
+	if _town_view != null and _town_view.get_parent() != null:
+		wc = _town_view.get_parent().get_parent()
+	if wc == null and _dungeon_view != null and _dungeon_view.get_parent() != null:
+		wc = _dungeon_view.get_parent().get_parent()
+	_world_canvas = wc as CanvasItem
 	_dungeon_grid = get_node_or_null("/root/DungeonGrid")
 	_room_db = get_node_or_null("/root/RoomDB")
 	_item_db = get_node_or_null("/root/ItemDB")
@@ -127,12 +139,6 @@ func _process(delta: float) -> void:
 		return
 	var dt: float = delta * GameState.speed
 
-	# Camera is visual-only: if the user pans/zooms the UI, the entrance world position changes.
-	# Retarget SURFACE-walking adventurers each frame so they keep walking to the entrance.
-	var entrance_world: Vector2 = Vector2.ZERO
-	if _dungeon_view != null:
-		entrance_world = _dungeon_view.call("entrance_surface_world_pos") as Vector2
-
 	_tick_party_spawn(dt)
 	_tick_spawners(dt)
 	if _combat != null:
@@ -160,8 +166,6 @@ func _process(delta: float) -> void:
 			if was_in_combat and not now_in_combat:
 				_on_party_combat_ended(aid)
 
-			if entrance_world != Vector2.ZERO and int(a.get("phase")) == 0 and not bool(a.get("in_combat")):
-				a.call("set_surface_target", entrance_world, SURFACE_SPEED)
 			a.call("tick", dt)
 			alive.append(a)
 	_adventurers = alive
@@ -231,7 +235,12 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 	var path: Array[Vector2i] = _party_spawn_ctx.get("path", []) as Array[Vector2i]
 
 	var adv := _adv_scene.instantiate() as Node2D
-	_town_view.add_child(adv)
+	if _world_canvas != null:
+		_world_canvas.add_child(adv)
+	else:
+		_town_view.add_child(adv)
+	adv.z_index = ACTOR_Z_INDEX
+	adv.z_as_relative = false
 	# Spawn as a tight cluster on the ground with a tiny scatter (2–4px) so they read as one party.
 	var scatter := [
 		Vector2(0, 0),
@@ -239,7 +248,11 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 		Vector2(-2, 2),
 		Vector2(2, 3),
 	]
-	adv.global_position = spawn_world + scatter[idx % scatter.size()]
+	if _world_canvas != null:
+		var inv_wc: Transform2D = _world_canvas.get_global_transform().affine_inverse()
+		adv.position = (inv_wc * spawn_world) + scatter[idx % scatter.size()]
+	else:
+		adv.position = _town_view.get_global_transform().affine_inverse() * (spawn_world + scatter[idx % scatter.size()])
 	adv.set("party_id", 1)
 
 	var cls_res: Resource = null
@@ -248,7 +261,12 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 	adv.call("apply_class", cls_res)
 
 	adv.set_meta("collision_radius", COLLISION_RADIUS_ADV)
-	adv.call("set_surface_target", entrance_world, SURFACE_SPEED)
+	# Store the surface target in WorldCanvas-local space so camera transforms don't affect movement.
+	if _world_canvas != null:
+		var inv_wc2: Transform2D = _world_canvas.get_global_transform().affine_inverse()
+		adv.call("set_surface_target_local", inv_wc2 * entrance_world, SURFACE_SPEED)
+	else:
+		adv.call("set_surface_target", entrance_world, SURFACE_SPEED)
 	adv.call("set_dungeon_targets", _dungeon_view, path, DUNGEON_SPEED)
 	adv.call("set_on_reach_goal", Callable(self, "_on_adventurer_finished").bind(adv))
 	adv.connect("cell_reached", Callable(self, "_on_adventurer_cell_reached").bind(adv))
@@ -542,6 +560,7 @@ func _spawn_boss() -> void:
 		"size": mi.size,
 		"attack_damage": mi.attack_damage,
 		"attack_interval": mi.attack_interval,
+		"range": mi.range,
 		"attack_timer": 0.0,
 		"actor": actor,
 	}]
@@ -606,12 +625,23 @@ func _spawn_monster_instance(room_id: int, mi: MonsterItem, idx: int) -> Diction
 	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary if _dungeon_grid != null else {}
 
 	var actor: Node2D = _monster_scene.instantiate() as Node2D
-	if _dungeon_view != null:
+	if _world_canvas != null and _dungeon_view != null:
+		_world_canvas.add_child(actor)
+		var inv_wc3: Transform2D = _world_canvas.get_global_transform().affine_inverse()
+		var base_local: Vector2 = Vector2.ZERO
+		if not room.is_empty():
+			var room_center_local: Vector2 = _dungeon_view.call("room_center_local", room) as Vector2
+			var room_center_world: Vector2 = (_dungeon_view as CanvasItem).get_global_transform() * room_center_local
+			base_local = inv_wc3 * room_center_world
+		actor.position = base_local + Vector2(-12.0 + float(idx) * 12.0, 10.0)
+	elif _dungeon_view != null:
 		_dungeon_view.add_child(actor)
 		var base: Vector2 = Vector2.ZERO
 		if not room.is_empty():
 			base = _dungeon_view.call("room_center_local", room) as Vector2
 		actor.position = base + Vector2(-12.0 + float(idx) * 12.0, 10.0)
+	actor.z_index = ACTOR_Z_INDEX
+	actor.z_as_relative = false
 	actor.call("set_hp", mi.max_hp, mi.max_hp)
 	actor.call("set_icon", mi.icon)
 	actor.set_meta("collision_radius", COLLISION_RADIUS_MON)
@@ -624,6 +654,7 @@ func _spawn_monster_instance(room_id: int, mi: MonsterItem, idx: int) -> Diction
 		"size": mi.size,
 		"attack_damage": mi.attack_damage,
 		"attack_interval": mi.attack_interval,
+		"range": mi.range,
 		"attack_timer": 0.0,
 		"actor": actor,
 	}
@@ -663,26 +694,21 @@ func _resolve_soft_collisions() -> void:
 	if bodies.size() <= 1:
 		return
 
-	# If the UI is zoomed, CanvasItem global distances scale by zoom, but our radii are in unzoomed units.
-	# Compensate so zoom has ZERO effect on collision behavior.
-	var zoom_scale: float = 1.0
-	if _dungeon_view != null:
-		zoom_scale = float((_dungeon_view as CanvasItem).get_global_transform().get_scale().x)
-	zoom_scale = max(0.0001, zoom_scale)
-
 	for _it in range(COLLISION_ITERATIONS):
 		for i in range(bodies.size()):
 			var a := bodies[i]
 			if not is_instance_valid(a):
 				continue
-			var ra: float = float(a.get_meta("collision_radius", 10.0)) * zoom_scale
+			var ra: float = float(a.get_meta("collision_radius", 10.0))
 			for j in range(i + 1, bodies.size()):
 				var b := bodies[j]
 				if not is_instance_valid(b):
 					continue
-				var rb: float = float(b.get_meta("collision_radius", 10.0)) * zoom_scale
+				var rb: float = float(b.get_meta("collision_radius", 10.0))
 
-				var delta := b.global_position - a.global_position
+				# Use local positions so UI zoom/pan can't affect simulation.
+				# (All sim actors are parented to WorldCanvas when available.)
+				var delta := b.position - a.position
 				var dist := delta.length()
 				var min_dist := ra + rb
 				if dist >= min_dist:
@@ -697,5 +723,5 @@ func _resolve_soft_collisions() -> void:
 					dir = Vector2(cos(rng_seed), sin(rng_seed)).normalized()
 
 				var push := (min_dist - dist) * 0.5
-				a.global_position -= dir * push
-				b.global_position += dir * push
+				a.position -= dir * push
+				b.position += dir * push

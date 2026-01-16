@@ -6,6 +6,11 @@ const TOWN_BOX_W := 220.0
 const PAD := 12.0
 const SHIFT_LEFT := 220.0
 
+const TOWN_ICON: Texture2D = preload("res://assets/icons/town/IconSmallVillage.tres")
+const TOWN_ICON_DRAW_SCALE := 2.0
+const TOWN_ICON_Y_OFFSET := -5.0
+const TOWN_SPAWN_Y_OFFSET_PX := 50.0
+
 var _dungeon_view: Node = null
 
 # Theme keys live in `ui/DungeonManagerTheme.tres` under `TownView/...`.
@@ -14,6 +19,32 @@ const THEME_TYPE := "TownView"
 # Back-compat fallback (if dungeon view not set yet)
 var entrance_world_pos: Vector2 = Vector2.ZERO
 var entrance_cap_world_rect: Rect2 = Rect2()
+
+func _town_icon_rect_local() -> Rect2:
+	if TOWN_ICON == null:
+		return Rect2()
+	var icon_size := TOWN_ICON.get_size()
+	if icon_size.x <= 0.0 or icon_size.y <= 0.0:
+		return Rect2()
+
+	var max_h := maxf(1.0, size.y - PAD * 2.0)
+	var icon_scale := (max_h / maxf(1.0, icon_size.y)) * TOWN_ICON_DRAW_SCALE
+	var w := icon_size.x * icon_scale
+	var h := icon_size.y * icon_scale
+
+	# Keep within a reasonable width (prevents it from swallowing the whole strip).
+	var max_w := TOWN_BOX_W * TOWN_ICON_DRAW_SCALE
+	if w > max_w:
+		var s2 := max_w / w
+		w *= s2
+		h *= s2
+
+	var town_pos := Vector2(
+		size.x - PAD - SHIFT_LEFT - w,
+		PAD + (max_h - h) * 0.5 + TOWN_ICON_Y_OFFSET
+	)
+	return Rect2(town_pos, Vector2(w, h))
+
 
 func _ready() -> void:
 	queue_redraw()
@@ -43,7 +74,13 @@ func set_entrance_cap_world_rect(r: Rect2) -> void:
 
 
 func get_spawn_world_pos() -> Vector2:
-	# Spawn on the "ground" in the town strip, near the right side.
+	# Spawn at the center of the village icon.
+	var local_rect := _town_icon_rect_local()
+	if local_rect != Rect2():
+		var c_local := local_rect.position + local_rect.size * 0.5
+		return (get_global_transform() * c_local) + Vector2(0, TOWN_SPAWN_Y_OFFSET_PX)
+
+	# Fallback: old "ground" spawn near right side.
 	var r := get_global_rect()
 	return Vector2(r.position.x + r.size.x - PAD - 24.0 - SHIFT_LEFT, r.position.y + r.size.y - PAD - 10.0)
 
@@ -55,29 +92,14 @@ func _draw() -> void:
 	var outline_w := float(_tconst("outline_w", int(BlueprintTheme.OUTLINE_W)))
 
 	# Background strip
-	draw_rect(Rect2(Vector2.ZERO, size), bg, true)
+	# Keep transparent so the HUD paper grain shows through.
+	draw_rect(Rect2(Vector2.ZERO, size), Color(bg.r, bg.g, bg.b, 0.0), true)
 	draw_rect(Rect2(Vector2.ZERO, size), line_dim, false, outline_w)
 
-	# Town box on the top-right
-	var town_rect := Rect2(Vector2(size.x - TOWN_BOX_W - PAD - SHIFT_LEFT, PAD), Vector2(TOWN_BOX_W, size.y - PAD * 2.0))
-	draw_rect(town_rect, Color(0, 0, 0, 0), false, 2.0) # intentionally transparent fill
-	draw_rect(town_rect, line, false, 2.0)
-
-	# Label-ish mark
-	var c := town_rect.position + town_rect.size * 0.5
-	draw_line(c + Vector2(-26, 0), c + Vector2(26, 0), line, 2.0)
-	draw_line(c + Vector2(0, -10), c + Vector2(0, 10), line, 2.0)
-
-	# Connection to entrance (surface travel line)
-	var entrance_world: Vector2 = entrance_world_pos
-	if _dungeon_view != null and is_instance_valid(_dungeon_view):
-		entrance_world = _dungeon_view.call("entrance_surface_world_pos") as Vector2
-
-	if entrance_world != Vector2.ZERO:
-		var inv: Transform2D = get_global_transform().affine_inverse()
-		var spawn: Vector2 = inv * get_spawn_world_pos()
-		var e: Vector2 = inv * entrance_world
-		draw_line(spawn, e, line_dim, 2.0)
+	# Town icon on the top-right (replaces old square + label mark).
+	var town_rect := _town_icon_rect_local()
+	if town_rect != Rect2():
+		draw_texture_rect(TOWN_ICON, town_rect, true, Color(1, 1, 1, 1))
 
 	# Entrance cap (above ground): 2x1 stamp just before the dungeon.
 	var cap_world: Rect2 = entrance_cap_world_rect

@@ -1,0 +1,7 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3 uid="uid://cd0id0f5i8efx"]
+
+[ext_resource type="Texture2D" uid="uid://bvdkxdivdyfvw" path="res://assets/ChatGPT Image Jan 14, 2026, 12_39_41 PM.png" id="1_vj4ni"]
+
+[resource]
+atlas = ExtResource("1_vj4ni")
+region = Rect2(496, 352, 224, 224)

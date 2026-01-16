@@ -3,13 +3,18 @@ extends Control
 # MVP blueprint renderer: draws the underground grid area.
 
 signal status_changed(text: String)
+signal preview_reason_changed(text: String, ok: bool)
 
-const DEFAULT_CELL_PX := 24
+const DEFAULT_CELL_PX := 36
+const ICON_BASE_CELL_PX := 24
 
 const MAJOR_EVERY := 4
 
 const ROOM_OUTLINE_W := 2.0
 const ICON_W := 2.0
+
+# Grid background texture (paper).
+const PAPER_BG_TEX: Texture2D = preload("res://assets/simple-old-paper-1.jpg")
 
 var selected_type_id: String = "hall"
 var hover_cell: Vector2i = Vector2i(-999, -999)
@@ -23,6 +28,19 @@ const THEME_TYPE := "DungeonView"
 # While dragging a room inventory item, we preview that room size.
 var _drag_room_type_id: String = ""
 
+# Lightweight "stamp" FX state for successful drops.
+const STAMP_DUR_S := 0.22
+var _stamp_room_rect: Rect2 = Rect2()
+var _stamp_room_t0: float = -999.0
+var _stamp_room_jitter: Vector2 = Vector2.ZERO
+
+var _stamp_slot_rect: Rect2 = Rect2()
+var _stamp_slot_t0: float = -999.0
+var _stamp_slot_jitter: Vector2 = Vector2.ZERO
+
+var _preview_last_ok: bool = true
+var _preview_last_text: String = ""
+
 @onready var _room_db: Node = get_node_or_null("/root/RoomDB")
 @onready var _dungeon_grid: Node = get_node_or_null("/root/DungeonGrid")
 @onready var _game_state: Node = get_node_or_null("/root/GameState")
@@ -35,6 +53,163 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_process(true)
 	queue_redraw()
+
+
+func _now_s() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
+
+
+func _trigger_room_stamp(rect: Rect2) -> void:
+	_stamp_room_rect = rect
+	_stamp_room_t0 = _now_s()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(Time.get_ticks_usec())
+	_stamp_room_jitter = Vector2(rng.randf_range(-2.0, 2.0), rng.randf_range(-2.0, 2.0))
+	queue_redraw()
+
+
+func _trigger_slot_stamp(rect: Rect2) -> void:
+	_stamp_slot_rect = rect
+	_stamp_slot_t0 = _now_s()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(Time.get_ticks_usec()) ^ 0x9E3779B9
+	_stamp_slot_jitter = Vector2(rng.randf_range(-1.5, 1.5), rng.randf_range(-1.5, 1.5))
+	queue_redraw()
+
+
+func _draw_stamp_rect(rect: Rect2, col: Color, t: float, jitter: Vector2) -> void:
+	# t: 0..1. Expands and fades.
+	var grow := lerpf(0.0, 8.0, t)
+	var a := lerpf(0.85, 0.0, t)
+	var r := rect.grow(grow)
+	r.position += jitter
+	draw_rect(r, Color(col.r, col.g, col.b, col.a * a), false, 2.0)
+	draw_rect(r.grow(-2.0), Color(col.r, col.g, col.b, col.a * a * 0.08), true)
+
+
+func _preview_reason_text(reason_key: String) -> String:
+	match reason_key:
+		"overlap":
+			return "Overlaps another room."
+		"not_enough_power":
+			return "Not enough power."
+		"out_of_bounds":
+			return "Out of bounds."
+		"unique_room_already_placed":
+			return "Only one of that room."
+		_:
+			return ""
+
+
+func _update_preview_reason(ok: bool, reason_key: String) -> void:
+	var text := "" if ok else _preview_reason_text(reason_key)
+	if text == _preview_last_text and ok == _preview_last_ok:
+		return
+	_preview_last_text = text
+	_preview_last_ok = ok
+	preview_reason_changed.emit(text, ok)
+
+
+func _draw_dashed_line(a: Vector2, b: Vector2, col: Color, width: float, dash_len: float, gap_len: float) -> void:
+	var dir := b - a
+	var seg_len := dir.length()
+	if seg_len <= 0.001:
+		return
+	dir /= seg_len
+	var t := 0.0
+	while t < seg_len:
+		var seg_a := a + dir * t
+		var seg_b := a + dir * minf(t + dash_len, seg_len)
+		draw_line(seg_a, seg_b, col, width)
+		t += dash_len + gap_len
+
+
+func _draw_dashed_rect(rect: Rect2, col: Color, width: float) -> void:
+	var dash := 8.0
+	var gap := 5.0
+	var tl := rect.position
+	var tr_p := rect.position + Vector2(rect.size.x, 0)
+	var bl := rect.position + Vector2(0, rect.size.y)
+	var br := rect.position + rect.size
+	_draw_dashed_line(tl, tr_p, col, width, dash, gap)
+	_draw_dashed_line(tr_p, br, col, width, dash, gap)
+	_draw_dashed_line(br, bl, col, width, dash, gap)
+	_draw_dashed_line(bl, tl, col, width, dash, gap)
+
+
+func _clip_code(p: Vector2, xmin: float, xmax: float, ymin: float, ymax: float) -> int:
+	var c := 0
+	if p.x < xmin:
+		c |= 1
+	elif p.x > xmax:
+		c |= 2
+	if p.y < ymin:
+		c |= 4
+	elif p.y > ymax:
+		c |= 8
+	return c
+
+
+func _clip_segment_to_rect(a: Vector2, b: Vector2, rect: Rect2) -> PackedVector2Array:
+	# Cohen–Sutherland clip against axis-aligned rect. Returns 0 or 2 points.
+	var xmin := rect.position.x
+	var xmax := rect.position.x + rect.size.x
+	var ymin := rect.position.y
+	var ymax := rect.position.y + rect.size.y
+
+	var p0 := a
+	var p1 := b
+	var out0 := _clip_code(p0, xmin, xmax, ymin, ymax)
+	var out1 := _clip_code(p1, xmin, xmax, ymin, ymax)
+
+	while true:
+		if (out0 | out1) == 0:
+			return PackedVector2Array([p0, p1])
+		if (out0 & out1) != 0:
+			return PackedVector2Array()
+
+		var out := out0 if out0 != 0 else out1
+		var x := 0.0
+		var y := 0.0
+
+		if (out & 4) != 0:
+			# Above
+			x = p0.x + (p1.x - p0.x) * (ymin - p0.y) / (p1.y - p0.y)
+			y = ymin
+		elif (out & 8) != 0:
+			# Below
+			x = p0.x + (p1.x - p0.x) * (ymax - p0.y) / (p1.y - p0.y)
+			y = ymax
+		elif (out & 2) != 0:
+			# Right
+			y = p0.y + (p1.y - p0.y) * (xmax - p0.x) / (p1.x - p0.x)
+			x = xmax
+		elif (out & 1) != 0:
+			# Left
+			y = p0.y + (p1.y - p0.y) * (xmin - p0.x) / (p1.x - p0.x)
+			x = xmin
+
+		if out == out0:
+			p0 = Vector2(x, y)
+			out0 = _clip_code(p0, xmin, xmax, ymin, ymax)
+		else:
+			p1 = Vector2(x, y)
+			out1 = _clip_code(p1, xmin, xmax, ymin, ymax)
+
+	return PackedVector2Array()
+
+
+func _draw_hatched_rect(rect: Rect2, col: Color) -> void:
+	# Subtle diagonal hatch inside the rect.
+	var hatch_col := Color(col.r, col.g, col.b, col.a * 0.18)
+	var spacing := 10.0
+	# Create \-direction lines and clip to the rect.
+	for x in range(int(-rect.size.y), int(rect.size.x) + 1, int(spacing)):
+		var p0 := rect.position + Vector2(float(x), rect.size.y)
+		var p1 := rect.position + Vector2(float(x) + rect.size.y, 0.0)
+		var clipped := _clip_segment_to_rect(p0, p1, rect)
+		if clipped.size() == 2:
+			draw_line(clipped[0], clipped[1], hatch_col, 1.0)
 
 
 func _tcol(name: String, fallback: Color) -> Color:
@@ -221,6 +396,14 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 	if not PlayerInventory.consume(item_id, 1):
 		return
 	_dungeon_grid.call("install_item_in_slot", room_id, slot_idx, item_id)
+	# Stamp FX on success path (we already validated empty slot + kind).
+	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary
+	if not room.is_empty():
+		var pos: Vector2i = room.get("pos", Vector2i.ZERO)
+		var size: Vector2i = room.get("size", Vector2i.ONE)
+		var px := float(_cell_px())
+		var room_rect := Rect2(Vector2(pos.x, pos.y) * px, Vector2(size.x, size.y) * px)
+		_trigger_slot_stamp(_slot_rect_local(room_rect, slot_idx))
 	queue_redraw()
 
 
@@ -266,6 +449,9 @@ func _drop_room(d: Dictionary) -> void:
 	if id == 0:
 		RoomInventory.refund(type_id, 1)
 		return
+	# Stamp FX on success.
+	var px := float(_cell_px())
+	_trigger_room_stamp(Rect2(Vector2(cell.x, cell.y) * px, Vector2(size.x, size.y) * px))
 	_game_state.call("set_power_used", int(_game_state.get("power_used")) + cost)
 	_emit_build_status()
 	queue_redraw()
@@ -450,6 +636,11 @@ func _draw() -> void:
 	var accent_bad := _tcol("accent_bad", BlueprintTheme.ACCENT_BAD)
 	var accent_warn := _tcol("accent_warn", BlueprintTheme.ACCENT_WARN)
 
+	# Paper background behind the grid lines (inside the playable area rect).
+	if PAPER_BG_TEX != null:
+		# Slightly transparent so the blueprint ink stays readable.
+		draw_texture_rect(PAPER_BG_TEX, Rect2(Vector2.ZERO, Vector2(w, h)), false, Color(1, 1, 1, 0.92))
+
 	# Draw grid lines
 	for x in range(gw + 1):
 		var lx := x * px
@@ -482,12 +673,33 @@ func _draw() -> void:
 			Vector2(hover_cell.x, hover_cell.y) * px,
 			Vector2(size.x, size.y) * px
 		)
-		draw_rect(rect, col, false, 2.0)
+		_update_preview_reason(ok, String(res.get("reason", "")))
+		if ok:
+			draw_rect(rect, col, false, 2.0)
+		else:
+			_draw_dashed_rect(rect, col, 2.0)
+			_draw_hatched_rect(rect, col)
+	else:
+		_update_preview_reason(true, "")
+
+	# Success stamps (room/item).
+	var now := _now_s()
+	if now - _stamp_room_t0 >= 0.0 and now - _stamp_room_t0 < STAMP_DUR_S:
+		var t := clampf((now - _stamp_room_t0) / STAMP_DUR_S, 0.0, 1.0)
+		_draw_stamp_rect(_stamp_room_rect, accent_ok, t, _stamp_room_jitter)
+	if now - _stamp_slot_t0 >= 0.0 and now - _stamp_slot_t0 < STAMP_DUR_S:
+		var t2 := clampf((now - _stamp_slot_t0) / STAMP_DUR_S, 0.0, 1.0)
+		_draw_stamp_rect(_stamp_slot_rect, accent_ok, t2, _stamp_slot_jitter)
 
 
 func _process(_delta: float) -> void:
 	# During DAY, redraw so monster counts/icons update as encounters spawn/despawn.
 	if Engine.has_singleton("GameState") and GameState.phase == GameState.Phase.DAY:
+		queue_redraw()
+		return
+	# While stamps are active, keep animating.
+	var now := _now_s()
+	if now - _stamp_room_t0 < STAMP_DUR_S or now - _stamp_slot_t0 < STAMP_DUR_S:
 		queue_redraw()
 
 
@@ -559,7 +771,8 @@ func _get_item_icon(item_id: String) -> Texture2D:
 
 
 func _draw_room_center_icon(center: Vector2, tex: Texture2D) -> void:
-	var px := float(_cell_px())
+	# Keep these icons a stable pixel size (independent of cell size).
+	var px := float(ICON_BASE_CELL_PX)
 	# ~50% larger than before
 	var s := clampf(px * 1.05, 18.0, 36.0)
 	draw_texture_rect(tex, Rect2(center - Vector2(s * 0.5, s * 0.5), Vector2(s, s)), true)
@@ -612,7 +825,8 @@ func entrance_cap_world_rect() -> Rect2:
 
 func _draw_icon_stamp(center: Vector2, kind: String, known: bool) -> void:
 	var col := _tcol("outline", BlueprintTheme.LINE) if known else _tcol("outline_dim", BlueprintTheme.LINE_DIM)
-	var s := float(_cell_px()) * 0.35
+	# Keep these icons a stable pixel size (independent of cell size).
+	var s := float(ICON_BASE_CELL_PX) * 0.35
 
 	match kind:
 		"entrance":

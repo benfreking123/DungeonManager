@@ -11,4 +11,5 @@ icon = ExtResource("2_zicon")
 max_hp = 5
 attack_damage = 1
 attack_interval = 1.0
+range = 40.0
 size = 1

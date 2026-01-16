@@ -1,0 +1,6 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3 uid="uid://dqsjusg38mijx"]
+
+[ext_resource type="Texture2D" uid="uid://dbiaq0kcbgpxd" path="res://assets/ChatGPT Image Jan 15, 2026, 06_41_41 PM.png" id="1_5tlg4"]
+
+[resource]
+atlas = ExtResource("1_5tlg4")

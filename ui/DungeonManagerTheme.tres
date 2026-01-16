@@ -1,4 +1,7 @@
-[gd_resource type="Theme" load_steps=7 format=3 uid="uid://d1nyvccj27w6m"]
+[gd_resource type="Theme" load_steps=9 format=3 uid="uid://d1nyvccj27w6m"]
+
+[ext_resource type="StyleBox" uid="uid://cirxnihlh81rd" path="res://assets/StyleBoxes/Base.tres" id="1_05x13"]
+[ext_resource type="StyleBox" uid="uid://6p0aq2m6kbwd" path="res://assets/StyleBoxes/RoomMenuStyleBox.tres" id="1_lwxpc"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_disabled"]
 content_margin_left = 10.0
@@ -15,6 +18,9 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.1)
+shadow_size = 6
+shadow_offset = Vector2(0, 2)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
 content_margin_left = 10.0
@@ -31,6 +37,9 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.16)
+shadow_size = 8
+shadow_offset = Vector2(0, 3)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_normal"]
 content_margin_left = 10.0
@@ -47,6 +56,9 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.14)
+shadow_size = 7
+shadow_offset = Vector2(0, 2)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_pressed"]
 content_margin_left = 10.0
@@ -63,22 +75,9 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frame_only"]
-content_margin_left = 10.0
-content_margin_top = 10.0
-content_margin_right = 10.0
-content_margin_bottom = 10.0
-bg_color = Color(0, 0, 0, 0)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.18, 0.13, 0.08, 0.5)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.1)
+shadow_size = 4
+shadow_offset = Vector2(0, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 10.0
@@ -95,6 +94,28 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.1)
+shadow_size = 7
+shadow_offset = Vector2(0, 3)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar_panel"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.965, 0.94, 0.87, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.48)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.12)
+shadow_size = 6
+shadow_offset = Vector2(0, 2)
 
 [resource]
 Button/colors/font_color = Color(0.18, 0.13, 0.08, 0.95)
@@ -109,7 +130,7 @@ Combat/colors/hp_back = Color(0, 0, 0, 0.22)
 Combat/colors/hp_outline = Color(0.72, 0.15, 0.12, 0.35)
 Combat/colors/monster_marker = Color(0.72, 0.15, 0.12, 0.95)
 Combat/colors/monster_marker_dim = Color(0.72, 0.15, 0.12, 0.35)
-DungeonFrame/styles/panel = SubResource("StyleBoxFlat_frame_only")
+DungeonFrame/styles/panel = ExtResource("1_05x13")
 DungeonView/colors/accent_bad = Color(1, 0.35, 0.35, 0.9)
 DungeonView/colors/accent_ok = Color(0.4, 0.95, 0.65, 0.9)
 DungeonView/colors/accent_warn = Color(1, 0.8, 0.35, 0.9)
@@ -127,6 +148,8 @@ HUD/colors/ink_dim = Color(0.18, 0.13, 0.08, 0.45)
 HUD/colors/paper_base = Color(0.975, 0.95, 0.88, 1)
 Label/colors/font_color = Color(0.18, 0.13, 0.08, 0.95)
 PanelContainer/styles/panel = SubResource("StyleBoxFlat_panel")
+RoomMenu/styles/panel = ExtResource("1_lwxpc")
+TopBar/styles/panel = SubResource("StyleBoxFlat_topbar_panel")
 TownView/colors/bg = Color(0.975, 0.95, 0.88, 1)
 TownView/colors/line = Color(0.18, 0.13, 0.08, 0.6)
 TownView/colors/line_dim = Color(0.18, 0.13, 0.08, 0.28)

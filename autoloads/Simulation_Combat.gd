@@ -11,6 +11,8 @@ extends RefCounted
 const COMBAT_WARMUP_SECONDS := 1.0
 const COMBAT_MOVE_SPEED := 220.0
 
+const DEFAULT_MELEE_RANGE := 40.0
+
 var combats_by_room_id: Dictionary = {}
 
 var _dungeon_view: Control
@@ -167,6 +169,7 @@ func _tick_adv_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> void:
 	if participants.is_empty() or monsters.is_empty():
 		return
 	var adv_timers: Dictionary = combat.get("adv_attack_timers", {})
+	var adv_targets: Dictionary = combat.get("adv_targets", {})
 
 	for p in participants:
 		if not is_instance_valid(p):
@@ -176,21 +179,51 @@ func _tick_adv_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> void:
 		if t <= 0.0:
 			# Adventurers hit ONE monster per attack.
 			var dmg: int = int(p.get("attack_damage"))
-			var alive_idxs: Array[int] = []
+			var rng: float = float(p.get("range"))
+			if rng <= 0.0:
+				rng = DEFAULT_MELEE_RANGE
+
+			# Find closest alive monster that has a valid actor for distance checks.
+			var best_i := -1
+			var best_dist := 1e18
+			var best_actor_pos := Vector2.ZERO
+			var adv_pos := (p as Node2D).global_position
 			for i in range(monsters.size()):
 				var m0: Dictionary = monsters[i]
-				if int(m0.get("hp", 0)) > 0:
-					alive_idxs.append(i)
-			if not alive_idxs.is_empty():
-				var pick_i: int = alive_idxs[randi() % alive_idxs.size()]
-				var m: Dictionary = monsters[pick_i]
-				m["hp"] = int(m.get("hp", 0)) - dmg
-				_sync_monster_actor(m)
-				monsters[pick_i] = m
-			t += float(p.get("attack_interval"))
+				if int(m0.get("hp", 0)) <= 0:
+					continue
+				var actor0: Variant = m0.get("actor", null)
+				if actor0 == null or not is_instance_valid(actor0):
+					continue
+				var mon_pos := (actor0 as Node2D).global_position
+				var d := adv_pos.distance_to(mon_pos)
+				if d < best_dist:
+					best_dist = d
+					best_i = i
+					best_actor_pos = mon_pos
+
+			if best_i != -1:
+				if best_dist <= rng:
+					var m: Dictionary = monsters[best_i]
+					m["hp"] = int(m.get("hp", 0)) - dmg
+					_sync_monster_actor(m)
+					monsters[best_i] = m
+					t += float(p.get("attack_interval"))
+				else:
+					# Close distance: steer this adventurer toward a point left of the target.
+					var keep_y: float = adv_pos.y
+					var cur_t: Variant = adv_targets.get(pid, adv_pos)
+					if cur_t is Vector2:
+						keep_y = _dungeon_local_to_world(cur_t as Vector2).y
+					var desired_sep: float = maxf(10.0, rng * 0.8)
+					var desired_world := best_actor_pos + Vector2(-desired_sep, keep_y - best_actor_pos.y)
+					adv_targets[pid] = _dungeon_world_to_local(desired_world)
+					# Keep trying next tick without resetting cooldown.
+					t = 0.0
 		adv_timers[pid] = t
 
 	combat["adv_attack_timers"] = adv_timers
+	combat["adv_targets"] = adv_targets
 	sp["monsters"] = monsters
 
 
@@ -199,6 +232,7 @@ func _tick_monster_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> voi
 	var monsters: Array = sp.get("monsters", [])
 	if participants.is_empty() or monsters.is_empty():
 		return
+	var mon_targets: Dictionary = combat.get("mon_targets", {})
 
 	for i in range(monsters.size()):
 		var m: Dictionary = monsters[i]
@@ -206,18 +240,47 @@ func _tick_monster_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> voi
 		if t <= 0.0:
 			# Monsters hit ONE adventurer per attack.
 			var dmg: int = int(m.get("attack_damage", 1))
-			var alive: Array[Node2D] = []
+			var rng: float = float(m.get("range", DEFAULT_MELEE_RANGE))
+			if rng <= 0.0:
+				rng = DEFAULT_MELEE_RANGE
+
+			# Find closest alive adventurer.
+			var best_adv: Node2D = null
+			var best_dist := 1e18
+			var actor: Variant = m.get("actor", null)
+			var mon_pos := (actor as Node2D).global_position if actor != null and is_instance_valid(actor) else Vector2.ZERO
 			for p in participants:
-				if is_instance_valid(p):
-					alive.append(p as Node2D)
-			if not alive.is_empty():
-				var pick: Node2D = alive[randi() % alive.size()]
-				pick.call("apply_damage", dmg)
-			t += float(m.get("attack_interval", 1.0))
+				if not is_instance_valid(p):
+					continue
+				var adv := p as Node2D
+				var d := mon_pos.distance_to(adv.global_position)
+				if d < best_dist:
+					best_dist = d
+					best_adv = adv
+
+			if best_adv != null:
+				if best_dist <= rng:
+					best_adv.call("apply_damage", dmg)
+					t += float(m.get("attack_interval", 1.0))
+				else:
+					# Close distance: steer this monster toward a point right of the target.
+					var actor2: Variant = m.get("actor", null)
+					if actor2 != null and is_instance_valid(actor2):
+						var aid := int((actor2 as Node2D).get_instance_id())
+						var keep_y: float = mon_pos.y
+						var cur_t: Variant = mon_targets.get(aid, mon_pos)
+						if cur_t is Vector2:
+							keep_y = _dungeon_local_to_world(cur_t as Vector2).y
+						var desired_sep: float = maxf(10.0, rng * 0.8)
+						var desired_world := best_adv.global_position + Vector2(desired_sep, keep_y - best_adv.global_position.y)
+						mon_targets[aid] = _dungeon_world_to_local(desired_world)
+					# Keep trying next tick without resetting cooldown.
+					t = 0.0
 		m["attack_timer"] = t
 		monsters[i] = m
 
 	sp["monsters"] = monsters
+	combat["mon_targets"] = mon_targets
 
 
 func _dungeon_local_to_world(local_pos: Vector2) -> Vector2:
@@ -226,12 +289,17 @@ func _dungeon_local_to_world(local_pos: Vector2) -> Vector2:
 	return (_dungeon_view as CanvasItem).get_global_transform() * local_pos
 
 
+func _dungeon_world_to_local(world_pos: Vector2) -> Vector2:
+	if _dungeon_view == null:
+		return world_pos
+	return (_dungeon_view as CanvasItem).get_global_transform().affine_inverse() * world_pos
+
+
 func _assign_combat_positions(room: Dictionary, combat: Dictionary, sp: Dictionary) -> void:
 	# Create deterministic-ish positions for participants/monsters inside the room (pure animation).
 	if _dungeon_view == null:
 		return
 	var center_local: Vector2 = _dungeon_view.call("room_center_local", room) as Vector2
-	var center_world: Vector2 = _dungeon_local_to_world(center_local)
 
 	var participants: Array = combat.get("participants", [])
 	var adv_targets: Dictionary = combat.get("adv_targets", {})
@@ -244,7 +312,12 @@ func _assign_combat_positions(room: Dictionary, combat: Dictionary, sp: Dictiona
 		if not is_instance_valid(p):
 			continue
 		var t_y := (float(i) - float(n_adv - 1) * 0.5) * 14.0
-		adv_targets[int(p.get_instance_id())] = center_world + Vector2(-28.0, t_y)
+		var r: float = float(p.get("range"))
+		if r <= 0.0:
+			r = DEFAULT_MELEE_RANGE
+		var x := -60.0 if r >= 100.0 else -28.0
+		# Store targets in DungeonView-local space so zoom/pan can't desync combat positions.
+		adv_targets[int(p.get_instance_id())] = center_local + Vector2(x, t_y)
 
 	# Monsters line up on the right side of the room center.
 	var monsters: Array = sp.get("monsters", [])
@@ -259,7 +332,9 @@ func _assign_combat_positions(room: Dictionary, combat: Dictionary, sp: Dictiona
 	for j in range(n_mon):
 		var a: Node2D = mon_actors[j]
 		var t_y2 := (float(j) - float(n_mon - 1) * 0.5) * 14.0
-		mon_targets[int(a.get_instance_id())] = center_world + Vector2(28.0, t_y2)
+		# Monsters are currently melee by default; keep them near the front.
+		# Store targets in DungeonView-local space so zoom/pan can't desync combat positions.
+		mon_targets[int(a.get_instance_id())] = center_local + Vector2(28.0, t_y2)
 
 	combat["adv_targets"] = adv_targets
 	combat["mon_targets"] = mon_targets
@@ -277,8 +352,9 @@ func _animate_combat_positions(combat: Dictionary, sp: Dictionary, dt: float) ->
 		var key: int = int(adv.get_instance_id())
 		if not adv_targets.has(key):
 			continue
-		var target: Vector2 = adv_targets[key] as Vector2
-		adv.global_position = adv.global_position.move_toward(target, COMBAT_MOVE_SPEED * dt)
+		var target_local: Vector2 = adv_targets[key] as Vector2
+		var target_world := _dungeon_local_to_world(target_local)
+		adv.global_position = adv.global_position.move_toward(target_world, COMBAT_MOVE_SPEED * dt)
 
 	var monsters: Array = sp.get("monsters", [])
 	for m in monsters:
@@ -290,8 +366,9 @@ func _animate_combat_positions(combat: Dictionary, sp: Dictionary, dt: float) ->
 		var key2: int = int(a.get_instance_id())
 		if not mon_targets.has(key2):
 			continue
-		var target2: Vector2 = mon_targets[key2] as Vector2
-		a.global_position = a.global_position.move_toward(target2, COMBAT_MOVE_SPEED * dt)
+		var target2_local: Vector2 = mon_targets[key2] as Vector2
+		var target2_world := _dungeon_local_to_world(target2_local)
+		a.global_position = a.global_position.move_toward(target2_world, COMBAT_MOVE_SPEED * dt)
 
 
 func _sync_monster_actor(m: Dictionary) -> void:

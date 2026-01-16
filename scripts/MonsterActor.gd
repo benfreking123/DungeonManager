@@ -33,14 +33,16 @@ func _draw() -> void:
 	var hp_outline := ThemePalette.color("Combat", "hp_outline", Color(0.9, 0.2, 0.2, 0.35))
 	var hp_fill := ThemePalette.color("Combat", "hp_fill", Color(0.9, 0.2, 0.2, 0.95))
 
+	const MARKER_SCALE := 0.65
+
 	# Minimap marker: prefer monster icon when present.
 	if icon != null:
-		var s := 30.0 if is_boss else 22.0
+		var s := (30.0 if is_boss else 22.0) * MARKER_SCALE
 		draw_texture_rect(icon, Rect2(Vector2(-s * 0.5, -s * 0.5), Vector2(s, s)), true)
 	else:
 		# Same style as adventurer, but red.
-		draw_circle(Vector2.ZERO, 6.0, marker)
-		draw_arc(Vector2.ZERO, 10.0, 0, TAU, 24, marker_dim, 2.0)
+		draw_circle(Vector2.ZERO, 6.0 * MARKER_SCALE, marker)
+		draw_arc(Vector2.ZERO, 10.0 * MARKER_SCALE, 0, TAU, 24, marker_dim, 2.0 * MARKER_SCALE)
 
 	# HP bar above
 	var w := 28.0

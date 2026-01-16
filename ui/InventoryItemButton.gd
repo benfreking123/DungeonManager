@@ -25,11 +25,28 @@ func set_item(next_item_id: String, next_name: String, next_icon: Texture2D, nex
 		_count_badge.text = "x%d" % _count
 
 
+func _play_drag_stamp() -> void:
+	# Quick "stamp" feedback: tiny scale pop + slight alpha pulse.
+	pivot_offset = size * 0.5
+
+	scale = Vector2.ONE * 1.06
+	var t_scale := create_tween()
+	t_scale.tween_property(self, "scale", Vector2.ONE, 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	var base_a := modulate.a
+	var up_a := minf(1.0, base_a + 0.08)
+	var t_alpha := create_tween()
+	t_alpha.tween_property(self, "modulate:a", up_a, 0.04).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t_alpha.tween_property(self, "modulate:a", base_a, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
 func _get_drag_data(_at_position: Vector2) -> Variant:
 	if item_id == "":
 		return null
 	if PlayerInventory.get_count(item_id) <= 0:
 		return null
+
+	_play_drag_stamp()
 
 	var preview_root := VBoxContainer.new()
 	preview_root.alignment = BoxContainer.ALIGNMENT_CENTER

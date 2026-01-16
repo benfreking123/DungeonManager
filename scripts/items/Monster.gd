@@ -9,6 +9,9 @@ class_name MonsterItem
 @export var attack_damage: int = 1
 @export var attack_interval: float = 1.0
 
+# Pixel/world distance required to hit a target in combat.
+@export var range: float = 40.0
+
 # Size units for room capacity + spawn time scaling.
 @export var size: int = 1
 

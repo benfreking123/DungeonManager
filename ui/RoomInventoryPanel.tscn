@@ -1,24 +1,144 @@
-[gd_scene load_steps=2 format=3 uid="uid://d2m1q7p8w9r3n"]
+[gd_scene load_steps=3 format=3 uid="uid://d2m1q7p8xar3n"]
 
 [ext_resource type="Script" path="res://ui/RoomInventoryPanel.gd" id="1_7rpiq"]
+[ext_resource type="StyleBox" uid="uid://6p0aq2m6kbwd" path="res://assets/StyleBoxes/RoomMenuStyleBox.tres" id="1_m4xvp"]
 
 [node name="RoomInventoryPanel" type="PanelContainer"]
 custom_minimum_size = Vector2(260, 0)
 size_flags_vertical = 3
+theme_type_variation = &"RoomMenu"
+theme_override_styles/panel = ExtResource("1_m4xvp")
 script = ExtResource("1_7rpiq")
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 2
+size_flags_vertical = 3
 
-[node name="Title" type="Label" parent="VBox"]
+[node name="TabButtons" type="VBoxContainer" parent="VBox"]
 layout_mode = 2
-text = "Rooms"
 
-[node name="List" type="VBoxContainer" parent="VBox"]
+[node name="Row1" type="HBoxContainer" parent="VBox/TabButtons"]
 layout_mode = 2
+
+[node name="RoomTab" type="Button" parent="VBox/TabButtons/Row1"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "Room"
+
+[node name="TrapsTab" type="Button" parent="VBox/TabButtons/Row1"]
+layout_mode = 2
+toggle_mode = true
+text = "Traps"
+
+[node name="BossTab" type="Button" parent="VBox/TabButtons/Row1"]
+layout_mode = 2
+toggle_mode = true
+text = "Boss"
+
+[node name="Row2" type="HBoxContainer" parent="VBox/TabButtons"]
+layout_mode = 2
+
+[node name="MonstersTab" type="Button" parent="VBox/TabButtons/Row2"]
+layout_mode = 2
+toggle_mode = true
+text = "Monster"
+
+[node name="TreasureTab" type="Button" parent="VBox/TabButtons/Row2"]
+layout_mode = 2
+toggle_mode = true
+text = "Treasure"
+
+[node name="Pages" type="Control" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Room" type="ScrollContainer" parent="VBox/Pages"]
+layout_mode = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="RoomGrid" type="HFlowContainer" parent="VBox/Pages/Room"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="Monsters" type="ScrollContainer" parent="VBox/Pages"]
+visible = false
+layout_mode = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="MonsterGrid" type="HFlowContainer" parent="VBox/Pages/Monsters"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="Traps" type="ScrollContainer" parent="VBox/Pages"]
+visible = false
+layout_mode = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="TrapGrid" type="HFlowContainer" parent="VBox/Pages/Traps"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="Boss" type="ScrollContainer" parent="VBox/Pages"]
+visible = false
+layout_mode = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="BossGrid" type="HFlowContainer" parent="VBox/Pages/Boss"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="Treasure" type="MarginContainer" parent="VBox/Pages"]
+visible = false
+layout_mode = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TreasureLabel" type="Label" parent="VBox/Pages/Treasure"]
+layout_mode = 2
+text = "Coming soon."
+horizontal_alignment = 1
 
 [node name="Status" type="Label" parent="VBox"]
 layout_mode = 2
-text = ""
 autowrap_mode = 3
-

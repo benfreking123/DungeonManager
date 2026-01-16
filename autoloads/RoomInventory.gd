@@ -7,6 +7,8 @@ signal inventory_changed()
 
 var counts: Dictionary = {
 	"hall": 2,
+	"stairs": 2,
+	"corridor": 2,
 	"monster": 1,
 	"trap": 1,
 	"boss": 1,
@@ -38,6 +40,8 @@ func refund(id: String, amount: int = 1) -> void:
 func reset_all() -> void:
 	counts = {
 		"hall": 2,
+		"stairs": 2,
+		"corridor": 2,
 		"monster": 1,
 		"trap": 1,
 		"boss": 1,

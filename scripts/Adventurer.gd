@@ -8,7 +8,7 @@ enum Phase { SURFACE, DUNGEON, DONE }
 
 var phase: int = Phase.SURFACE
 
-var _surface_target: Vector2 # stored in global space; converted per-tick to local
+var _surface_target_local: Vector2 # stored in parent-local space (camera-independent)
 var _surface_speed: float = 200.0
 
 var _dungeon_view: Control
@@ -27,6 +27,7 @@ var hp_max: int = 10
 var hp: int = 10
 var attack_damage: int = 2
 var attack_interval: float = 1.0
+var range: float = 40.0
 
 var in_combat: bool = false
 var combat_room_id: int = 0
@@ -36,7 +37,14 @@ var class_icon: Texture2D
 
 
 func set_surface_target(target_world: Vector2, speed: float) -> void:
-	_surface_target = target_world
+	# Legacy API: treat as global space and convert each tick.
+	_surface_target_local = _to_parent_local(target_world)
+	_surface_speed = speed
+
+
+func set_surface_target_local(target_local: Vector2, speed: float) -> void:
+	# Preferred: parent-local coordinates so UI zoom/pan never affects movement.
+	_surface_target_local = target_local
 	_surface_speed = speed
 
 
@@ -62,6 +70,7 @@ func apply_class(c: AdventurerClass) -> void:
 	hp = hp_max
 	attack_damage = c.attack_damage
 	attack_interval = c.attack_interval
+	range = c.range
 	queue_redraw()
 
 
@@ -75,9 +84,8 @@ func tick(dt: float) -> void:
 		Phase.SURFACE:
 			if in_combat:
 				return
-			var target_local: Vector2 = _to_parent_local(_surface_target)
-			_move_toward_local(target_local, _surface_speed, dt)
-			if position.distance_to(target_local) <= 2.0:
+			_move_toward_local(_surface_target_local, _surface_speed, dt)
+			if position.distance_to(_surface_target_local) <= 2.0:
 				phase = Phase.DUNGEON
 		Phase.DUNGEON:
 			if in_combat:
@@ -171,14 +179,16 @@ func _draw() -> void:
 	var hp_back := ThemePalette.color("Combat", "hp_back", Color(0, 0, 0, 0.35))
 	var hp_fill := ThemePalette.color("Combat", "hp_fill", Color(0.9, 0.2, 0.2, 0.95))
 
+	const MARKER_SCALE := 0.65
+
 	# Minimap marker: prefer class icon when present.
 	if class_icon != null:
-		var s := 22.0
+		var s := 22.0 * MARKER_SCALE
 		draw_texture_rect(class_icon, Rect2(Vector2(-s * 0.5, -s * 0.5), Vector2(s, s)), true)
 	else:
 		# Simple dot + ring (blueprint style)
-		draw_circle(Vector2.ZERO, 4.5, line)
-		draw_arc(Vector2.ZERO, 8.0, 0, TAU, 24, line_dim, 2.0)
+		draw_circle(Vector2.ZERO, 4.5 * MARKER_SCALE, line)
+		draw_arc(Vector2.ZERO, 8.0 * MARKER_SCALE, 0, TAU, 24, line_dim, 2.0 * MARKER_SCALE)
 
 	# HP bar above
 	var w := 22.0

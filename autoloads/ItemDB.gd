@@ -42,5 +42,3 @@ func get_any_item(id: String) -> Resource:
 	if monsters.has(id):
 		return monsters[id] as Resource
 	return null
-
-

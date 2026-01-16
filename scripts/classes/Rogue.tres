@@ -11,3 +11,4 @@ icon = ExtResource("2_icon")
 hp_max = 9
 attack_damage = 1
 attack_interval = 0.8
+range = 40.0

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RoomType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/rooms/RoomType.gd" id="1_roomtype"]
+
+[resource]
+script = ExtResource("1_roomtype")
+id = "entrance"
+label = "Entrance"
+size = Vector2i(2, 2)
+power_cost = 0
+kind = "entrance"
+max_slots = 0
+

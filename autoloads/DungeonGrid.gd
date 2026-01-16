@@ -19,17 +19,35 @@ var _occ := {} # Dictionary<Vector2i, int room_id>
 func ensure_room_defaults() -> bool:
 	# Backfill slots/capacity for rooms created before these fields existed.
 	var changed := false
+	var room_db := get_node_or_null("/root/RoomDB")
 	for i in range(rooms.size()):
 		var r: Dictionary = rooms[i]
 		var kind := String(r.get("kind", ""))
-		if kind == "trap":
-			if not r.has("slots") or (r.get("slots", []) as Array).is_empty():
-				r["slots"] = [{ "slot_kind": "trap", "installed_item_id": "" }]
+		var type_id := String(r.get("type_id", ""))
+		var max_slots := 0
+		if room_db != null and room_db.has_method("get_room_type"):
+			var def: Dictionary = room_db.call("get_room_type", type_id) as Dictionary
+			max_slots = int(def.get("max_slots", 0))
+
+		# Ensure correct slot count for monster/trap rooms (and none otherwise).
+		var want_kind := "monster" if kind == "monster" else ("trap" if kind == "trap" else "")
+		var cur_slots: Array = r.get("slots", [])
+		if max_slots <= 0:
+			if not cur_slots.is_empty():
+				r["slots"] = []
 				changed = true
-		elif kind == "monster":
-			if not r.has("slots") or (r.get("slots", []) as Array).is_empty():
-				r["slots"] = [{ "slot_kind": "monster", "installed_item_id": "" }]
+		else:
+			if cur_slots.size() != max_slots:
+				var next_slots: Array = []
+				for si in range(max_slots):
+					var installed := ""
+					if si < cur_slots.size():
+						installed = String((cur_slots[si] as Dictionary).get("installed_item_id", ""))
+					next_slots.append({ "slot_kind": want_kind, "installed_item_id": installed })
+				r["slots"] = next_slots
 				changed = true
+
+		if kind == "monster":
 			if int(r.get("max_monster_size_capacity", 0)) <= 0:
 				r["max_monster_size_capacity"] = 3
 				changed = true
@@ -47,7 +65,7 @@ func clear() -> void:
 	layout_changed.emit()
 
 
-func can_place(type_id: String, pos: Vector2i, size: Vector2i) -> bool:
+func can_place(_type_id: String, pos: Vector2i, size: Vector2i) -> bool:
 	if pos.x < 0 or pos.y < 0:
 		return false
 	if pos.x + size.x > GRID_W or pos.y + size.y > GRID_H:
@@ -67,10 +85,17 @@ func place_room(type_id: String, pos: Vector2i, size: Vector2i, kind: String, lo
 	_next_room_id += 1
 	var slots: Array = []
 	var max_monster_size_capacity: int = 0
-	if kind == "trap":
-		slots = [{ "slot_kind": "trap", "installed_item_id": "" }]
+	var room_db := get_node_or_null("/root/RoomDB")
+	var max_slots := 0
+	if room_db != null and room_db.has_method("get_room_type"):
+		var def: Dictionary = room_db.call("get_room_type", type_id) as Dictionary
+		max_slots = int(def.get("max_slots", 0))
+
+	if max_slots > 0 and (kind == "trap" or kind == "monster"):
+		var slot_kind := kind
+		for _i in range(max_slots):
+			slots.append({ "slot_kind": slot_kind, "installed_item_id": "" })
 	if kind == "monster":
-		slots = [{ "slot_kind": "monster", "installed_item_id": "" }]
 		max_monster_size_capacity = 3
 
 	var room := {

@@ -54,7 +54,7 @@ To “slice it into individual icons”, you’ll create **more** `AtlasTexture`
   - Optional: enable **Expand Icon** if you want consistent sizing.
 - **TextureRect**: set the **Texture** property to the `.tres`.
 
-This project’s current UI (`ui/InventoryBar.tscn`) uses plain `Button`s; adding icons is as simple as assigning each button’s `icon` in the inspector (no code required).
+The current UI uses icon-bearing inventory buttons; adding icons is as simple as assigning each item’s `icon` in the inspector (no code required).
 
 ## When *not* to use an atlas (when separate PNGs are OK)
 

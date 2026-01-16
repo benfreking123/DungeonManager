@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://bqql0df1ll3f7"]
+[gd_scene load_steps=3 format=3 uid="uid://iu7dig0fx8xh"]
 
 [ext_resource type="Script" path="res://ui/InventoryBar.gd" id="1_2i4bq"]
 [ext_resource type="PackedScene" uid="uid://d1qct7a2s0u8m" path="res://ui/InventoryItemButton.tscn" id="2_2n0v4"]

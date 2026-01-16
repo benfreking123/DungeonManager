@@ -4,12 +4,12 @@ extends Node2D
 func _ready() -> void:
 	var hud := $UI/HUD
 	# Support multiple HUD layouts (new VBoxContainer/HBoxContainer, legacy Body, flat).
-	var dungeon_view := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
+	var dungeon_view := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
 	if dungeon_view == null:
 		dungeon_view = get_node_or_null("UI/HUD/Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
 	if dungeon_view == null:
 		dungeon_view = get_node_or_null("UI/HUD/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Grid/DungeonView")
-	var town_view := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
+	var town_view := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
 	if town_view == null:
 		town_view = get_node_or_null("UI/HUD/Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
 	if town_view == null:
