@@ -32,7 +32,14 @@ var _item_db: Node
 # adv_instance_id -> last room id (0 if none)
 var _adv_last_room: Dictionary = {}
 
-# room_id -> spawner dict (runs from day start, fills to capacity)
+# room_id -> spawner record dict (runs from day start, fills to capacity)
+# Record shape:
+# {
+#   room_id: int,
+#   capacity: int,
+#   spawners: Array[Dictionary] (each { monster_item_id: String, spawn_timer: float }),
+#   spawn_disabled?: bool
+# }
 var room_spawners_by_room_id: Dictionary = {}
 
 var _combat: RefCounted
@@ -64,6 +71,7 @@ var _party_spawn_ctx: Dictionary = {}
 var _adv_scene: PackedScene = preload("res://scenes/Adventurer.tscn")
 
 var _loot_system: RefCounted
+var _trap_system: RefCounted
 var _room_inventory_panel: Node
 var _ending_day: bool = false
 var _monster_roster: RefCounted
@@ -101,6 +109,10 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_loot_system = preload("res://scripts/systems/LootDropSystem.gd").new()
 	_loot_system.call("setup", _world_canvas, _item_db, get_node_or_null("/root/game_config"))
 
+	# Trap system: handles trap room entry effects.
+	_trap_system = preload("res://scripts/systems/TrapSystem.gd").new()
+	_trap_system.call("setup", _item_db)
+
 
 func start_day() -> void:
 	if _active:
@@ -135,6 +147,8 @@ func start_day() -> void:
 	_begin_party_spawn()
 	if _loot_system != null:
 		_loot_system.call("reset")
+	if _trap_system != null:
+		_trap_system.call("reset")
 
 
 func end_day() -> void:
@@ -395,7 +409,8 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 	# Only fire room-entry effects when we actually enter a new room.
 	if entered_new_room:
 		if kind == "trap":
-			_apply_trap_on_enter(room, adv)
+			if _trap_system != null:
+				_trap_system.call("on_room_enter", room, adv, _adventurers, _adv_last_room)
 		elif kind == "monster" or kind == "boss":
 			if _combat != null:
 				_combat.call("join_room", room, adv)
@@ -500,51 +515,20 @@ func _room_center_cell(room: Dictionary, fallback: Vector2i) -> Vector2i:
 	return Vector2i(pos.x + int(size.x / 2), pos.y + int(size.y / 2))
 
 
-func _apply_trap_on_enter(room: Dictionary, adv: Node2D) -> void:
-	var slots: Array = room.get("slots", [])
-	if slots.is_empty():
-		return
-	var slot: Dictionary = slots[0]
-	var item_id := String(slot.get("installed_item_id", ""))
-	if item_id == "":
-		return
-
-	# Determine all adventurers currently in this room (same room_id).
-	var room_id: int = int(room.get("id", 0))
-	var targets: Array[Node2D] = []
-	for a in _adventurers:
-		if not is_instance_valid(a):
-			continue
-		var key: int = int(a.get_instance_id())
-		if int(_adv_last_room.get(key, 0)) == room_id:
-			targets.append(a)
-
-	if targets.is_empty():
-		targets.append(adv)
-
-	var trap: TrapItem = null
-	if _item_db != null:
-		trap = _item_db.call("get_trap", item_id) as TrapItem
-	if trap == null:
-		return
-
-	if randf() > trap.proc_chance:
-		return
-
-	if trap.hits_all:
-		for t in targets:
-			t.call("apply_damage", trap.damage)
-	else:
-		var idx := randi() % targets.size()
-		targets[idx].call("apply_damage", trap.damage)
-
-
 func _make_spawner(room_id: int, monster_item_id: String, capacity: int) -> Dictionary:
 	return {
 		"room_id": room_id,
 		"monster_item_id": monster_item_id,
 		"capacity": capacity,
 		"spawn_timer": 0.0,
+	}
+
+
+func _make_room_spawner_record(room_id: int, capacity: int, spawners: Array) -> Dictionary:
+	return {
+		"room_id": room_id,
+		"capacity": capacity,
+		"spawners": spawners,
 	}
 
 
@@ -564,13 +548,21 @@ func _init_room_spawners() -> void:
 		var slots: Array = room.get("slots", [])
 		if slots.is_empty():
 			continue
-		var item_id := String((slots[0] as Dictionary).get("installed_item_id", ""))
-		if item_id == "":
-			continue
 		var room_id: int = int(room.get("id", 0))
 		var cap: int = int(room.get("max_monster_size_capacity", 3))
-		room_spawners_by_room_id[room_id] = _make_spawner(room_id, item_id, cap)
-		DbgLog.log("Spawner armed room_id=%d item=%s cap=%d" % [room_id, item_id, cap], "monsters")
+		var spawners: Array = []
+		for s in slots:
+			var sd := s as Dictionary
+			if sd.is_empty():
+				continue
+			var item_id := String(sd.get("installed_item_id", ""))
+			if item_id == "":
+				continue
+			spawners.append(_make_spawner(room_id, item_id, cap))
+		if spawners.is_empty():
+			continue
+		room_spawners_by_room_id[room_id] = _make_room_spawner_record(room_id, cap, spawners)
+		DbgLog.log("Spawner armed room_id=%d slots=%d cap=%d" % [room_id, spawners.size(), cap], "monsters")
 
 
 func _spawn_boss() -> void:
@@ -593,9 +585,8 @@ func _spawn_boss() -> void:
 	# Boss spawner: static (no ticking), contains exactly one boss monster.
 	var sp := {
 		"room_id": room_id,
-		"monster_item_id": mi.id,
 		"capacity": mi.size,
-		"spawn_timer": 0.0,
+		"spawners": [],
 		"spawn_disabled": true,
 	}
 
@@ -621,27 +612,32 @@ func _spawn_boss() -> void:
 func _tick_spawners(dt: float) -> void:
 	for k in room_spawners_by_room_id.keys():
 		var room_id: int = int(k)
-		var sp: Dictionary = room_spawners_by_room_id[room_id]
-		if bool(sp.get("spawn_disabled", false)):
+		var rec: Dictionary = room_spawners_by_room_id[room_id]
+		if bool(rec.get("spawn_disabled", false)):
 			continue
 		# Pause spawning while this room is in combat.
 		if _combat != null and bool(_combat.call("is_room_in_combat", room_id)):
 			continue
-		_tick_one_spawner(sp, dt)
-		room_spawners_by_room_id[room_id] = sp
+		var cap: int = int(rec.get("capacity", 3))
+		var spawners: Array = rec.get("spawners", [])
+		var next_spawners: Array = []
+		for s0 in spawners:
+			var sd := s0 as Dictionary
+			if sd.is_empty():
+				continue
+			next_spawners.append(_tick_one_spawner(sd, room_id, cap, dt))
+		rec["spawners"] = next_spawners
+		room_spawners_by_room_id[room_id] = rec
 
 
-func _tick_one_spawner(sp: Dictionary, dt: float) -> void:
+func _tick_one_spawner(sp: Dictionary, room_id: int, capacity: int, dt: float) -> Dictionary:
 	var monster_item_id := String(sp.get("monster_item_id", ""))
 	var item := _make_monster_item(monster_item_id)
 	if item == null:
-		return
+		return sp
 	var mi := item as MonsterItem
 	var interval: float = float(mi.size) * SPAWN_SECONDS_PER_SIZE
-	var capacity: int = int(sp.get("capacity", 3))
-
 	var spawn_timer: float = float(sp.get("spawn_timer", 0.0)) + dt
-	var room_id: int = int(sp.get("room_id", 0))
 
 	while true:
 		if spawn_timer < interval:
@@ -670,6 +666,7 @@ func _tick_one_spawner(sp: Dictionary, dt: float) -> void:
 			_combat.call("on_monster_spawned", room_id)
 
 	sp["spawn_timer"] = spawn_timer
+	return sp
 
 
 func _join_combat_for_adventurers_in_room(room_id: int) -> void:

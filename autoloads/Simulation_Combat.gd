@@ -197,9 +197,17 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 	if not any_alive:
 		# Reset monster spawn cooldown when combat ends (prevents immediate respawn as party leaves).
 		if room_spawners_by_room_id.has(room_id):
-			var sp: Dictionary = room_spawners_by_room_id[room_id]
-			sp["spawn_timer"] = 0.0
-			room_spawners_by_room_id[room_id] = sp
+			var rec: Dictionary = room_spawners_by_room_id[room_id]
+			# New spawner shape: per-room record with per-slot spawners.
+			var spawners: Array = rec.get("spawners", [])
+			for i in range(spawners.size()):
+				var sd := spawners[i] as Dictionary
+				if sd.is_empty():
+					continue
+				sd["spawn_timer"] = 0.0
+				spawners[i] = sd
+			rec["spawners"] = spawners
+			room_spawners_by_room_id[room_id] = rec
 		for p in participants:
 			if is_instance_valid(p):
 				p.call("exit_combat")

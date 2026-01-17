@@ -1,6 +1,5 @@
 extends PanelContainer
 
-@onready var _status: Label = $VBox/Status
 @onready var _room_db: Node = get_node_or_null("/root/RoomDB")
 
 @onready var _room_grid: Container = $VBox/Pages/Room/RoomGrid
@@ -121,20 +120,14 @@ func get_treasure_collect_target_global_pos() -> Vector2:
 	return global_position
 
 
-func set_status(text: String) -> void:
-	_status.text = text
-
-
 func _refresh() -> void:
 	_clear_children(_room_grid)
 	_clear_children(_monster_grid)
 	_clear_children(_trap_grid)
 	_clear_children(_boss_grid)
 	_clear_children(_treasure_grid)
-	set_status("")
 
 	if _room_db == null:
-		set_status("Missing RoomDB autoload.")
 		return
 
 	_refresh_rooms()

@@ -14,12 +14,6 @@ func _ready() -> void:
 		town_view = get_node_or_null("UI/HUD/Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
 	if town_view == null:
 		town_view = get_node_or_null("UI/HUD/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView")
-	var room_inventory_panel := get_node_or_null("UI/HUD/VBoxContainer/HBoxContainer/RoomInventoryPanel")
-	if room_inventory_panel == null:
-		room_inventory_panel = get_node_or_null("UI/HUD/Body/RoomInventoryPanel")
-	if room_inventory_panel == null:
-		room_inventory_panel = get_node_or_null("UI/HUD/RoomInventoryPanel")
-
 	var room_db: Node = get_node("/root/RoomDB")
 	var dungeon_grid: Node = get_node("/root/DungeonGrid")
 	var simulation: Node = get_node("/root/Simulation")
@@ -36,9 +30,6 @@ func _ready() -> void:
 		var cur: Vector2i = entrance.get("pos", Vector2i.ZERO)
 		if cur != desired:
 			dungeon_grid.call("force_move_room_of_kind", "entrance", desired)
-
-	if dungeon_view != null and room_inventory_panel != null and room_inventory_panel.has_method("set_status"):
-		dungeon_view.status_changed.connect(room_inventory_panel.set_status)
 
 	# Town needs to know where the entrance is (surface point above the entrance).
 	# Use deferred updates so Control sizes/global rects are valid and stable.

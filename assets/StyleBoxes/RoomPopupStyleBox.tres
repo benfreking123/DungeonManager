@@ -1,4 +1,4 @@
-[gd_resource type="StyleBoxFlat" format=3]
+[gd_resource type="StyleBoxFlat" format=3 uid="uid://ban0mjr3sist8"]
 
 [resource]
 content_margin_left = 6.0
@@ -18,4 +18,3 @@ corner_radius_bottom_left = 6
 shadow_color = Color(0.18, 0.13, 0.08, 0.12)
 shadow_size = 5
 shadow_offset = Vector2(0, 2)
-

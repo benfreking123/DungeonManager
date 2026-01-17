@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://dhh6eeqqo51gg"]
+[gd_scene load_steps=24 format=3 uid="uid://dhh6eeqqo51gg"]
 
 [ext_resource type="Script" path="res://ui/HUD.gd" id="1_2b4c7"]
 [ext_resource type="Script" path="res://scripts/DungeonView.gd" id="2_2t2p0"]
@@ -10,12 +10,29 @@
 [ext_resource type="Texture2D" uid="uid://cbqqhnpreh5x0" path="res://assets/RockFrame.tres" id="7_uqoya"]
 [ext_resource type="Shader" path="res://ui/shaders/vignette.gdshader" id="8_vignette"]
 [ext_resource type="Texture2D" uid="uid://clia71e760qmr" path="res://assets/simple-old-paper-1.jpg" id="9_old_paper"]
+[ext_resource type="PackedScene" uid="uid://edd24i7ldah4" path="res://ui/SetupWarningPopup.tscn" id="10_setup_popup"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
 shader = ExtResource("8_vignette")
 shader_parameter/strength = 0.03
 shader_parameter/feather = 0.18
 shader_parameter/ink_color = Color(0.18, 0.13, 0.08, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jjt0d"]
+content_margin_left = 10.0
+content_margin_right = 9.0
+bg_color = Color(0.975, 0.95, 0.88, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.35)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.1)
+shadow_offset = Vector2(0, 3)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_g7pc7"]
 content_margin_left = 0.0
@@ -80,6 +97,11 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
+[node name="SetupWarningPopup" parent="." instance=ExtResource("10_setup_popup")]
+z_index = 4096
+z_as_relative = false
+layout_mode = 0
+
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
 layout_mode = 0
 offset_right = 1278.0
@@ -136,6 +158,21 @@ size_flags_horizontal = 3
 layout_mode = 2
 theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
 text = "Power: 0/0"
+
+[node name="SetupWarning" type="PanelContainer" parent="VBoxContainer/TopBar/HBox"]
+layout_mode = 2
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_jjt0d")
+
+[node name="Label" type="Label" parent="VBoxContainer/TopBar/HBox/SetupWarning"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.84, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 22
+text = "!"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="DayButton" type="Button" parent="VBoxContainer/TopBar/HBox"]
 layout_mode = 2
@@ -430,7 +467,6 @@ grow_vertical = 2
 script = ExtResource("2_2t2p0")
 
 [node name="RoomInventoryPanel" parent="VBoxContainer/HBoxContainer" instance=ExtResource("6_roominv")]
-custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 
 [node name="Spacer" type="Control" parent="VBoxContainer"]

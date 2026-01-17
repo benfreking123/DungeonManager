@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://dsetupwarningpopup"]
+
+[ext_resource type="Script" path="res://ui/SetupWarningPopup.gd" id="1_popup_script"]
+[ext_resource type="StyleBox" uid="uid://cirxnihlh81rd" path="res://assets/StyleBoxes/Base.tres" id="2_base_sb"]
+
+[node name="SetupWarningPopup" type="PanelContainer"]
+visible = false
+mouse_filter = 2
+theme_override_styles/panel = ExtResource("2_base_sb")
+script = ExtResource("1_popup_script")
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 2
+autowrap_mode = 0
+theme_override_font_sizes/font_size = 12
+text = ""

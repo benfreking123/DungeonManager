@@ -12,7 +12,7 @@ const PANEL_W_MIN := 520.0
 const PANEL_W_MAX := 900.0
 const SLIDE_DURATION := 0.32
 const SQUARE_GROUP_SIZE := 2
-const SQUARE_GROUP_STAGGER := 0.055
+const SQUARE_GROUP_STAGGER := 0.0275
 const SQUARE_SPEED := 0.82 # < 1.0 = faster
 
 var _is_open: bool = false
@@ -240,7 +240,8 @@ func _play_squares_reveal() -> void:
 
 		var overshoot := fin_pos2 + Vector2(14.0, -10.0)
 
-		var group_delay := float(i) / float(SQUARE_GROUP_SIZE) * SQUARE_GROUP_STAGGER
+		var group_idx := int(floor(float(i) / float(SQUARE_GROUP_SIZE)))
+		var group_delay := float(group_idx) * SQUARE_GROUP_STAGGER
 		var track := _squares_tween.parallel()
 		track.tween_interval(group_delay)
 
@@ -295,7 +296,8 @@ func _play_squares_hide() -> void:
 		var out_pos := fin_pos + Vector2(jitter_x, jitter_y)
 		var out_rot := fin_rot + deg_to_rad(22.0) * (1.0 if (i % 2) == 0 else -1.0)
 
-		var group_delay := float(i) / float(SQUARE_GROUP_SIZE) * SQUARE_GROUP_STAGGER
+		var group_idx := int(floor(float(i) / float(SQUARE_GROUP_SIZE)))
+		var group_delay := float(group_idx) * SQUARE_GROUP_STAGGER
 		var track := _squares_tween.parallel()
 		track.tween_interval(group_delay)
 

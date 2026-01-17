@@ -1,0 +1,15 @@
+[gd_resource type="StyleBoxFlat" format=3]
+
+[resource]
+# Keep sizing identical to TabButtonNormal.tres (same borders/shadow).
+# Only adjust color so the selected tab is still visually distinct.
+bg_color = Color(0.945098, 0.909804, 0.823529, 0.96)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.180392, 0.129412, 0.0784314, 0.478431)
+border_blend = true
+shadow_color = Color(0.180392, 0.129412, 0.0784314, 0.121569)
+shadow_size = 6
+shadow_offset = Vector2(0, 2)

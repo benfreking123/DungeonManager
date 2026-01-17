@@ -1,5 +1,8 @@
 extends Control
 
+const DungeonSetupStatusServiceScript := preload("res://scripts/services/DungeonSetupStatusService.gd")
+const SetupWarningPopupScene := preload("res://ui/SetupWarningPopup.tscn")
+
 var treasure_label: Label = null
 var power_label: Label = null
 var day_button: Button = null
@@ -7,6 +10,8 @@ var speed_1x: Button = null
 var speed_2x: Button = null
 var speed_4x: Button = null
 var shop_button: Button = null
+var _setup_warning: Control = null
+var _setup_warning_popup: PanelContainer = null
 @onready var _simulation: Node = get_node("/root/Simulation")
 @onready var _game_over: PanelContainer = $GameOverPanel
 
@@ -29,8 +34,8 @@ var _shop_layer: CanvasLayer = null
 var _room_inventory_panel: Control = null
 
 # Cache original mouse_filters for temporary shop interaction gating.
-var _topbar_mouse_filter: int = Control.MOUSE_FILTER_STOP
-var _world_frame_mouse_filter: int = Control.MOUSE_FILTER_STOP
+var _topbar_mouse_filter: Control.MouseFilter = Control.MOUSE_FILTER_STOP
+var _world_frame_mouse_filter: Control.MouseFilter = Control.MOUSE_FILTER_STOP
 
 var _world_zoom: float = 1.0
 var _is_panning: bool = false
@@ -50,6 +55,8 @@ const ZOOM_STEP := 1.12
 
 func _ready() -> void:
 	_resolve_topbar_nodes()
+	_resolve_setup_warning()
+	_resolve_setup_warning_popup()
 	_resolve_world_nodes()
 	_apply_paper_theme()
 	_layout_paper_fx()
@@ -61,6 +68,7 @@ func _ready() -> void:
 	_connect_placement_hint()
 	_resolve_shop()
 	_resolve_room_inventory_panel()
+	_connect_setup_warning()
 	set_process(true)
 	if _game_over != null:
 		# Ensure the overlay always renders above everything.
@@ -97,6 +105,7 @@ func _ready() -> void:
 	# Treasure counter removed; hide if present.
 	if treasure_label != null:
 		treasure_label.visible = false
+	_refresh_setup_warning()
 
 
 func _resolve_topbar_nodes() -> void:
@@ -139,6 +148,106 @@ func _resolve_topbar_nodes() -> void:
 		speed_4x = get_node_or_null("TopBar/HBox/Speed4x") as Button
 	if shop_button == null:
 		shop_button = get_node_or_null("TopBar/HBox/ShopButton") as Button
+
+
+func _resolve_setup_warning() -> void:
+	var bases := [
+		"TopBar/HBox",
+		"VBoxContainer/TopBar/HBox"
+	]
+	for base in bases:
+		var w := get_node_or_null("%s/SetupWarning" % base) as Control
+		if w != null:
+			_setup_warning = w
+			return
+	_setup_warning = get_node_or_null("TopBar/HBox/SetupWarning") as Control
+
+
+func _resolve_setup_warning_popup() -> void:
+	_setup_warning_popup = get_node_or_null("SetupWarningPopup") as PanelContainer
+	if _setup_warning_popup == null:
+		# Robustness if HUD.tscn changes: create it dynamically.
+		var inst := SetupWarningPopupScene.instantiate() as PanelContainer
+		add_child(inst)
+		inst.name = "SetupWarningPopup"
+		inst.z_as_relative = false
+		inst.z_index = 4096
+		_setup_warning_popup = inst
+	if _setup_warning_popup != null:
+		_setup_warning_popup.visible = false
+
+
+func _connect_setup_warning() -> void:
+	var dg := get_node_or_null("/root/DungeonGrid")
+	if dg != null and dg.has_signal("layout_changed"):
+		dg.layout_changed.connect(_refresh_setup_warning)
+	if GameState != null and GameState.has_signal("phase_changed"):
+		GameState.phase_changed.connect(func(_new_phase: int) -> void:
+			_refresh_setup_warning()
+		)
+	if _setup_warning != null:
+		_setup_warning.mouse_entered.connect(_on_setup_warning_hover_entered)
+		_setup_warning.mouse_exited.connect(_on_setup_warning_hover_exited)
+
+
+func _refresh_setup_warning() -> void:
+	if _setup_warning == null:
+		return
+
+	# Hide during the DAY phase (setup errors are only relevant while building).
+	if GameState != null and GameState.phase == GameState.Phase.DAY:
+		_setup_warning.visible = false
+		_hide_setup_warning_popup()
+		return
+
+	var dg := get_node_or_null("/root/DungeonGrid")
+	var issues := DungeonSetupStatusServiceScript.get_setup_issues(dg)
+	if issues.is_empty():
+		_setup_warning.visible = false
+		_hide_setup_warning_popup()
+		return
+
+	_setup_warning.visible = true
+	# If popup is already visible (hovered), update its contents immediately.
+	if _setup_warning_popup != null and _setup_warning_popup.visible:
+		_show_setup_warning_popup(issues)
+
+
+func _on_setup_warning_hover_entered() -> void:
+	var dg := get_node_or_null("/root/DungeonGrid")
+	var issues := DungeonSetupStatusServiceScript.get_setup_issues(dg)
+	if issues.is_empty():
+		_hide_setup_warning_popup()
+		return
+	_show_setup_warning_popup(issues)
+
+
+func _on_setup_warning_hover_exited() -> void:
+	_hide_setup_warning_popup()
+
+
+func _hide_setup_warning_popup() -> void:
+	if _setup_warning_popup == null:
+		return
+	if _setup_warning_popup.has_method("close"):
+		_setup_warning_popup.call("close")
+	else:
+		_setup_warning_popup.visible = false
+
+
+func _show_setup_warning_popup(issues: Array[String]) -> void:
+	if _setup_warning == null or _setup_warning_popup == null:
+		return
+	# Single-line (horizontal) popup; avoid wrapping into tall vertical text.
+	var text := " • ".join(issues)
+	if _setup_warning_popup.has_method("set_text"):
+		_setup_warning_popup.call("set_text", text)
+	# Position using the warning icon's global rect.
+	var anchor := _setup_warning.get_global_rect()
+	if _setup_warning_popup.has_method("open_at"):
+		_setup_warning_popup.call("open_at", anchor)
+	else:
+		_setup_warning_popup.visible = true
 
 
 func _resolve_shop() -> void:
