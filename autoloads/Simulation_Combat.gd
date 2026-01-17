@@ -94,6 +94,16 @@ func join_room(room: Dictionary, adv: Node2D) -> void:
 		}
 		if _simulation != null and _simulation.has_signal("combat_started"):
 			_simulation.emit_signal("combat_started", room_id)
+		DbgLog.once(
+			"combat_started:%d" % room_id,
+			"Combat started room_id=%d (warmup=%.2fs participants=0 monsters=%d)" % [
+				room_id,
+				float(COMBAT_WARMUP_SECONDS),
+				monsters.size(),
+			],
+			"combat",
+			DbgLog.Level.INFO
+		)
 
 	var participants: Array = combat.get("participants", [])
 	if not participants.has(adv):
@@ -147,6 +157,12 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 	if participants.is_empty():
 		if _simulation != null and _simulation.has_signal("combat_ended"):
 			_simulation.emit_signal("combat_ended", room_id)
+		DbgLog.once(
+			"combat_ended:%d:no_participants" % room_id,
+			"Combat ended room_id=%d (reason=no_participants)" % room_id,
+			"combat",
+			DbgLog.Level.INFO
+		)
 		return false
 
 	if monsters.is_empty():
@@ -157,6 +173,12 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 			_threat.call("reset_room", room_id)
 		if _simulation != null and _simulation.has_signal("combat_ended"):
 			_simulation.emit_signal("combat_ended", room_id)
+		DbgLog.once(
+			"combat_ended:%d:no_monsters" % room_id,
+			"Combat ended room_id=%d (reason=no_monsters)" % room_id,
+			"combat",
+			DbgLog.Level.INFO
+		)
 		return false
 
 	_tick_motion_noise(combat, dt)
@@ -215,6 +237,12 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 			_threat.call("reset_room", room_id)
 		if _simulation != null and _simulation.has_signal("combat_ended"):
 			_simulation.emit_signal("combat_ended", room_id)
+		DbgLog.once(
+			"combat_ended:%d:all_monsters_dead" % room_id,
+			"Combat ended room_id=%d (reason=all_monsters_dead)" % room_id,
+			"combat",
+			DbgLog.Level.INFO
+		)
 		return false
 
 	return true
@@ -441,12 +469,30 @@ func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 						best_dist_glop = d1
 						best_adv_glop = a1
 				if best_adv_glop != null:
+					DbgLog.info(
+						"Glop cast room_id=%d dmg=%d range=%.0f target_adv=%d dist=%.1f" % [
+							room_id,
+							int(m.glop_damage),
+							gr,
+							int(best_adv_glop.get_instance_id()),
+							float(best_dist_glop),
+						],
+						"boss_upgrades"
+					)
 					best_adv_glop.call("apply_damage", int(m.glop_damage))
 					adv_hit[int(best_adv_glop.get_instance_id())] = RANGED_KITE_HIT_WINDOW
 					var cd := float(m.glop_cooldown_s)
 					if cd <= 0.0:
 						cd = 3.0
 					m.glop_t = cd
+				else:
+					DbgLog.throttle(
+						"glop_no_target:%d" % room_id,
+						2.0,
+						"Glop ready but no target in range room_id=%d range=%.0f" % [room_id, gr],
+						"boss_upgrades",
+						DbgLog.Level.DEBUG
+					)
 
 		var t: float = float(m.attack_timer) - dt
 		if t <= 0.0:

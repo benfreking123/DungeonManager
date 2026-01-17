@@ -389,7 +389,9 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 		item_kind = String(ItemDB.call("get_item_kind", item_id))
 	var can_install := false
 	if slot_kind == "universal":
-		can_install = item_kind in ["trap", "monster", "treasure"]
+		# Universal slots can accept any item type that can be installed into a room slot.
+		# Boss rooms use these for minion spawners, but they can also hold boss upgrades.
+		can_install = item_kind in ["trap", "monster", "treasure", "boss_upgrade"]
 	elif slot_kind == "boss_upgrade":
 		can_install = item_kind == "boss_upgrade"
 	else:

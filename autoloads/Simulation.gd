@@ -666,8 +666,6 @@ func _boss_upgrades_in_room(boss_room: Dictionary) -> Array[BossUpgradeItem]:
 		var sd := s as Dictionary
 		if sd.is_empty():
 			continue
-		if String(sd.get("slot_kind", "")) != "boss_upgrade":
-			continue
 		var item_id := String(sd.get("installed_item_id", ""))
 		if item_id == "":
 			continue

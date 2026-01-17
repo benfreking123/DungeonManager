@@ -15,7 +15,35 @@ var enabled: Dictionary = {
 	"monsters": { "enabled": true, "level": Level.DEBUG },
 	"adventurers": { "enabled": true, "level": Level.DEBUG },
 	"ui": { "enabled": true, "level": Level.DEBUG },
+	# Combat/encounter + boss-upgrade detail logs (safe to turn off in one place).
+	"combat": { "enabled": true, "level": Level.INFO },
+	"boss_upgrades": { "enabled": true, "level": Level.INFO },
 }
+
+var _once_keys: Dictionary = {} # String -> bool
+var _throttle_next_s: Dictionary = {} # String -> float
+
+
+func _now_s() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
+
+
+func once(key: String, message: String, category: String, level: int = Level.DEBUG) -> void:
+	# Log a message only once per runtime (use a stable key).
+	if bool(_once_keys.get(key, false)):
+		return
+	_once_keys[key] = true
+	self.log(message, category, level)
+
+
+func throttle(key: String, interval_s: float, message: String, category: String, level: int = Level.DEBUG) -> void:
+	# Log a message at most once per interval per key.
+	var now := _now_s()
+	var next_ok := float(_throttle_next_s.get(key, -1.0))
+	if next_ok >= 0.0 and now < next_ok:
+		return
+	_throttle_next_s[key] = now + maxf(0.0, interval_s)
+	self.log(message, category, level)
 
 
 func is_enabled(category: String) -> bool:

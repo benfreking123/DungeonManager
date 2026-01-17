@@ -1,14 +1,16 @@
-[gd_resource type="AtlasTexture" load_steps=3 format=3 uid="uid://bsa4xih0meu0e"]
+[gd_resource type="Resource" script_class="BossUpgradeItem" load_steps=4 format=3]
 
-[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_ssl4b"]
-load_path = "res://.godot/imported/ChatGPT Image Jan 17, 2026, 01_00_28 AM.png-c5f40f0e0b041c5c545c376851a4ac89.ctex"
+[ext_resource type="Script" path="res://scripts/items/BossUpgradeItem.gd" id="1_up"]
+[ext_resource type="Texture2D" path="res://assets/icons/boss_upgrades/BossUpgradeAtlas.tres" id="2_atlas"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_hshm6"]
-atlas = SubResource("CompressedTexture2D_ssl4b")
-region = Rect2(520, 512, 240, 192)
+[sub_resource type="AtlasTexture" id="AtlasTexture_icon"]
+atlas = ExtResource("2_atlas")
+region = Rect2(520, 528, 240, 192)
 
 [resource]
-atlas = SubResource("AtlasTexture_hshm6")
-region = Rect2(520, 528, 240, 192)
-metadata/upgrade_id = "health"
-metadata/value = 5.0
+script = ExtResource("1_up")
+upgrade_id = "health"
+display_name = "Health"
+icon = SubResource("AtlasTexture_icon")
+effect_id = "boss_upgrade_health"
+value = 5.0

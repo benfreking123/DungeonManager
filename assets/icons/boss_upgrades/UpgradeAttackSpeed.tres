@@ -1,9 +1,16 @@
-[gd_resource type="AtlasTexture" load_steps=2 format=3 uid="uid://l1y770y2xxhw"]
+[gd_resource type="Resource" script_class="BossUpgradeItem" load_steps=4 format=3]
 
-[ext_resource type="Texture2D" uid="uid://b44kkct70cdqb" path="res://assets/icons/boss_upgrades/BossUpgradeAtlas.tres" id="1_ii3i4"]
+[ext_resource type="Script" path="res://scripts/items/BossUpgradeItem.gd" id="1_up"]
+[ext_resource type="Texture2D" path="res://assets/icons/boss_upgrades/BossUpgradeAtlas.tres" id="2_atlas"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_icon"]
+atlas = ExtResource("2_atlas")
+region = Rect2(24, 16, 240, 192)
 
 [resource]
-atlas = ExtResource("1_ii3i4")
-region = Rect2(24, 16, 240, 192)
-metadata/upgrade_id = "attackspeed"
-metadata/value = 1.15
+script = ExtResource("1_up")
+upgrade_id = "attack_speed"
+display_name = "Attack Speed"
+icon = SubResource("AtlasTexture_icon")
+effect_id = "boss_upgrade_attack_speed"
+value = 1.15
