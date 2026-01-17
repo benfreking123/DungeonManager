@@ -7,6 +7,8 @@ extends Node
 
 signal day_started()
 signal day_ended()
+signal combat_started(room_id: int)
+signal combat_ended(room_id: int)
 
 const SURFACE_SPEED := 64.0
 const DUNGEON_SPEED := 52.0
@@ -61,6 +63,11 @@ var _party_spawn_ctx: Dictionary = {}
 
 var _adv_scene: PackedScene = preload("res://scenes/Adventurer.tscn")
 
+var _loot_system: RefCounted
+var _room_inventory_panel: Node
+var _ending_day: bool = false
+var _monster_roster: RefCounted
+
 
 func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_town_view = town_view
@@ -76,18 +83,29 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_dungeon_grid = get_node_or_null("/root/DungeonGrid")
 	_room_db = get_node_or_null("/root/RoomDB")
 	_item_db = get_node_or_null("/root/ItemDB")
+	_room_inventory_panel = _find_room_inventory_panel()
+
+	# Runtime monsters live in a roster (separate from spawners/templates).
+	# Must be created BEFORE combat setup so combat can query current monsters.
+	_monster_roster = preload("res://scripts/systems/MonsterRoster.gd").new()
+
 	_combat = preload("res://autoloads/Simulation_Combat.gd").new()
-	_combat.call("setup", _dungeon_view, _dungeon_grid, self)
+	_combat.call("setup", _dungeon_view, _dungeon_grid, self, _monster_roster)
 	# Initialize AI services
 	_path_service = preload("res://scripts/nav/PathService.gd").new()
 	_path_service.setup(_dungeon_grid)
 	_party_ai = preload("res://scripts/ai/PartyAI.gd").new()
 	_party_ai.setup(_dungeon_grid, _path_service)
 
+	# Loot system (separate file): spawns on-ground treasure drops and collects at day end.
+	_loot_system = preload("res://scripts/systems/LootDropSystem.gd").new()
+	_loot_system.call("setup", _world_canvas, _item_db, get_node_or_null("/root/game_config"))
+
 
 func start_day() -> void:
 	if _active:
 		return
+	_ending_day = false
 	# Require a valid layout (entrance->boss path).
 	if _dungeon_grid != null:
 		var req: Dictionary = _dungeon_grid.call("validate_required_paths") as Dictionary
@@ -106,6 +124,8 @@ func start_day() -> void:
 	_adv_last_cell.clear()
 	_adv_was_in_combat.clear()
 	room_spawners_by_room_id.clear()
+	if _monster_roster != null:
+		_monster_roster.call("reset")
 	if _combat != null:
 		_combat.call("reset")
 	if _dungeon_grid != null:
@@ -113,12 +133,27 @@ func start_day() -> void:
 		_init_room_spawners()
 		_spawn_boss()
 	_begin_party_spawn()
+	if _loot_system != null:
+		_loot_system.call("reset")
 
 
 func end_day() -> void:
+	if _ending_day:
+		return
+	_ending_day = true
 	_active = false
 	_party_spawn_queue.clear()
 	_party_spawn_ctx.clear()
+
+	# Collect ground loot (animate to Treasure tab) before final cleanup.
+	var target := _loot_collect_target_world_pos()
+	if _loot_system != null and bool(_loot_system.call("has_loot")) and target != Vector2.ZERO:
+		_loot_system.call("collect_all_to", target, Callable(self, "_finish_end_day_cleanup"))
+	else:
+		_finish_end_day_cleanup()
+
+
+func _finish_end_day_cleanup() -> void:
 	for a in _adventurers:
 		if is_instance_valid(a):
 			a.queue_free()
@@ -130,8 +165,11 @@ func end_day() -> void:
 	room_spawners_by_room_id.clear()
 	if _combat != null:
 		_combat.call("reset")
+	if _monster_roster != null:
+		_monster_roster.call("reset")
 	GameState.set_phase(GameState.Phase.RESULTS)
 	day_ended.emit()
+	_ending_day = false
 
 
 func _process(delta: float) -> void:
@@ -270,8 +308,35 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 	adv.call("set_dungeon_targets", _dungeon_view, path, DUNGEON_SPEED)
 	adv.call("set_on_reach_goal", Callable(self, "_on_adventurer_finished").bind(adv))
 	adv.connect("cell_reached", Callable(self, "_on_adventurer_cell_reached").bind(adv))
+	if adv.has_signal("died"):
+		adv.connect("died", Callable(self, "_on_adventurer_died").bind(int(adv.get_instance_id())))
 	_adventurers.append(adv)
 	_adv_was_in_combat[int(adv.get_instance_id())] = false
+
+
+func _on_adventurer_died(world_pos: Vector2, class_id: String, adv_id: int) -> void:
+	# Only drop loot if the adventurer has entered the dungeon (has a non-zero last room).
+	if int(_adv_last_room.get(adv_id, 0)) == 0:
+		return
+	if _loot_system != null:
+		_loot_system.call("on_adventurer_died", world_pos, class_id)
+
+
+func _find_room_inventory_panel() -> Node:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return null
+	return scene.find_child("RoomInventoryPanel", true, false)
+
+
+func _loot_collect_target_world_pos() -> Vector2:
+	if _room_inventory_panel == null:
+		_room_inventory_panel = _find_room_inventory_panel()
+	if _room_inventory_panel != null and _room_inventory_panel.has_method("get_treasure_collect_target_global_pos"):
+		var v: Variant = _room_inventory_panel.call("get_treasure_collect_target_global_pos")
+		if v is Vector2:
+			return v
+	return Vector2.ZERO
 
 
 func _on_adventurer_finished(adv: Node2D) -> void:
@@ -333,7 +398,7 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 			_apply_trap_on_enter(room, adv)
 		elif kind == "monster" or kind == "boss":
 			if _combat != null:
-				_combat.call("join_room", room, adv, room_spawners_by_room_id)
+				_combat.call("join_room", room, adv)
 
 	# Exploration AI: after entering a room (and if not in combat), retarget occasionally.
 	if bool(adv.get("in_combat")):
@@ -480,19 +545,12 @@ func _make_spawner(room_id: int, monster_item_id: String, capacity: int) -> Dict
 		"monster_item_id": monster_item_id,
 		"capacity": capacity,
 		"spawn_timer": 0.0,
-		"monsters": [], # Array[Dictionary] { hp, max_hp, size, attack_damage, attack_interval, attack_timer, actor }
 	}
 
 
 func _clear_all_monster_actors() -> void:
-	for k in room_spawners_by_room_id.keys():
-		var sp: Dictionary = room_spawners_by_room_id[int(k)]
-		var monsters: Array = sp.get("monsters", [])
-		for m in monsters:
-			var d := m as Dictionary
-			var actor: Variant = d.get("actor", null)
-			if actor != null and is_instance_valid(actor):
-				(actor as Node).queue_free()
+	if _monster_roster != null:
+		_monster_roster.call("clear_all_actors")
 
 
 func _init_room_spawners() -> void:
@@ -538,7 +596,6 @@ func _spawn_boss() -> void:
 		"monster_item_id": mi.id,
 		"capacity": mi.size,
 		"spawn_timer": 0.0,
-		"monsters": [],
 		"spawn_disabled": true,
 	}
 
@@ -552,18 +609,10 @@ func _spawn_boss() -> void:
 	actor.call("set_icon", mi.icon)
 	actor.set_meta("collision_radius", COLLISION_RADIUS_BOSS)
 	actor.call("set_is_boss", true)
-
-	sp["monsters"] = [{
-		"id": mi.id,
-		"hp": mi.max_hp,
-		"max_hp": mi.max_hp,
-		"size": mi.size,
-		"attack_damage": mi.attack_damage,
-		"attack_interval": mi.attack_interval,
-		"range": mi.range,
-		"attack_timer": 0.0,
-		"actor": actor,
-	}]
+	if _monster_roster != null:
+		var mon := preload("res://scripts/systems/MonsterInstance.gd").new()
+		mon.call("setup_from_template", mi, room_id, room_id, actor)
+		_monster_roster.call("add", mon)
 
 	room_spawners_by_room_id[room_id] = sp
 	DbgLog.log("Boss spawned room_id=%d hp=%d" % [room_id, mi.max_hp], "monsters")
@@ -592,26 +641,52 @@ func _tick_one_spawner(sp: Dictionary, dt: float) -> void:
 	var capacity: int = int(sp.get("capacity", 3))
 
 	var spawn_timer: float = float(sp.get("spawn_timer", 0.0)) + dt
-	var monsters: Array = sp.get("monsters", [])
+	var room_id: int = int(sp.get("room_id", 0))
 
 	while true:
 		if spawn_timer < interval:
 			break
 		var current_size_sum: int = 0
-		for m in monsters:
-			current_size_sum += int((m as Dictionary).get("size", 1))
+		if _monster_roster != null:
+			current_size_sum = int(_monster_roster.call("size_sum_in_room", room_id))
 		if current_size_sum + mi.size > capacity:
 			break
 		spawn_timer -= interval
-		monsters.append(_spawn_monster_instance(int(sp.get("room_id", 0)), mi, monsters.size()))
-		DbgLog.log("Spawned %s in room_id=%d (count=%d)" % [mi.id, int(sp.get("room_id", 0)), monsters.size()], "monsters")
+		var idx := 0
+		if _monster_roster != null:
+			idx = int(_monster_roster.call("count_in_room", room_id))
+		var inst: Variant = _spawn_monster_instance(room_id, mi, idx)
+		if _monster_roster != null and inst != null:
+			_monster_roster.call("add", inst)
+		var count_now := idx + 1
+		if _monster_roster != null:
+			count_now = int(_monster_roster.call("count_in_room", room_id))
+		DbgLog.log("Spawned %s in room_id=%d (count=%d)" % [mi.id, room_id, count_now], "monsters")
+		# If adventurers are already in this room, start/join combat now (otherwise they could
+		# walk through before the first spawn and never re-enter combat).
+		_join_combat_for_adventurers_in_room(room_id)
 		# If there's an active combat in this room, refresh formation targets for the new monster.
-		var rid: int = int(sp.get("room_id", 0))
 		if _combat != null:
-			_combat.call("on_monster_spawned", rid, room_spawners_by_room_id)
+			_combat.call("on_monster_spawned", room_id)
 
 	sp["spawn_timer"] = spawn_timer
-	sp["monsters"] = monsters
+
+
+func _join_combat_for_adventurers_in_room(room_id: int) -> void:
+	if room_id == 0 or _combat == null or _dungeon_grid == null:
+		return
+	if _adventurers.is_empty():
+		return
+	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary
+	if room.is_empty():
+		return
+	for a in _adventurers:
+		if not is_instance_valid(a):
+			continue
+		var aid: int = int((a as Node2D).get_instance_id())
+		if int(_adv_last_room.get(aid, 0)) != room_id:
+			continue
+		_combat.call("join_room", room, a)
 
 
 
@@ -621,7 +696,7 @@ func _make_monster_item(item_id: String) -> MonsterItem:
 	return _item_db.call("get_monster", item_id) as MonsterItem
 
 
-func _spawn_monster_instance(room_id: int, mi: MonsterItem, idx: int) -> Dictionary:
+func _spawn_monster_instance(room_id: int, mi: MonsterItem, idx: int) -> RefCounted:
 	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary if _dungeon_grid != null else {}
 
 	var actor: Node2D = _monster_scene.instantiate() as Node2D
@@ -647,23 +722,9 @@ func _spawn_monster_instance(room_id: int, mi: MonsterItem, idx: int) -> Diction
 	actor.set_meta("collision_radius", COLLISION_RADIUS_MON)
 	actor.call("set_is_boss", false)
 
-	return {
-		"id": mi.id,
-		"hp": mi.max_hp,
-		"max_hp": mi.max_hp,
-		"size": mi.size,
-		"attack_damage": mi.attack_damage,
-		"attack_interval": mi.attack_interval,
-		"range": mi.range,
-		"attack_timer": 0.0,
-		"actor": actor,
-	}
-
-
-func _sync_monster_actor(m: Dictionary) -> void:
-	var actor: Variant = m.get("actor", null)
-	if actor != null and is_instance_valid(actor):
-		(actor as Node).call("set_hp", int(m.get("hp", 0)), int(m.get("max_hp", 1)))
+	var mon := preload("res://scripts/systems/MonsterInstance.gd").new()
+	mon.call("setup_from_template", mi, room_id, room_id, actor)
+	return mon
 
 
 func _collect_collision_bodies() -> Array[Node2D]:
@@ -677,14 +738,13 @@ func _collect_collision_bodies() -> Array[Node2D]:
 				continue
 			out.append(a)
 	# Monsters (actors)
-	for k in room_spawners_by_room_id.keys():
-		var sp: Dictionary = room_spawners_by_room_id[int(k)]
-		var monsters: Array = sp.get("monsters", [])
-		for m in monsters:
-			var d := m as Dictionary
-			var actor: Variant = d.get("actor", null)
-			if actor != null and is_instance_valid(actor):
-				out.append(actor as Node2D)
+	if _monster_roster != null:
+		var bodies: Variant = _monster_roster.call("collect_actor_bodies")
+		if bodies is Array:
+			for b in bodies:
+				var n := b as Node2D
+				if n != null and is_instance_valid(n):
+					out.append(n)
 	return out
 
 

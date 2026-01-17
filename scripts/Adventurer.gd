@@ -4,6 +4,8 @@ extends Node2D
 # - Moves along a surface straight line into entrance
 # - Then moves cell-to-cell along a dungeon path
 
+signal died(world_pos: Vector2, class_id: String)
+
 enum Phase { SURFACE, DUNGEON, DONE }
 
 var phase: int = Phase.SURFACE
@@ -34,6 +36,7 @@ var combat_room_id: int = 0
 var party_id: int = 0
 var class_id: String = ""
 var class_icon: Texture2D
+var _dead: bool = false
 
 
 func set_surface_target(target_world: Vector2, speed: float) -> void:
@@ -153,6 +156,11 @@ func apply_damage(amount: int) -> void:
 
 
 func die() -> void:
+	if _dead:
+		return
+	_dead = true
+	# Notify Simulation/loot system (spawn ground loot, etc.)
+	died.emit(global_position, class_id)
 	phase = Phase.DONE
 	queue_free()
 

@@ -54,12 +54,10 @@ func _ready() -> void:
 		simulation.call("set_views", town_view, dungeon_view)
 
 	GameState.economy_changed.connect(func():
-		hud.set_treasure(GameState.treasure_total)
 		hud.set_power(GameState.power_used, GameState.power_capacity)
 	)
 
 	# Initial paint
-	hud.set_treasure(GameState.treasure_total)
 	hud.set_power(GameState.power_used, GameState.power_capacity)
 
 

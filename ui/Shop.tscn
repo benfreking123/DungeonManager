@@ -1,0 +1,186 @@
+[gd_scene load_steps=11 format=3 uid="uid://cqgpn7xq2dyua"]
+
+[ext_resource type="Script" path="res://ui/Shop.gd" id="1_shop_gd"]
+[ext_resource type="Texture2D" uid="uid://cba0hifpmn7hq" path="res://assets/Shop/ShopBackground.png" id="2_shop_bg"]
+[ext_resource type="Texture2D" uid="uid://qlttegso7ia1" path="res://assets/Shop/Squares/BlackSquare.tres" id="3_dodmw"]
+[ext_resource type="Texture2D" uid="uid://dbwsqkia1q7ih" path="res://assets/Shop/Squares/BlueSquare.tres" id="4_xsooh"]
+[ext_resource type="Texture2D" uid="uid://b7i57nk1haluh" path="res://assets/Shop/Squares/BrownSquare.tres" id="5_1bxn0"]
+[ext_resource type="Texture2D" uid="uid://ta0rii6o8wes" path="res://assets/Shop/Squares/GraySquare.tres" id="6_mmuwl"]
+[ext_resource type="Texture2D" uid="uid://37qx2t3nfqad" path="res://assets/Shop/Squares/GreenSquare.tres" id="7_pot73"]
+[ext_resource type="Texture2D" uid="uid://c88fhmvbmmqgr" path="res://assets/Shop/Squares/PurpleSquare.tres" id="8_c6m53"]
+[ext_resource type="Texture2D" uid="uid://cus0t415enusv" path="res://assets/Shop/Squares/RedSquare.tres" id="9_e562a"]
+[ext_resource type="Texture2D" uid="uid://c2yw37kdvydbb" path="res://assets/Shop/Squares/WhiteSquare.tres" id="10_adjul"]
+
+[node name="Shop" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+script = ExtResource("1_shop_gd")
+
+[node name="Panel" type="Control" parent="."]
+anchors_preset = 0
+offset_left = -800.0
+offset_bottom = 720.0
+mouse_filter = 1
+
+[node name="Background" type="TextureRect" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -692.0
+offset_top = -232.0
+offset_right = -207.0
+offset_bottom = 275.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_shop_bg")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Close" type="Button" parent="Panel"]
+layout_mode = 0
+offset_left = 440.0
+offset_top = 26.0
+offset_right = 510.0
+offset_bottom = 61.0
+text = "Close"
+
+[node name="Squares" type="Control" parent="."]
+anchors_preset = 0
+offset_left = -800.0
+offset_right = -760.0
+offset_bottom = 40.0
+
+[node name="BlackSquare" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -136.0
+offset_top = 486.0
+offset_right = -4.0
+offset_bottom = 625.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("3_dodmw")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BlackSquare2" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -131.0
+offset_top = 315.0
+offset_right = 1.0
+offset_bottom = 454.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("4_xsooh")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BlackSquare3" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 128.0
+offset_top = 311.0
+offset_right = 260.0
+offset_bottom = 450.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_1bxn0")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BlackSquare4" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 131.0
+offset_top = 169.0
+offset_right = 263.0
+offset_bottom = 308.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("6_mmuwl")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BlackSquare5" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -128.0
+offset_top = 100.0
+offset_right = 4.0
+offset_bottom = 239.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("7_pot73")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BlackSquare6" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -353.0
+offset_top = 310.0
+offset_right = -202.0
+offset_bottom = 468.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("8_c6m53")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BlackSquare7" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -345.0
+offset_top = 104.0
+offset_right = -213.0
+offset_bottom = 243.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("9_e562a")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BlackSquare8" type="TextureRect" parent="Squares"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -344.0
+offset_top = 481.0
+offset_right = -212.0
+offset_bottom = 620.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("10_adjul")
+expand_mode = 1
+stretch_mode = 5

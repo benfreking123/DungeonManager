@@ -7,6 +7,7 @@ extends PanelContainer
 @onready var _monster_grid: Container = $VBox/Pages/Monsters/MonsterGrid
 @onready var _trap_grid: Container = $VBox/Pages/Traps/TrapGrid
 @onready var _boss_grid: Container = $VBox/Pages/Boss/BossGrid
+@onready var _treasure_grid: Container = $VBox/Pages/Treasure/TreasureGrid
 
 @onready var _page_room: Control = $VBox/Pages/Room
 @onready var _page_monsters: Control = $VBox/Pages/Monsters
@@ -24,6 +25,8 @@ var _room_btn_scene: PackedScene = preload("res://ui/RoomInventoryItemButton.tsc
 var _item_btn_scene: PackedScene = preload("res://ui/InventoryItemButton.tscn")
 
 var _glyph_icons: Dictionary = {} # String -> Texture2D
+
+var _tab_lock: String = "" # "" = unlocked, otherwise page id (e.g. "treasure")
 
 
 func _ready() -> void:
@@ -51,11 +54,71 @@ func _setup_tabs() -> void:
 
 
 func _show_page(which: String) -> void:
+	if _tab_lock != "" and which != _tab_lock:
+		return
 	_page_room.visible = (which == "room")
 	_page_monsters.visible = (which == "monsters")
 	_page_traps.visible = (which == "traps")
 	_page_boss.visible = (which == "boss")
 	_page_treasure.visible = (which == "treasure")
+
+
+func lock_tabs_to(which: String) -> void:
+	_tab_lock = which
+	_show_page(which)
+
+	# Keep the UI obvious: disable other tabs while locked.
+	var lock_room := (which != "room")
+	var lock_mon := (which != "monsters")
+	var lock_traps := (which != "traps")
+	var lock_boss := (which != "boss")
+	var lock_treasure := (which != "treasure")
+	if _tab_room != null:
+		_tab_room.disabled = lock_room
+	if _tab_monsters != null:
+		_tab_monsters.disabled = lock_mon
+	if _tab_traps != null:
+		_tab_traps.disabled = lock_traps
+	if _tab_boss != null:
+		_tab_boss.disabled = lock_boss
+	if _tab_treasure != null:
+		_tab_treasure.disabled = lock_treasure
+
+	# Ensure the correct button appears selected when locked.
+	match which:
+		"room":
+			if _tab_room != null: _tab_room.button_pressed = true
+		"monsters":
+			if _tab_monsters != null: _tab_monsters.button_pressed = true
+		"traps":
+			if _tab_traps != null: _tab_traps.button_pressed = true
+		"boss":
+			if _tab_boss != null: _tab_boss.button_pressed = true
+		"treasure":
+			if _tab_treasure != null: _tab_treasure.button_pressed = true
+
+
+func unlock_tabs() -> void:
+	_tab_lock = ""
+	if _tab_room != null:
+		_tab_room.disabled = false
+	if _tab_monsters != null:
+		_tab_monsters.disabled = false
+	if _tab_traps != null:
+		_tab_traps.disabled = false
+	if _tab_boss != null:
+		_tab_boss.disabled = false
+	if _tab_treasure != null:
+		_tab_treasure.disabled = false
+
+
+func get_treasure_collect_target_global_pos() -> Vector2:
+	# Used for end-of-day loot collection animation.
+	# Aim for the Treasure tab button center (stable even if Treasure page isn't visible).
+	if _tab_treasure != null:
+		var r := _tab_treasure.get_global_rect()
+		return r.position + r.size * 0.5
+	return global_position
 
 
 func set_status(text: String) -> void:
@@ -67,6 +130,7 @@ func _refresh() -> void:
 	_clear_children(_monster_grid)
 	_clear_children(_trap_grid)
 	_clear_children(_boss_grid)
+	_clear_children(_treasure_grid)
 	set_status("")
 
 	if _room_db == null:
@@ -104,6 +168,7 @@ func _refresh_rooms() -> void:
 func _refresh_items() -> void:
 	_refresh_item_group(_monster_grid, ItemDB.monsters)
 	_refresh_item_group(_trap_grid, ItemDB.traps)
+	_refresh_item_group(_treasure_grid, ItemDB.treasures)
 	_refresh_boss()
 
 
@@ -153,6 +218,8 @@ func _resource_display_name(res: Resource, fallback_id: String) -> String:
 		return (res as TrapItem).display_name
 	if res is MonsterItem:
 		return (res as MonsterItem).display_name
+	if res is TreasureItem:
+		return (res as TreasureItem).display_name
 	return fallback_id
 
 
@@ -163,6 +230,8 @@ func _resource_icon(res: Resource, id: String) -> Texture2D:
 	if res is MonsterItem:
 		var tex := (res as MonsterItem).icon
 		return tex if tex != null else _get_monster_glyph_icon(id)
+	if res is TreasureItem:
+		return (res as TreasureItem).icon
 	return _get_generic_item_glyph_icon(id)
 
 

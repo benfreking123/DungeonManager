@@ -7,6 +7,11 @@ var counts: Dictionary = {
 	"spike_trap": 1,
 	"floor_pit": 1,
 	"zombie": 1,
+	"treasure_base": 0,
+	"treasure_mage": 0,
+	"treasure_priest": 0,
+	"treasure_rogue": 0,
+	"treasure_warrior": 0,
 }
 
 
@@ -40,6 +45,11 @@ func reset_all() -> void:
 		"spike_trap": 1,
 		"floor_pit": 1,
 		"zombie": 1,
+		"treasure_base": 0,
+		"treasure_mage": 0,
+		"treasure_priest": 0,
+		"treasure_rogue": 0,
+		"treasure_warrior": 0,
 	}
 	inventory_changed.emit()
 

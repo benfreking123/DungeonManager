@@ -13,43 +13,68 @@ const COMBAT_MOVE_SPEED := 220.0
 
 const DEFAULT_MELEE_RANGE := 40.0
 
+# When units are out of range, we steer them toward an offset position near the target.
+# For melee ranges, we MUST close to contact distance (not a % of range), otherwise two
+# melee units on opposite sides can stabilize at a distance > range and never hit.
+const MELEE_RANGE_CUTOFF := 80.0
+const MELEE_CONTACT_DISTANCE := 8.0
+const RANGED_STANDOFF_RATIO := 0.9
+
+# Small motion noise to make fights feel less robotic.
+const MOVE_REACTION_DELAY_MIN := 0.05
+const MOVE_REACTION_DELAY_MAX := 0.25
+const WANDER_RADIUS_PX := 5.0
+const WANDER_REROLL_MIN := 0.35
+const WANDER_REROLL_MAX := 0.95
+const ROOM_INTERIOR_PAD_PX := 6.0
+
+const RANGED_KITE_HIT_WINDOW := 0.85
+const RANGED_KITE_EXTRA_DISTANCE := 60.0
+
 var combats_by_room_id: Dictionary = {}
 
 var _dungeon_view: Control
 var _dungeon_grid: Node
 var _simulation: Node
+var _threat: RefCounted
+var _monster_roster: RefCounted
 
 
-func setup(dungeon_view: Control, dungeon_grid: Node, simulation: Node) -> void:
+func setup(dungeon_view: Control, dungeon_grid: Node, simulation: Node, monster_roster: RefCounted) -> void:
 	_dungeon_view = dungeon_view
 	_dungeon_grid = dungeon_grid
 	_simulation = simulation
+	_threat = preload("res://scripts/systems/ThreatSystem.gd").new()
+	_monster_roster = monster_roster
 
 
 func reset() -> void:
 	combats_by_room_id.clear()
+	if _threat != null:
+		_threat.call("reset")
 
 
 func is_room_in_combat(room_id: int) -> bool:
 	return combats_by_room_id.has(room_id)
 
 
-func join_room(room: Dictionary, adv: Node2D, room_spawners_by_room_id: Dictionary) -> void:
+func join_room(room: Dictionary, adv: Node2D) -> void:
 	var room_id: int = int(room.get("id", 0))
 	if room_id == 0:
 		return
 
-	# Only enter combat if monsters have spawned in this room.
-	var sp: Dictionary = room_spawners_by_room_id.get(room_id, {})
-	if sp.is_empty():
+	# Only enter combat if monsters currently exist in this room.
+	if _monster_roster == null:
 		return
-	var monsters: Array = sp.get("monsters", [])
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id)
 	if monsters.is_empty():
 		return
 
 	var combat: Dictionary = combats_by_room_id.get(room_id, {})
 	if combat.is_empty():
 		# Warmup: wait a bit before attacks start, and let units slide into position.
+		var rng := RandomNumberGenerator.new()
+		rng.seed = int(Time.get_ticks_usec()) ^ (room_id * 1103515245)
 		combat = {
 			"room_id": room_id,
 			"participants": [],
@@ -57,31 +82,39 @@ func join_room(room: Dictionary, adv: Node2D, room_spawners_by_room_id: Dictiona
 			"warmup_remaining": COMBAT_WARMUP_SECONDS,
 			"adv_targets": {},  # adv_instance_id -> world pos
 			"mon_targets": {},  # actor_instance_id -> world pos
+			"adv_move_pause": {},  # adv_instance_id -> seconds until retarget allowed
+			"mon_move_pause": {},  # actor_instance_id -> seconds until retarget allowed
+			"adv_wander_offset": {},  # adv_instance_id -> local offset
+			"mon_wander_offset": {},  # actor_instance_id -> local offset
+			"adv_wander_t": {},  # adv_instance_id -> seconds until reroll
+			"mon_wander_t": {},  # actor_instance_id -> seconds until reroll
+			"rng": rng,
+			"room_rect_local": Rect2(),
+			"adv_recently_hit": {}, # adv_instance_id -> seconds remaining
 		}
+		if _simulation != null and _simulation.has_signal("combat_started"):
+			_simulation.emit_signal("combat_started", room_id)
 
 	var participants: Array = combat.get("participants", [])
 	if not participants.has(adv):
 		participants.append(adv)
 	combat["participants"] = participants
 
-	_assign_combat_positions(room, combat, sp)
+	_assign_combat_positions(room, combat)
 	combats_by_room_id[room_id] = combat
 
 	adv.call("enter_combat", room_id)
 	DbgLog.log("Adventurer entered combat room_id=%d monsters=%d" % [room_id, monsters.size()], "monsters")
 
 
-func on_monster_spawned(room_id: int, room_spawners_by_room_id: Dictionary) -> void:
+func on_monster_spawned(room_id: int) -> void:
 	if not combats_by_room_id.has(room_id):
 		return
 	if _dungeon_grid == null:
 		return
-	var sp: Dictionary = room_spawners_by_room_id.get(room_id, {})
-	if sp.is_empty():
-		return
 	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary
 	var combat: Dictionary = combats_by_room_id[room_id]
-	_assign_combat_positions(room, combat, sp)
+	_assign_combat_positions(room, combat)
 	combats_by_room_id[room_id] = combat
 
 
@@ -100,10 +133,9 @@ func tick(dt: float, room_spawners_by_room_id: Dictionary) -> void:
 
 
 func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners_by_room_id: Dictionary) -> bool:
-	if not room_spawners_by_room_id.has(room_id):
+	if _monster_roster == null:
 		return false
-	var sp: Dictionary = room_spawners_by_room_id[room_id]
-	var monsters: Array = sp.get("monsters", [])
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id)
 
 	var participants: Array = combat.get("participants", [])
 	var p2: Array[Node2D] = []
@@ -113,16 +145,25 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 	participants = p2
 	combat["participants"] = participants
 	if participants.is_empty():
+		if _simulation != null and _simulation.has_signal("combat_ended"):
+			_simulation.emit_signal("combat_ended", room_id)
 		return false
 
 	if monsters.is_empty():
 		for p in participants:
 			if is_instance_valid(p):
 				p.call("exit_combat")
+		if _threat != null:
+			_threat.call("reset_room", room_id)
+		if _simulation != null and _simulation.has_signal("combat_ended"):
+			_simulation.emit_signal("combat_ended", room_id)
 		return false
 
+	_tick_motion_noise(combat, dt)
+	_tick_recent_hits(combat, dt)
+
 	# Visual staging: slide units to formation spots.
-	_animate_combat_positions(combat, sp, dt)
+	_animate_combat_positions(combat, dt)
 
 	# Delay attacks briefly when combat starts (pure feel/animation).
 	var warm: float = float(combat.get("warmup_remaining", 0.0))
@@ -131,45 +172,122 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 		combat["warmup_remaining"] = warm
 		return true
 
-	_tick_adv_attacks(combat, sp, dt)
-	_tick_monster_attacks(combat, sp, dt)
+	if _threat != null:
+		_threat.call("decay_room", room_id, dt)
+	_tick_adv_attacks(room_id, combat, dt)
+	_tick_monster_attacks(room_id, combat, dt)
 
 	# remove dead monsters
-	var m2: Array = []
-	for m in sp.get("monsters", []):
-		var md := m as Dictionary
-		if int(md.get("hp", 0)) > 0:
-			m2.append(md)
-		else:
+	var any_alive := false
+	for mon in monsters:
+		var mi := mon as MonsterInstance
+		if mi == null:
+			continue
+		if mi.is_alive():
+			any_alive = true
+			continue
 			# Boss death triggers game over.
-			if String(md.get("id", "")) == "boss":
+		if mi.is_boss():
 				if _simulation != null and _simulation.has_signal("boss_killed"):
 					_simulation.emit_signal("boss_killed")
-			var actor: Variant = md.get("actor", null)
-			if actor != null and is_instance_valid(actor):
-				(actor as Node).queue_free()
-	sp["monsters"] = m2
-	room_spawners_by_room_id[room_id] = sp
+		if mi.actor != null and is_instance_valid(mi.actor):
+			mi.actor.queue_free()
+		_monster_roster.call("remove", mi.instance_id)
 
-	if m2.is_empty():
+	if not any_alive:
 		# Reset monster spawn cooldown when combat ends (prevents immediate respawn as party leaves).
-		sp["spawn_timer"] = 0.0
-		room_spawners_by_room_id[room_id] = sp
+		if room_spawners_by_room_id.has(room_id):
+			var sp: Dictionary = room_spawners_by_room_id[room_id]
+			sp["spawn_timer"] = 0.0
+			room_spawners_by_room_id[room_id] = sp
 		for p in participants:
 			if is_instance_valid(p):
 				p.call("exit_combat")
+		if _threat != null:
+			_threat.call("reset_room", room_id)
+		if _simulation != null and _simulation.has_signal("combat_ended"):
+			_simulation.emit_signal("combat_ended", room_id)
 		return false
 
 	return true
 
 
-func _tick_adv_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> void:
+func _tick_recent_hits(combat: Dictionary, dt: float) -> void:
+	var hit: Dictionary = combat.get("adv_recently_hit", {})
+	for k in hit.keys():
+		hit[k] = maxf(0.0, float(hit.get(k, 0.0)) - dt)
+	combat["adv_recently_hit"] = hit
+
+
+func _ensure_rng(combat: Dictionary) -> RandomNumberGenerator:
+	var rng: RandomNumberGenerator = combat.get("rng", null) as RandomNumberGenerator
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.seed = int(Time.get_ticks_usec()) ^ (int(combat.get("room_id", 0)) * 1103515245)
+		combat["rng"] = rng
+	return rng
+
+
+func _clamp_to_room_rect(combat: Dictionary, p_local: Vector2) -> Vector2:
+	var r: Rect2 = combat.get("room_rect_local", Rect2()) as Rect2
+	if r == Rect2():
+		return p_local
+	var minx := r.position.x
+	var maxx := r.position.x + r.size.x
+	var miny := r.position.y
+	var maxy := r.position.y + r.size.y
+	return Vector2(clampf(p_local.x, minx, maxx), clampf(p_local.y, miny, maxy))
+
+
+func _tick_motion_noise(combat: Dictionary, dt: float) -> void:
+	# Decrement reaction delays and occasionally re-roll wander offsets so units feel alive.
+	var rng := _ensure_rng(combat)
+
+	var adv_pause: Dictionary = combat.get("adv_move_pause", {})
+	for k in adv_pause.keys():
+		adv_pause[k] = maxf(0.0, float(adv_pause.get(k, 0.0)) - dt)
+	combat["adv_move_pause"] = adv_pause
+
+	var mon_pause: Dictionary = combat.get("mon_move_pause", {})
+	for k2 in mon_pause.keys():
+		mon_pause[k2] = maxf(0.0, float(mon_pause.get(k2, 0.0)) - dt)
+	combat["mon_move_pause"] = mon_pause
+
+	var adv_targets: Dictionary = combat.get("adv_targets", {})
+	var adv_off: Dictionary = combat.get("adv_wander_offset", {})
+	var adv_t: Dictionary = combat.get("adv_wander_t", {})
+	for aid in adv_targets.keys():
+		var t := float(adv_t.get(aid, 0.0)) - dt
+		if t <= 0.0 or not adv_off.has(aid):
+			adv_off[aid] = Vector2(rng.randf_range(-WANDER_RADIUS_PX, WANDER_RADIUS_PX), rng.randf_range(-WANDER_RADIUS_PX, WANDER_RADIUS_PX))
+			t = rng.randf_range(WANDER_REROLL_MIN, WANDER_REROLL_MAX)
+		adv_t[aid] = t
+	combat["adv_wander_offset"] = adv_off
+	combat["adv_wander_t"] = adv_t
+
+	var mon_targets: Dictionary = combat.get("mon_targets", {})
+	var mon_off: Dictionary = combat.get("mon_wander_offset", {})
+	var mon_t: Dictionary = combat.get("mon_wander_t", {})
+	for mid in mon_targets.keys():
+		var t2 := float(mon_t.get(mid, 0.0)) - dt
+		if t2 <= 0.0 or not mon_off.has(mid):
+			mon_off[mid] = Vector2(rng.randf_range(-WANDER_RADIUS_PX, WANDER_RADIUS_PX), rng.randf_range(-WANDER_RADIUS_PX, WANDER_RADIUS_PX))
+			t2 = rng.randf_range(WANDER_REROLL_MIN, WANDER_REROLL_MAX)
+		mon_t[mid] = t2
+	combat["mon_wander_offset"] = mon_off
+	combat["mon_wander_t"] = mon_t
+
+
+func _tick_adv_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 	var participants: Array = combat.get("participants", [])
-	var monsters: Array = sp.get("monsters", [])
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id) if _monster_roster != null else []
 	if participants.is_empty() or monsters.is_empty():
 		return
 	var adv_timers: Dictionary = combat.get("adv_attack_timers", {})
 	var adv_targets: Dictionary = combat.get("adv_targets", {})
+	var adv_pause: Dictionary = combat.get("adv_move_pause", {})
+	var adv_hit: Dictionary = combat.get("adv_recently_hit", {})
+	var rng0 := _ensure_rng(combat)
 
 	for p in participants:
 		if not is_instance_valid(p):
@@ -189,10 +307,10 @@ func _tick_adv_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> void:
 			var best_actor_pos := Vector2.ZERO
 			var adv_pos := (p as Node2D).global_position
 			for i in range(monsters.size()):
-				var m0: Dictionary = monsters[i]
-				if int(m0.get("hp", 0)) <= 0:
+				var m0: MonsterInstance = monsters[i] as MonsterInstance
+				if m0 == null or not m0.is_alive():
 					continue
-				var actor0: Variant = m0.get("actor", null)
+				var actor0: Variant = m0.actor
 				if actor0 == null or not is_instance_valid(actor0):
 					continue
 				var mon_pos := (actor0 as Node2D).global_position
@@ -204,83 +322,137 @@ func _tick_adv_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> void:
 
 			if best_i != -1:
 				if best_dist <= rng:
-					var m: Dictionary = monsters[best_i]
-					m["hp"] = int(m.get("hp", 0)) - dmg
+					var m: MonsterInstance = monsters[best_i] as MonsterInstance
+					if m != null:
+						m.hp = int(m.hp) - dmg
 					_sync_monster_actor(m)
-					monsters[best_i] = m
-					t += float(p.get("attack_interval"))
+					# Threat: the damaged monster will focus this adventurer more.
+					if _threat != null:
+						var actor_hit: Variant = m.actor if m != null else null
+						var mon_key: int = 0
+						if actor_hit != null and is_instance_valid(actor_hit):
+							mon_key = int((actor_hit as Node2D).get_instance_id())
+						_threat.call("on_adv_damage", room_id, mon_key, pid, dmg)
+					# Add a touch of jitter so parties don't swing in perfect unison.
+					var base_int := float(p.get("attack_interval"))
+					t += base_int * randf_range(0.9, 1.1)
 				else:
+					# Ranged units kite when they've been hit recently.
+					if rng > MELEE_RANGE_CUTOFF and float(adv_hit.get(pid, 0.0)) > 0.0:
+						if float(adv_pause.get(pid, 0.0)) > 0.0:
+							t = 0.0
+							continue
+						var away := (adv_pos - best_actor_pos)
+						if away.length() <= 0.001:
+							away = Vector2.LEFT
+						away = away.normalized()
+						var kite_world := adv_pos + away * (RANGED_KITE_EXTRA_DISTANCE + rng0.randf_range(-10.0, 10.0))
+						var kite_local := _dungeon_world_to_local(kite_world)
+						adv_targets[pid] = _clamp_to_room_rect(combat, kite_local)
+						adv_pause[pid] = rng0.randf_range(MOVE_REACTION_DELAY_MIN, MOVE_REACTION_DELAY_MAX)
+						t = 0.0
+						continue
 					# Close distance: steer this adventurer toward a point left of the target.
+					if float(adv_pause.get(pid, 0.0)) > 0.0:
+						t = 0.0
+						continue
 					var keep_y: float = adv_pos.y
 					var cur_t: Variant = adv_targets.get(pid, adv_pos)
 					if cur_t is Vector2:
 						keep_y = _dungeon_local_to_world(cur_t as Vector2).y
-					var desired_sep: float = maxf(10.0, rng * 0.8)
+					var desired_sep: float = _closing_separation(rng)
 					var desired_world := best_actor_pos + Vector2(-desired_sep, keep_y - best_actor_pos.y)
-					adv_targets[pid] = _dungeon_world_to_local(desired_world)
+					var desired_local := _dungeon_world_to_local(desired_world)
+					adv_targets[pid] = _clamp_to_room_rect(combat, desired_local)
+					adv_pause[pid] = rng0.randf_range(MOVE_REACTION_DELAY_MIN, MOVE_REACTION_DELAY_MAX)
 					# Keep trying next tick without resetting cooldown.
 					t = 0.0
 		adv_timers[pid] = t
 
 	combat["adv_attack_timers"] = adv_timers
 	combat["adv_targets"] = adv_targets
-	sp["monsters"] = monsters
+	combat["adv_move_pause"] = adv_pause
+	combat["adv_recently_hit"] = adv_hit
 
 
-func _tick_monster_attacks(combat: Dictionary, sp: Dictionary, dt: float) -> void:
+func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 	var participants: Array = combat.get("participants", [])
-	var monsters: Array = sp.get("monsters", [])
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id) if _monster_roster != null else []
 	if participants.is_empty() or monsters.is_empty():
 		return
 	var mon_targets: Dictionary = combat.get("mon_targets", {})
+	var mon_pause: Dictionary = combat.get("mon_move_pause", {})
+	var adv_hit: Dictionary = combat.get("adv_recently_hit", {})
+	var rng0 := _ensure_rng(combat)
 
 	for i in range(monsters.size()):
-		var m: Dictionary = monsters[i]
-		var t: float = float(m.get("attack_timer", 0.0)) - dt
+		var m: MonsterInstance = monsters[i] as MonsterInstance
+		if m == null or not m.is_alive():
+			continue
+		var t: float = float(m.attack_timer) - dt
 		if t <= 0.0:
 			# Monsters hit ONE adventurer per attack.
-			var dmg: int = int(m.get("attack_damage", 1))
-			var rng: float = float(m.get("range", DEFAULT_MELEE_RANGE))
+			var dmg: int = int(m.attack_damage())
+			var rng: float = float(m.range_px())
 			if rng <= 0.0:
 				rng = DEFAULT_MELEE_RANGE
 
 			# Find closest alive adventurer.
-			var best_adv: Node2D = null
-			var best_dist := 1e18
-			var actor: Variant = m.get("actor", null)
+			var actor: Variant = m.actor
 			var mon_pos := (actor as Node2D).global_position if actor != null and is_instance_valid(actor) else Vector2.ZERO
-			for p in participants:
-				if not is_instance_valid(p):
-					continue
-				var adv := p as Node2D
-				var d := mon_pos.distance_to(adv.global_position)
-				if d < best_dist:
-					best_dist = d
-					best_adv = adv
+			var best_adv: Node2D = null
+			if _threat != null and actor != null and is_instance_valid(actor):
+				var mon_key := int((actor as Node2D).get_instance_id())
+				var prof: ThreatProfile = null
+				if m.template != null:
+					prof = m.template.threat_profile
+				var picked: Variant = _threat.call("choose_adv_target", room_id, mon_key, participants, mon_pos, rng, prof)
+				if picked != null and is_instance_valid(picked):
+					best_adv = picked as Node2D
+			# Fallback: nearest.
+			if best_adv == null:
+				var best_dist0 := 1e18
+				for p in participants:
+					if not is_instance_valid(p):
+						continue
+					var adv0 := p as Node2D
+					var d0 := mon_pos.distance_to(adv0.global_position)
+					if d0 < best_dist0:
+						best_dist0 = d0
+						best_adv = adv0
 
 			if best_adv != null:
+				var best_dist := mon_pos.distance_to(best_adv.global_position)
 				if best_dist <= rng:
 					best_adv.call("apply_damage", dmg)
-					t += float(m.get("attack_interval", 1.0))
+					# Mark this adventurer as "recently hit" so ranged units can kite briefly.
+					adv_hit[int(best_adv.get_instance_id())] = RANGED_KITE_HIT_WINDOW
+					# Add a touch of jitter so monsters don't swing in perfect unison.
+					t += float(m.attack_interval()) * randf_range(0.9, 1.1)
 				else:
 					# Close distance: steer this monster toward a point right of the target.
-					var actor2: Variant = m.get("actor", null)
+					var actor2: Variant = m.actor
 					if actor2 != null and is_instance_valid(actor2):
 						var aid := int((actor2 as Node2D).get_instance_id())
+						if float(mon_pause.get(aid, 0.0)) > 0.0:
+							t = 0.0
+							continue
 						var keep_y: float = mon_pos.y
 						var cur_t: Variant = mon_targets.get(aid, mon_pos)
 						if cur_t is Vector2:
 							keep_y = _dungeon_local_to_world(cur_t as Vector2).y
-						var desired_sep: float = maxf(10.0, rng * 0.8)
+						var desired_sep: float = _closing_separation(rng)
 						var desired_world := best_adv.global_position + Vector2(desired_sep, keep_y - best_adv.global_position.y)
-						mon_targets[aid] = _dungeon_world_to_local(desired_world)
+						var desired_local := _dungeon_world_to_local(desired_world)
+						mon_targets[aid] = _clamp_to_room_rect(combat, desired_local)
+						mon_pause[aid] = rng0.randf_range(MOVE_REACTION_DELAY_MIN, MOVE_REACTION_DELAY_MAX)
 					# Keep trying next tick without resetting cooldown.
 					t = 0.0
-		m["attack_timer"] = t
-		monsters[i] = m
+		m.attack_timer = t
 
-	sp["monsters"] = monsters
 	combat["mon_targets"] = mon_targets
+	combat["mon_move_pause"] = mon_pause
+	combat["adv_recently_hit"] = adv_hit
 
 
 func _dungeon_local_to_world(local_pos: Vector2) -> Vector2:
@@ -295,11 +467,21 @@ func _dungeon_world_to_local(world_pos: Vector2) -> Vector2:
 	return (_dungeon_view as CanvasItem).get_global_transform().affine_inverse() * world_pos
 
 
-func _assign_combat_positions(room: Dictionary, combat: Dictionary, sp: Dictionary) -> void:
+func _closing_separation(rng: float) -> float:
+	# Melee: close to contact distance so distance can fall BELOW melee range.
+	if rng <= MELEE_RANGE_CUTOFF:
+		return MELEE_CONTACT_DISTANCE
+	# Ranged: keep a standoff so ranged units don't stack on top of targets.
+	# Also clamp so we never try to keep a separation larger than range itself.
+	return clampf(rng * RANGED_STANDOFF_RATIO, 10.0, maxf(10.0, rng - 2.0))
+
+
+func _assign_combat_positions(room: Dictionary, combat: Dictionary) -> void:
 	# Create deterministic-ish positions for participants/monsters inside the room (pure animation).
 	if _dungeon_view == null:
 		return
 	var center_local: Vector2 = _dungeon_view.call("room_center_local", room) as Vector2
+	combat["room_rect_local"] = _dungeon_view.call("room_interior_rect_local", room, ROOM_INTERIOR_PAD_PX) as Rect2
 
 	var participants: Array = combat.get("participants", [])
 	var adv_targets: Dictionary = combat.get("adv_targets", {})
@@ -317,14 +499,15 @@ func _assign_combat_positions(room: Dictionary, combat: Dictionary, sp: Dictiona
 			r = DEFAULT_MELEE_RANGE
 		var x := -60.0 if r >= 100.0 else -28.0
 		# Store targets in DungeonView-local space so zoom/pan can't desync combat positions.
-		adv_targets[int(p.get_instance_id())] = center_local + Vector2(x, t_y)
+		adv_targets[int(p.get_instance_id())] = _clamp_to_room_rect(combat, center_local + Vector2(x, t_y))
 
 	# Monsters line up on the right side of the room center.
-	var monsters: Array = sp.get("monsters", [])
+	var room_id: int = int(room.get("id", 0))
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id) if _monster_roster != null else []
 	var mon_actors: Array[Node2D] = []
 	for m in monsters:
-		var md := m as Dictionary
-		var actor: Variant = md.get("actor", null)
+		var md := m as MonsterInstance
+		var actor: Variant = md.actor if md != null else null
 		if actor != null and is_instance_valid(actor):
 			mon_actors.append(actor as Node2D)
 
@@ -334,15 +517,18 @@ func _assign_combat_positions(room: Dictionary, combat: Dictionary, sp: Dictiona
 		var t_y2 := (float(j) - float(n_mon - 1) * 0.5) * 14.0
 		# Monsters are currently melee by default; keep them near the front.
 		# Store targets in DungeonView-local space so zoom/pan can't desync combat positions.
-		mon_targets[int(a.get_instance_id())] = center_local + Vector2(28.0, t_y2)
+		mon_targets[int(a.get_instance_id())] = _clamp_to_room_rect(combat, center_local + Vector2(28.0, t_y2))
 
 	combat["adv_targets"] = adv_targets
 	combat["mon_targets"] = mon_targets
 
 
-func _animate_combat_positions(combat: Dictionary, sp: Dictionary, dt: float) -> void:
+func _animate_combat_positions(combat: Dictionary, dt: float) -> void:
 	var adv_targets: Dictionary = combat.get("adv_targets", {})
 	var mon_targets: Dictionary = combat.get("mon_targets", {})
+	var adv_off: Dictionary = combat.get("adv_wander_offset", {})
+	var mon_off: Dictionary = combat.get("mon_wander_offset", {})
+	var room_rect: Rect2 = combat.get("room_rect_local", Rect2()) as Rect2
 
 	var participants: Array = combat.get("participants", [])
 	for p in participants:
@@ -353,13 +539,23 @@ func _animate_combat_positions(combat: Dictionary, sp: Dictionary, dt: float) ->
 		if not adv_targets.has(key):
 			continue
 		var target_local: Vector2 = adv_targets[key] as Vector2
+		if adv_off.has(key):
+			target_local += adv_off[key] as Vector2
+		if room_rect != Rect2():
+			target_local = _clamp_to_room_rect(combat, target_local)
 		var target_world := _dungeon_local_to_world(target_local)
 		adv.global_position = adv.global_position.move_toward(target_world, COMBAT_MOVE_SPEED * dt)
+		# Enforce room bounds.
+		if room_rect != Rect2():
+			var adv_local := _dungeon_world_to_local(adv.global_position)
+			adv_local = _clamp_to_room_rect(combat, adv_local)
+			adv.global_position = _dungeon_local_to_world(adv_local)
 
-	var monsters: Array = sp.get("monsters", [])
+	var room_id: int = int(combat.get("room_id", 0))
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id) if _monster_roster != null else []
 	for m in monsters:
-		var md := m as Dictionary
-		var actor: Variant = md.get("actor", null)
+		var md := m as MonsterInstance
+		var actor: Variant = md.actor if md != null else null
 		if actor == null or not is_instance_valid(actor):
 			continue
 		var a: Node2D = actor as Node2D
@@ -367,13 +563,22 @@ func _animate_combat_positions(combat: Dictionary, sp: Dictionary, dt: float) ->
 		if not mon_targets.has(key2):
 			continue
 		var target2_local: Vector2 = mon_targets[key2] as Vector2
+		if mon_off.has(key2):
+			target2_local += mon_off[key2] as Vector2
+		if room_rect != Rect2():
+			target2_local = _clamp_to_room_rect(combat, target2_local)
 		var target2_world := _dungeon_local_to_world(target2_local)
 		a.global_position = a.global_position.move_toward(target2_world, COMBAT_MOVE_SPEED * dt)
+		# Enforce room bounds.
+		if room_rect != Rect2():
+			var mon_local := _dungeon_world_to_local(a.global_position)
+			mon_local = _clamp_to_room_rect(combat, mon_local)
+			a.global_position = _dungeon_local_to_world(mon_local)
 
 
-func _sync_monster_actor(m: Dictionary) -> void:
-	var actor: Variant = m.get("actor", null)
+func _sync_monster_actor(m: MonsterInstance) -> void:
+	if m == null:
+		return
+	var actor: Variant = m.actor
 	if actor != null and is_instance_valid(actor):
-		(actor as Node).call("set_hp", int(m.get("hp", 0)), int(m.get("max_hp", 1)))
-
-
+		(actor as Node).call("set_hp", int(m.hp), int(m.max_hp))

@@ -1,0 +1,53 @@
+[gd_scene load_steps=3 format=3 uid="uid://dth2y8uw2eji3"]
+
+[ext_resource type="Script" path="res://ui/room_popup.gd" id="1_popup"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rbe83"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.787431, 0.696531, 0.526053, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.48)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.12)
+shadow_size = 5
+shadow_offset = Vector2(0, 2)
+
+[node name="RoomPopup" type="PanelContainer"]
+z_index = 4096
+z_as_relative = false
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_rbe83")
+script = ExtResource("1_popup")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_constants/separation = 4
+
+[node name="Top" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="VBox/Top"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Room"
+
+[node name="Close" type="Button" parent="VBox/Top"]
+layout_mode = 2
+text = "X"
+
+[node name="SlotsGrid" type="GridContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 6

@@ -1,0 +1,11 @@
+[gd_resource type="AtlasTexture" load_steps=3 format=3 uid="uid://qlttegso7ia1"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_bqoix"]
+load_path = "res://.godot/imported/ShopSquares.png-6a366555d8162ac47ac8db8609ceb259.ctex"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e4e66"]
+atlas = SubResource("CompressedTexture2D_bqoix")
+
+[resource]
+atlas = SubResource("AtlasTexture_e4e66")
+region = Rect2(136, 640, 320, 192)

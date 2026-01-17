@@ -7,4 +7,5 @@ class_name RoomType
 @export var power_cost: int = 0
 @export var kind: String = ""
 @export var max_slots: int = 0
+@export var effect_id: String = ""
 

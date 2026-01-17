@@ -6,6 +6,7 @@ var day_button: Button = null
 var speed_1x: Button = null
 var speed_2x: Button = null
 var speed_4x: Button = null
+var shop_button: Button = null
 @onready var _simulation: Node = get_node("/root/Simulation")
 @onready var _game_over: PanelContainer = $GameOverPanel
 
@@ -20,11 +21,27 @@ var _world_frame: Control = null
 var _world_canvas: Control = null
 var _dungeon_view: Node = null
 var _frame_paper_base: TextureRect = null
+var _town_texture: TextureRect = null
+var _room_popup: PanelContainer = null
+var _popup_layer: CanvasLayer = null
+var _shop: Control = null
+var _shop_layer: CanvasLayer = null
+var _room_inventory_panel: Control = null
+
+# Cache original mouse_filters for temporary shop interaction gating.
+var _topbar_mouse_filter: int = Control.MOUSE_FILTER_STOP
+var _world_frame_mouse_filter: int = Control.MOUSE_FILTER_STOP
 
 var _world_zoom: float = 1.0
 var _is_panning: bool = false
 var _pan_start_mouse_parent: Vector2 = Vector2.ZERO
 var _pan_start_canvas_pos: Vector2 = Vector2.ZERO
+
+# Nodes under WorldFrame that should visually follow the same pan/zoom as the world canvas.
+var _town_texture_base_pos: Vector2 = Vector2.ZERO
+var _town_texture_base_scale: Vector2 = Vector2.ONE
+var _frame_paper_base_pos: Vector2 = Vector2.ZERO
+var _frame_paper_base_scale: Vector2 = Vector2.ONE
 
 const ZOOM_MIN := 1.0
 const ZOOM_MAX := 2.5
@@ -39,7 +56,11 @@ func _ready() -> void:
 	resized.connect(_layout_paper_fx)
 	resized.connect(_apply_world_transform)
 	_resolve_dungeon_view()
+	_resolve_room_popup()
+	_connect_room_popup()
 	_connect_placement_hint()
+	_resolve_shop()
+	_resolve_room_inventory_panel()
 	set_process(true)
 	if _game_over != null:
 		# Ensure the overlay always renders above everything.
@@ -47,6 +68,8 @@ func _ready() -> void:
 		_game_over.z_as_relative = false
 	if day_button != null:
 		day_button.pressed.connect(_on_day_pressed)
+	if shop_button != null:
+		shop_button.pressed.connect(_on_shop_pressed)
 	_simulation.day_ended.connect(_on_day_ended)
 	if _simulation.has_signal("boss_killed"):
 		_simulation.connect("boss_killed", Callable(self, "_on_boss_killed"))
@@ -68,6 +91,12 @@ func _ready() -> void:
 	if speed_4x != null:
 		speed_4x.pressed.connect(func(): GameState.set_speed(4.0))
 	_apply_world_transform()
+	# Run once more after the first layout pass so sizes are valid and the initial
+	# pan/zoom clamp + backdrop sync don't start slightly offset.
+	call_deferred("_apply_world_transform")
+	# Treasure counter removed; hide if present.
+	if treasure_label != null:
+		treasure_label.visible = false
 
 
 func _resolve_topbar_nodes() -> void:
@@ -85,6 +114,7 @@ func _resolve_topbar_nodes() -> void:
 		var s1 := get_node_or_null("%s/Speed1x" % base) as Button
 		var s2 := get_node_or_null("%s/Speed2x" % base) as Button
 		var s4 := get_node_or_null("%s/Speed4x" % base) as Button
+		var sb := get_node_or_null("%s/ShopButton" % base) as Button
 		if tl != null and pl != null and db != null and s1 != null and s2 != null and s4 != null:
 			treasure_label = tl
 			power_label = pl
@@ -92,6 +122,7 @@ func _resolve_topbar_nodes() -> void:
 			speed_1x = s1
 			speed_2x = s2
 			speed_4x = s4
+			shop_button = sb
 			return
 	# Fallback to whatever was found, even if partial
 	if treasure_label == null:
@@ -106,6 +137,85 @@ func _resolve_topbar_nodes() -> void:
 		speed_2x = get_node_or_null("TopBar/HBox/Speed2x") as Button
 	if speed_4x == null:
 		speed_4x = get_node_or_null("TopBar/HBox/Speed4x") as Button
+	if shop_button == null:
+		shop_button = get_node_or_null("TopBar/HBox/ShopButton") as Button
+
+
+func _resolve_shop() -> void:
+	if _shop_layer == null:
+		_shop_layer = get_node_or_null("ShopLayer") as CanvasLayer
+		if _shop_layer == null:
+			_shop_layer = CanvasLayer.new()
+			_shop_layer.name = "ShopLayer"
+			_shop_layer.layer = 200
+			add_child(_shop_layer)
+
+	_shop = get_node_or_null("Shop") as Control
+	if _shop == null:
+		var scene := preload("res://ui/Shop.tscn")
+		var inst := scene.instantiate() as Control
+		_shop_layer.add_child(inst)
+		inst.name = "Shop"
+		inst.z_as_relative = false
+		# Godot clamps CanvasItem z_index; keep within valid range.
+		inst.z_index = 4096
+		_shop = inst
+		if _shop.has_signal("shop_opened"):
+			_shop.connect("shop_opened", Callable(self, "_on_shop_opened"))
+		if _shop.has_signal("shop_closed"):
+			_shop.connect("shop_closed", Callable(self, "_on_shop_closed"))
+
+
+func _resolve_room_inventory_panel() -> void:
+	# This is the right-side room menu panel (inventory).
+	_room_inventory_panel = get_node_or_null("VBoxContainer/HBoxContainer/RoomInventoryPanel") as Control
+	if _room_inventory_panel == null:
+		_room_inventory_panel = get_node_or_null("RoomInventoryPanel") as Control
+
+
+func _on_shop_opened() -> void:
+	# Lock room menu to Treasure tab and prevent tab changes until shop is closed.
+	if _room_inventory_panel == null:
+		_resolve_room_inventory_panel()
+	if _room_inventory_panel != null and _room_inventory_panel.has_method("lock_tabs_to"):
+		_room_inventory_panel.call("lock_tabs_to", "treasure")
+	_set_shop_interaction_mode(true)
+
+
+func _on_shop_closed() -> void:
+	if _room_inventory_panel != null and _room_inventory_panel.has_method("unlock_tabs"):
+		_room_inventory_panel.call("unlock_tabs")
+	_set_shop_interaction_mode(false)
+
+
+func _set_shop_interaction_mode(enabled: bool) -> void:
+	# Goal: while shop is open, allow clicking Shop UI and the right-side RoomInventoryPanel only.
+	# Everything else in the HUD should ignore mouse so it can't be interacted with.
+	var topbar := get_node_or_null("VBoxContainer/TopBar") as Control
+	if topbar != null:
+		if enabled:
+			_topbar_mouse_filter = topbar.mouse_filter
+			topbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		else:
+			topbar.mouse_filter = _topbar_mouse_filter
+
+	if _world_frame != null:
+		if enabled:
+			_world_frame_mouse_filter = _world_frame.mouse_filter
+			_world_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		else:
+			_world_frame.mouse_filter = _world_frame_mouse_filter
+
+
+func _on_shop_pressed() -> void:
+	if _shop == null:
+		_resolve_shop()
+	if _shop == null:
+		return
+	if _shop.has_method("open"):
+		_shop.call("open")
+	else:
+		_shop.visible = true
 
 func _apply_paper_theme() -> void:
 	# Keep background nodes theme-driven (so changing the Theme updates everything).
@@ -141,6 +251,45 @@ func _resolve_dungeon_view() -> void:
 		if n != null:
 			_dungeon_view = n
 			return
+
+
+func _resolve_room_popup() -> void:
+	if _popup_layer == null:
+		_popup_layer = get_node_or_null("PopupLayer") as CanvasLayer
+		if _popup_layer == null:
+			_popup_layer = CanvasLayer.new()
+			_popup_layer.name = "PopupLayer"
+			_popup_layer.layer = 100
+			add_child(_popup_layer)
+	_room_popup = get_node_or_null("RoomPopup") as PanelContainer
+	if _room_popup == null:
+		# Robustness: create it dynamically (keeps working even if HUD.tscn changes).
+		var scene := preload("res://ui/room_popup.tscn")
+		var inst := scene.instantiate() as PanelContainer
+		_popup_layer.add_child(inst)
+		inst.name = "RoomPopup"
+		inst.z_as_relative = false
+		inst.z_index = 4096
+		_room_popup = inst
+
+
+func _connect_room_popup() -> void:
+	if _dungeon_view == null or _room_popup == null:
+		return
+	if _dungeon_view.has_signal("room_clicked"):
+		_dungeon_view.connect("room_clicked", Callable(self, "_on_room_clicked"))
+
+
+func _on_room_clicked(room_id: int, screen_pos: Vector2) -> void:
+	if _room_popup == null:
+		_resolve_room_popup()
+	if _room_popup == null:
+		return
+	if _room_popup.has_method("open_at"):
+		_room_popup.call("open_at", room_id, screen_pos)
+	else:
+		# Fallback for older popup implementations.
+		_room_popup.call("open", room_id)
 
 
 func _connect_placement_hint() -> void:
@@ -190,6 +339,28 @@ func _resolve_world_nodes() -> void:
 	_frame_paper_base = null
 	if _world_frame != null:
 		_frame_paper_base = _world_frame.get_node_or_null("FramePaperBase") as TextureRect
+		_town_texture = _world_frame.get_node_or_null("TextureRect") as TextureRect
+
+	# Cache baseline transforms so we can re-apply them consistently across zoom changes.
+	if _frame_paper_base != null:
+		_frame_paper_base_pos = _frame_paper_base.position
+		_frame_paper_base_scale = _frame_paper_base.scale
+	if _town_texture != null:
+		_town_texture_base_pos = _town_texture.position
+		_town_texture_base_scale = _town_texture.scale
+
+
+func _sync_world_backdrops() -> void:
+	# Keep any WorldFrame backdrops moving/scaling in lockstep with the world canvas.
+	# This makes them behave as if they were parented under the pan/zoomed content.
+	if _world_canvas == null:
+		return
+	if _town_texture != null:
+		_town_texture.scale = _town_texture_base_scale * _world_zoom
+		_town_texture.position = _world_canvas.position + (_town_texture_base_pos * _world_zoom)
+	if _frame_paper_base != null:
+		_frame_paper_base.scale = _frame_paper_base_scale * _world_zoom
+		_frame_paper_base.position = _world_canvas.position + (_frame_paper_base_pos * _world_zoom)
 
 
 func _on_day_pressed() -> void:
@@ -207,22 +378,42 @@ func _on_day_ended() -> void:
 		day_button.disabled = false
 
 
-func set_treasure(value: int) -> void:
-	if treasure_label != null:
-		treasure_label.text = "Treasure: %d" % value
-
-
 func set_power(used: int, cap: int) -> void:
 	if power_label != null:
 		power_label.text = "Power: %d/%d" % [used, cap]
 
 
 func _input(event: InputEvent) -> void:
+	if _shop != null and _shop.visible:
+		# Let the Shop UI consume events; just prevent world/popup input logic from running.
+		if event is InputEventKey:
+			var k := event as InputEventKey
+			if k.pressed and k.keycode == KEY_ESCAPE:
+				if _shop.has_method("close"):
+					_shop.call("close")
+				else:
+					_shop.visible = false
+				get_viewport().set_input_as_handled()
+		return
 	if _world_frame == null or _world_canvas == null:
 		return
 
 	var mouse_global: Vector2 = get_viewport().get_mouse_position()
 	var over_world: bool = _world_frame.get_global_rect().has_point(mouse_global)
+
+	# If room popup is open, clicking anywhere outside closes it.
+	# This runs in _input so it works even if other UI consumes the click; we rely on the
+	# popup's short "ignore" window to avoid closing on the opening click.
+	if _room_popup != null and _room_popup.visible and event is InputEventMouseButton:
+		var mb0 := event as InputEventMouseButton
+		if mb0.button_index == MOUSE_BUTTON_LEFT and mb0.pressed:
+			var can_close := true
+			if _room_popup.has_method("can_close_from_outside_click"):
+				can_close = bool(_room_popup.call("can_close_from_outside_click"))
+			if can_close and not _room_popup.get_global_rect().has_point(mouse_global):
+				_room_popup.call("close")
+				get_viewport().set_input_as_handled()
+				# Still allow pan/zoom logic below if needed; but the popup is closed now.
 
 	# Middle mouse pan
 	if event is InputEventMouseButton:
@@ -275,6 +466,11 @@ func _input(event: InputEvent) -> void:
 		return
 
 
+func _unhandled_input(_event: InputEvent) -> void:
+	# (no-op) kept for future unhandled-only behaviors.
+	return
+
+
 func _clamp_world_canvas_position() -> void:
 	# Clamp panning so the world stays within the visible WorldFrame.
 	# If the world is smaller than the frame (at current zoom), keep it centered.
@@ -311,6 +507,7 @@ func _clamp_world_canvas_position() -> void:
 		clampf(_world_canvas.position.x, min_x, max_x),
 		clampf(_world_canvas.position.y, min_y, max_y)
 	)
+	_sync_world_backdrops()
 
 
 func _apply_world_transform() -> void:
@@ -318,6 +515,7 @@ func _apply_world_transform() -> void:
 		return
 	_world_canvas.scale = Vector2(_world_zoom, _world_zoom)
 	_clamp_world_canvas_position()
+	_sync_world_backdrops()
 
 	# We now draw paper inside `DungeonView` itself. Disable the separate
 	# `FramePaperBase` background to avoid layout/z-order surprises.

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="TreasureItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/Treasure.gd" id="1_treasure"]
+[ext_resource type="Texture2D" path="res://assets/icons/loot/Treasure_Base.tres" id="2_icon"]
+
+[resource]
+script = ExtResource("1_treasure")
+id = "treasure_base"
+display_name = "Treasure"
+icon = ExtResource("2_icon")
+class_id = ""
+

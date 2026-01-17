@@ -16,6 +16,13 @@ var rooms: Array[Dictionary] = []
 var _next_room_id: int = 1
 var _occ := {} # Dictionary<Vector2i, int room_id>
 
+
+func _can_edit_layout() -> bool:
+	# Hard rule: dungeon layout/slots can only be edited during BUILD.
+	# Pan/zoom are handled by HUD and remain available during DAY.
+	return GameState != null and GameState.phase == GameState.Phase.BUILD
+
+
 func ensure_room_defaults() -> bool:
 	# Backfill slots/capacity for rooms created before these fields existed.
 	var changed := false
@@ -29,8 +36,8 @@ func ensure_room_defaults() -> bool:
 			var def: Dictionary = room_db.call("get_room_type", type_id) as Dictionary
 			max_slots = int(def.get("max_slots", 0))
 
-		# Ensure correct slot count for monster/trap rooms (and none otherwise).
-		var want_kind := "monster" if kind == "monster" else ("trap" if kind == "trap" else "")
+		# Ensure correct slot count for rooms with installable slots.
+		var want_kind := kind if kind in ["monster", "trap", "treasure"] else ""
 		var cur_slots: Array = r.get("slots", [])
 		if max_slots <= 0:
 			if not cur_slots.is_empty():
@@ -58,6 +65,8 @@ func ensure_room_defaults() -> bool:
 
 
 func clear() -> void:
+	if not _can_edit_layout():
+		return
 	rooms.clear()
 	_occ.clear()
 	_next_room_id = 1
@@ -79,6 +88,8 @@ func can_place(_type_id: String, pos: Vector2i, size: Vector2i) -> bool:
 
 
 func place_room(type_id: String, pos: Vector2i, size: Vector2i, kind: String, locked: bool = false) -> int:
+	if not _can_edit_layout():
+		return 0
 	if not can_place(type_id, pos, size):
 		return 0
 	var id := _next_room_id
@@ -91,10 +102,9 @@ func place_room(type_id: String, pos: Vector2i, size: Vector2i, kind: String, lo
 		var def: Dictionary = room_db.call("get_room_type", type_id) as Dictionary
 		max_slots = int(def.get("max_slots", 0))
 
-	if max_slots > 0 and (kind == "trap" or kind == "monster"):
-		var slot_kind := kind
+	if max_slots > 0 and kind in ["trap", "monster", "treasure"]:
 		for _i in range(max_slots):
-			slots.append({ "slot_kind": slot_kind, "installed_item_id": "" })
+			slots.append({ "slot_kind": kind, "installed_item_id": "" })
 	if kind == "monster":
 		max_monster_size_capacity = 3
 
@@ -119,6 +129,8 @@ func place_room(type_id: String, pos: Vector2i, size: Vector2i, kind: String, lo
 
 
 func force_move_room_of_kind(kind: String, new_pos: Vector2i) -> bool:
+	if not _can_edit_layout():
+		return false
 	# Used for fixed structures like Entrance. Attempts to relocate without deleting the dungeon.
 	var idx := -1
 	for i in range(rooms.size()):
@@ -193,6 +205,8 @@ func set_room_by_id(room_id: int, new_room: Dictionary) -> bool:
 
 
 func install_item_in_slot(room_id: int, slot_idx: int, item_id: String) -> bool:
+	if not _can_edit_layout():
+		return false
 	var room := get_room_by_id(room_id)
 	if room.is_empty():
 		return false
@@ -209,6 +223,8 @@ func install_item_in_slot(room_id: int, slot_idx: int, item_id: String) -> bool:
 
 
 func uninstall_item_from_slot(room_id: int, slot_idx: int) -> String:
+	if not _can_edit_layout():
+		return ""
 	var room := get_room_by_id(room_id)
 	if room.is_empty():
 		return ""
@@ -227,6 +243,8 @@ func uninstall_item_from_slot(room_id: int, slot_idx: int) -> String:
 
 
 func remove_room_at(cell: Vector2i) -> bool:
+	if not _can_edit_layout():
+		return false
 	if not _occ.has(cell):
 		return false
 	var id: int = _occ[cell]

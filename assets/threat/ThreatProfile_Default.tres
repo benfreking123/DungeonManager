@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ThreatProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/ThreatProfile.gd" id="1_prof"]
+
+[resource]
+script = ExtResource("1_prof")
+damage_weight = 0.85
+distance_weight = 30.0
+melee_range_cutoff = 80.0
+melee_distance_weight_multiplier = 8.0
+

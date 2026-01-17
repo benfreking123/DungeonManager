@@ -1,13 +1,15 @@
-[gd_resource type="Resource" script_class="MonsterItem" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="MonsterItem" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/items/Monster.gd" id="1_mon"]
 [ext_resource type="Texture2D" path="res://assets/icons/Icon_Boss.tres" id="2_icon"]
+[ext_resource type="Resource" path="res://assets/threat/ThreatProfile_Melee.tres" id="3_prof"]
 
 [resource]
 script = ExtResource("1_mon")
 id = "boss"
 display_name = "Boss"
 icon = ExtResource("2_icon")
+threat_profile = ExtResource("3_prof")
 max_hp = 20
 attack_damage = 2
 attack_interval = 1.0

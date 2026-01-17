@@ -55,6 +55,7 @@ func _to_dict(rt: Resource) -> Dictionary:
 	var v_size: Variant = rt.get("size")
 	var v_power: Variant = rt.get("power_cost")
 	var v_max: Variant = rt.get("max_slots")
+	var v_eff: Variant = rt.get("effect_id")
 	return {
 		"id": String(rt.get("id")),
 		"label": String(rt.get("label")),
@@ -62,6 +63,7 @@ func _to_dict(rt: Resource) -> Dictionary:
 		"power_cost": int(v_power) if v_power != null else 0,
 		"kind": String(rt.get("kind")),
 		"max_slots": int(v_max) if v_max != null else 0,
+		"effect_id": String(v_eff) if v_eff != null else "",
 	}
 
 

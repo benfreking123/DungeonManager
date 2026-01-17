@@ -1,13 +1,15 @@
-[gd_resource type="Resource" script_class="AdventurerClass" load_steps=3 format=3 uid="uid://neenhavxr3we"]
+[gd_resource type="Resource" script_class="AdventurerClass" load_steps=4 format=3 uid="uid://neenhavxr3we"]
 
 [ext_resource type="Script" path="res://scripts/classes/AdventurerClass.gd" id="1_mag"]
 [ext_resource type="Texture2D" uid="uid://dc8b0vnbhdqkv" path="res://assets/icons/IconClass_Mage.tres" id="2_icon"]
+[ext_resource type="Resource" path="res://assets/threat/ThreatProfile_Ranged.tres" id="3_prof"]
 
 [resource]
 script = ExtResource("1_mag")
 id = "mage"
 display_name = "Mage"
 icon = ExtResource("2_icon")
+threat_profile = ExtResource("3_prof")
 hp_max = 8
 attack_damage = 1
 attack_interval = 1.2

@@ -4,6 +4,7 @@ extends Control
 
 signal status_changed(text: String)
 signal preview_reason_changed(text: String, ok: bool)
+signal room_clicked(room_id: int, screen_pos: Vector2)
 
 const DEFAULT_CELL_PX := 36
 const ICON_BASE_CELL_PX := 24
@@ -260,18 +261,26 @@ func _gui_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseButton and event.pressed:
-		# No build interactions while DAY is running.
-		if Engine.has_singleton("GameState") and GameState.phase == GameState.Phase.DAY:
-			return
-
 		# Ensure hover cell is up-to-date even if the mouse didn't move first.
 		_update_hover_cell()
 		_update_hover_slot()
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
-			# Room placement is drag-and-drop now.
-			pass
+			# If clicking a room, emit selection (works in BUILD and DAY).
+			if _dungeon_grid != null and _hover_in_bounds():
+				var room: Dictionary = _dungeon_grid.call("get_room_at", hover_cell) as Dictionary
+				if not room.is_empty():
+					room_clicked.emit(int(room.get("id", 0)), get_viewport().get_mouse_position())
+					# Prevent HUD global input from treating this same click as an "outside click"
+					# that immediately closes the popup.
+					get_viewport().set_input_as_handled()
+					return
+			# Room placement is drag-and-drop now (handled by DnD), so no-op here.
+			return
 		elif mb.button_index == MOUSE_BUTTON_RIGHT:
+			# No build interactions while DAY is running.
+			if Engine.has_singleton("GameState") and GameState.phase == GameState.Phase.DAY:
+				return
 			# If right-clicking a slot, uninstall instead of removing the room.
 			if _hover_slot_room_id != 0 and _hover_slot_idx != -1:
 				_try_uninstall_hover_slot()
@@ -326,6 +335,9 @@ func _slot_rect_local(room_rect: Rect2, slot_idx: int) -> Rect2:
 
 
 func _try_uninstall_hover_slot() -> void:
+	# Only allow changing installed items between days.
+	if Engine.has_singleton("GameState") and GameState.phase != GameState.Phase.BUILD:
+		return
 	if _dungeon_grid == null:
 		return
 	var item_id: String = String(_dungeon_grid.call("uninstall_item_from_slot", _hover_slot_room_id, _hover_slot_idx))
@@ -345,6 +357,9 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 		return _can_drop_room(d)
 
 	# Item slot drag
+	# Only allow changing installed items between days.
+	if Engine.has_singleton("GameState") and GameState.phase != GameState.Phase.BUILD:
+		return false
 	_drag_room_type_id = ""
 	var item_id := String(d.get("item_id", ""))
 	if item_id == "":
@@ -368,8 +383,10 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	if String(slot.get("installed_item_id", "")) != "":
 		return false
 	var slot_kind := String(slot.get("slot_kind", ""))
-	# Map item->kind
-	var item_kind := "trap" if item_id in ["spike_trap", "floor_pit"] else ("monster" if item_id == "zombie" else "")
+	# Map item->kind via ItemDB (supports traps/monsters/treasure).
+	var item_kind := ""
+	if ItemDB != null and ItemDB.has_method("get_item_kind"):
+		item_kind = String(ItemDB.call("get_item_kind", item_id))
 	return slot_kind == item_kind and PlayerInventory.get_count(item_id) > 0
 
 
@@ -591,6 +608,14 @@ func _try_remove_at_hover() -> void:
 	var def: Dictionary = (_room_db.call("get_room_type", type_id) as Dictionary) if _room_db != null else {}
 	var cost: int = def.get("power_cost", 0)
 
+	# Refund any installed slot items for this room before deletion.
+	var slots: Array = room.get("slots", [])
+	for s in slots:
+		var sd := s as Dictionary
+		var installed := String(sd.get("installed_item_id", ""))
+		if installed != "":
+			PlayerInventory.refund(installed, 1)
+
 	if bool(_dungeon_grid.call("remove_room_at", hover_cell)):
 		# Return piece to room inventory (except entrance which is locked anyway).
 		if type_id != "":
@@ -635,6 +660,9 @@ func _draw() -> void:
 	var accent_ok := _tcol("accent_ok", BlueprintTheme.ACCENT_OK)
 	var accent_bad := _tcol("accent_bad", BlueprintTheme.ACCENT_BAD)
 	var accent_warn := _tcol("accent_warn", BlueprintTheme.ACCENT_WARN)
+	var slot_treasure := _tcol("slot_outline_treasure", Color(0.95, 0.78, 0.22, 0.95))
+	var slot_trap := _tcol("slot_outline_trap", Color(0.25, 0.58, 1.0, 0.95))
+	var slot_monster := _tcol("slot_outline_monster", Color(0.25, 0.9, 0.5, 0.95))
 
 	# Paper background behind the grid lines (inside the playable area rect).
 	if PAPER_BG_TEX != null:
@@ -718,10 +746,10 @@ func _draw_room(room: Dictionary) -> void:
 	draw_rect(rect, outline_col, false, float(_tconst("room_outline_w", int(ROOM_OUTLINE_W))))
 
 	var center := rect.position + rect.size * 0.5
-	# Minimap: prefer installed item icons for trap/monster rooms.
+	# Minimap: prefer installed item icons for rooms with installable slots.
 	var kind: String = String(room.get("kind", "hall"))
 	var center_icon: Texture2D = null
-	if kind == "trap" or kind == "monster":
+	if kind == "trap" or kind == "monster" or kind == "treasure":
 		var slots0: Array = room.get("slots", [])
 		if not slots0.is_empty():
 			var slot0: Dictionary = slots0[0]
@@ -737,12 +765,25 @@ func _draw_room(room: Dictionary) -> void:
 	# Slot markers
 	var slots: Array = room.get("slots", [])
 	if not slots.is_empty():
+		var slot_outline_w := float(_tconst("slot_outline_w", 2))
+		var slot_treasure := _tcol("slot_outline_treasure", Color(0.95, 0.78, 0.22, 0.95))
+		var slot_trap := _tcol("slot_outline_trap", Color(0.25, 0.58, 1.0, 0.95))
+		var slot_monster := _tcol("slot_outline_monster", Color(0.25, 0.9, 0.5, 0.95))
 		for i in range(slots.size()):
 			var slot: Dictionary = slots[i]
 			var slot_rect := _slot_rect_local(rect, i)
 			var installed := String(slot.get("installed_item_id", ""))
-			var col := _tcol("outline", BlueprintTheme.LINE) if installed == "" else _tcol("accent_ok", BlueprintTheme.ACCENT_OK)
-			draw_rect(slot_rect, col, false, float(_tconst("slot_outline_w", 2)))
+			var sk := String(slot.get("slot_kind", ""))
+			var base_col := outline_col
+			if sk == "treasure":
+				base_col = slot_treasure
+			elif sk == "trap":
+				base_col = slot_trap
+			elif sk == "monster":
+				base_col = slot_monster
+			# Slightly dim empty slots.
+			var col := base_col if installed != "" else Color(base_col.r, base_col.g, base_col.b, base_col.a * 0.55)
+			draw_rect(slot_rect, col, false, float(slot_outline_w))
 			# Small fill if installed
 			if installed != "":
 				var icon_tex: Texture2D = _get_item_icon(installed)
@@ -767,6 +808,8 @@ func _get_item_icon(item_id: String) -> Texture2D:
 		return (r as TrapItem).icon
 	if r is MonsterItem:
 		return (r as MonsterItem).icon
+	if r is TreasureItem:
+		return (r as TreasureItem).icon
 	return null
 
 
@@ -787,6 +830,20 @@ func room_center_local(room: Dictionary) -> Vector2:
 	var size: Vector2i = room.get("size", Vector2i.ONE)
 	var px := float(_cell_px())
 	return Vector2((pos.x + size.x * 0.5) * px, (pos.y + size.y * 0.5) * px)
+
+
+func room_rect_local(room: Dictionary) -> Rect2:
+	var pos: Vector2i = room.get("pos", Vector2i.ZERO)
+	var size: Vector2i = room.get("size", Vector2i.ONE)
+	var px := float(_cell_px())
+	return Rect2(Vector2(pos.x, pos.y) * px, Vector2(size.x, size.y) * px)
+
+
+func room_interior_rect_local(room: Dictionary, pad_px := 6.0) -> Rect2:
+	var r := room_rect_local(room)
+	# Avoid negative sizes if the room is tiny.
+	var pad := clampf(float(pad_px), 0.0, minf(r.size.x, r.size.y) * 0.49)
+	return r.grow(-pad)
 
 
 func cell_center_world(cell: Vector2i) -> Vector2:

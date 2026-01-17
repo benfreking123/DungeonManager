@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://dkes3nonmu82s"]
+
+[node name="RoomInfoPopup" type="PanelContainer"]
+visible = false
+z_as_relative = false
+offset_left = 18.0
+offset_top = 76.0
+offset_right = 360.0
+offset_bottom = 420.0
+mouse_filter = 1
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Top" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="VBox/Top"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Room"
+
+[node name="Close" type="Button" parent="VBox/Top"]
+layout_mode = 2
+text = "X"
+
+[node name="Body" type="ScrollContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Content" type="RichTextLabel" parent="VBox/Body"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
