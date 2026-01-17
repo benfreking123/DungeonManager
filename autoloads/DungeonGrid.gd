@@ -14,6 +14,7 @@ var astar: AStarGrid2D
 var rooms: Array[Dictionary] = []
 
 var _next_room_id: int = 1
+var _next_group_id: int = 1
 var _occ := {} # Dictionary<Vector2i, int room_id>
 
 
@@ -76,6 +77,7 @@ func clear() -> void:
 	rooms.clear()
 	_occ.clear()
 	_next_room_id = 1
+	_next_group_id = 1
 	_rebuild_astar()
 	layout_changed.emit()
 
@@ -90,6 +92,20 @@ func can_place(_type_id: String, pos: Vector2i, size: Vector2i) -> bool:
 			var c := Vector2i(pos.x + x, pos.y + y)
 			if _occ.has(c):
 				return false
+	return true
+
+
+func can_place_cells(cells: Array[Vector2i]) -> bool:
+	# Cell-based overlap check for composite placements.
+	if cells.is_empty():
+		return false
+	for c in cells:
+		if c.x < 0 or c.y < 0:
+			return false
+		if c.x >= GRID_W or c.y >= GRID_H:
+			return false
+		if _occ.has(c):
+			return false
 	return true
 
 
@@ -132,6 +148,41 @@ func place_room(type_id: String, pos: Vector2i, size: Vector2i, kind: String, lo
 	_rebuild_astar()
 	layout_changed.emit()
 	return id
+
+
+func place_room_group(type_id: String, cells: Array[Vector2i], kind: String, locked: bool = false) -> int:
+	# Composite placement: stamp multiple 1x1 rooms, tracked by group_id so they can be removed/refunded as one.
+	if not _can_edit_layout():
+		return 0
+	if not can_place_cells(cells):
+		return 0
+
+	var gid := _next_group_id
+	_next_group_id += 1
+
+	for c in cells:
+		var id := _next_room_id
+		_next_room_id += 1
+		var room := {
+			"id": id,
+			"type_id": type_id,
+			"pos": c,
+			"size": Vector2i.ONE,
+			"kind": kind,
+			"known": true,
+			"locked": locked,
+			"slots": [],
+			"max_monster_size_capacity": 0,
+			# Composite metadata
+			"group_id": gid,
+			"group_type_id": type_id,
+		}
+		rooms.append(room)
+		_occ[c] = id
+
+	_rebuild_astar()
+	layout_changed.emit()
+	return gid
 
 
 func _slot_kind_for_room(kind: String, slot_idx: int, max_slots: int) -> String:
@@ -286,6 +337,45 @@ func remove_room_at(cell: Vector2i) -> bool:
 	_rebuild_astar()
 	layout_changed.emit()
 	return true
+
+
+func remove_room_group_at(cell: Vector2i) -> Dictionary:
+	# Removes all rooms that share the same group_id as the room at `cell`.
+	# Returns { ok: bool, group_type_id: String, removed_count: int }
+	if not _can_edit_layout():
+		return { "ok": false, "group_type_id": "", "removed_count": 0 }
+	if not _occ.has(cell):
+		return { "ok": false, "group_type_id": "", "removed_count": 0 }
+
+	var id0: int = int(_occ[cell])
+	var r0: Dictionary = {}
+	for r in rooms:
+		if int(r.get("id", 0)) == id0:
+			r0 = r
+			break
+	if r0.is_empty():
+		return { "ok": false, "group_type_id": "", "removed_count": 0 }
+	if bool(r0.get("locked", false)):
+		return { "ok": false, "group_type_id": "", "removed_count": 0 }
+
+	var gid: int = int(r0.get("group_id", 0))
+	if gid == 0:
+		return { "ok": false, "group_type_id": "", "removed_count": 0 }
+
+	var type_id := String(r0.get("group_type_id", r0.get("type_id", "")))
+	var keep: Array[Dictionary] = []
+	var removed := 0
+	for r2 in rooms:
+		if int(r2.get("group_id", 0)) == gid:
+			removed += 1
+			continue
+		keep.append(r2)
+	rooms = keep
+
+	_rebuild_occ()
+	_rebuild_astar()
+	layout_changed.emit()
+	return { "ok": true, "group_type_id": type_id, "removed_count": removed }
 
 
 func _rebuild_occ() -> void:

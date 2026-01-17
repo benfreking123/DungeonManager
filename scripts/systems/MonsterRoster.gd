@@ -70,8 +70,8 @@ func get_all_monsters() -> Array[MonsterInstance]:
 	return out
 
 
-func size_sum_in_room(room_id: int) -> int:
-	var sum := 0
+func size_sum_in_room(room_id: int) -> float:
+	var sum := 0.0
 	for mon in get_monsters_in_room(room_id):
 		if mon != null and mon.is_alive():
 			sum += mon.size_units()

@@ -22,7 +22,7 @@ This file is a quick “what exists” index for everything meaningful to the pl
 - **Player inventory (placeable items + boss upgrades + treasure counts)**: `res://autoloads/PlayerInventory.gd`
   - Keys are **item IDs** (trap/monster/treasure IDs and boss upgrade `upgrade_id` values)
 - **Room-piece inventory (placeable room types during BUILD)**: `res://autoloads/RoomInventory.gd`
-  - Keys are **RoomType ids** (e.g. `hall`, `corridor`, `monster`, `trap`, `boss`, `treasure`, `stairs`)
+  - Keys are **RoomType ids** (e.g. `hall`, `corridor`, `stairs`, `hall_plus`, `hall_t_left`, `monster`, `trap`, `boss`, `treasure`)
 - **Build inventory (alternate/older room count tracking)**: `res://autoloads/BuildInventory.gd`
   - Keys are **RoomType ids**; not all room kinds are tracked by default
 - **UI that renders inventories**: `res://ui/RoomInventoryPanel.gd` (tabs: Rooms/Monsters/Traps/Boss/Treasure)
@@ -46,11 +46,11 @@ This file is a quick “what exists” index for everything meaningful to the pl
   - `TREASURE_ROOM_EFFECT_ID`
   - `TREASURE_ROOM_POWER_CAPACITY_PER_TREASURE`
   - Treasure IDs and mapping:
-    - `TREASURE_ID_WARRIOR` → `treasure_warrior`
-    - `TREASURE_ID_MAGE` → `treasure_mage`
-    - `TREASURE_ID_PRIEST` → `treasure_priest`
-    - `TREASURE_ID_ROGUE` → `treasure_rogue`
-    - `TREASURE_ID_BY_CLASS` / `treasure_id_for_class(class_id)`
+	- `TREASURE_ID_WARRIOR` → `treasure_warrior`
+	- `TREASURE_ID_MAGE` → `treasure_mage`
+	- `TREASURE_ID_PRIEST` → `treasure_priest`
+	- `TREASURE_ID_ROGUE` → `treasure_rogue`
+	- `TREASURE_ID_BY_CLASS` / `treasure_id_for_class(class_id)`
 
 ## Rooms
 - **Loader**: `res://autoloads/RoomDB.gd` scans `res://scripts/rooms` for `*.tres` with script `res://scripts/rooms/RoomType.gd` and indexes by `RoomType.id`.
@@ -61,6 +61,8 @@ This file is a quick “what exists” index for everything meaningful to the pl
   - `corridor` → `res://scripts/rooms/CorridorRoom.tres`
   - `entrance` → `res://scripts/rooms/EntranceRoom.tres`
   - `hall` → `res://scripts/rooms/HallwayRoom.tres`
+  - `hall_plus` → `res://scripts/rooms/HallwayPlus.tres`
+  - `hall_t_left` → `res://scripts/rooms/HallwayTLeft.tres`
   - `monster` → `res://scripts/rooms/MonsterRoom.tres`
   - `stairs` → `res://scripts/rooms/StairsRoom.tres`
   - `trap` → `res://scripts/rooms/TrapRoom.tres`
@@ -75,11 +77,14 @@ This file is a quick “what exists” index for everything meaningful to the pl
   - `floor_pit` → `res://scripts/items/FloorPit.tres`
 
 ## Monsters
-- **Registry**: `res://autoloads/ItemDB.gd` (`monsters` dictionary)
+- **Registry/loader**: `res://autoloads/ItemDB.gd` loads monsters by scanning `res://scripts/monsters` for `*.tres` (and also registers `boss` from `res://scripts/items/Boss.tres`).
 - **Monster resource class**: `res://scripts/items/Monster.gd` (`MonsterItem`)
-- **Update rule**: Create/update a monster `.tres`, then register it in `ItemDB._ready()` (`monsters["your_id"] = load("res://...")`).
+- **Update rule**: Create/update a monster `.tres` in `res://scripts/monsters/` with a unique `id`. It will be auto-discovered by `ItemDB`.
 - **Monsters (id → file)**:
-  - `zombie` → `res://scripts/items/Zombie.tres`
+  - `skeleton` → `res://scripts/monsters/Skeleton.tres`
+  - `slime` → `res://scripts/monsters/Slime.tres`
+  - `ogre` → `res://scripts/monsters/Ogre.tres`
+  - `zombie` → `res://scripts/monsters/Zombie.tres`
   - `boss` → `res://scripts/items/Boss.tres`
 
 ## Treasure
@@ -118,10 +123,10 @@ There isn’t currently a separate “Adventures” data category; the player-fa
   - **Class resource class**: `res://scripts/classes/AdventurerClass.gd` (`AdventurerClass`)
   - **Update rule**: Create/update a class `.tres`, then register it in `ItemDB._ready()` (`classes["your_id"] = load("res://...")`).
   - **Classes (id → file)**:
-    - `warrior` → `res://scripts/classes/Warrior.tres`
-    - `rogue` → `res://scripts/classes/Rogue.tres`
-    - `mage` → `res://scripts/classes/Mage.tres`
-    - `priest` → `res://scripts/classes/Priest.tres`
+	- `warrior` → `res://scripts/classes/Warrior.tres`
+	- `rogue` → `res://scripts/classes/Rogue.tres`
+	- `mage` → `res://scripts/classes/Mage.tres`
+	- `priest` → `res://scripts/classes/Priest.tres`
 
 ## Threat profiles
 - **ThreatProfile resource class**: `res://scripts/systems/ThreatProfile.gd` (`ThreatProfile`)

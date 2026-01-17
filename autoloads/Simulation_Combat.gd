@@ -380,7 +380,11 @@ func _tick_adv_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 					var base_int := float(p.get("attack_interval"))
 					t += base_int * randf_range(0.9, 1.1)
 				else:
-					# Ranged units kite when they've been hit recently.
+					# Ranged units "kite" (reposition) when they've been hit recently.
+					# Important: avoid stalemates where a ranged unit is already out of range and keeps
+					# running away forever (especially vs long-range boss attacks like Glop).
+					# Instead, pick a standoff point at ~90% of range: this moves AWAY if too close,
+					# and moves TOWARD if too far, guaranteeing they can re-enter attack range.
 					if rng > MELEE_RANGE_CUTOFF and float(adv_hit.get(pid, 0.0)) > 0.0:
 						if float(adv_pause.get(pid, 0.0)) > 0.0:
 							t = 0.0
@@ -389,9 +393,10 @@ func _tick_adv_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 						if away.length() <= 0.001:
 							away = Vector2.LEFT
 						away = away.normalized()
-						var kite_world := adv_pos + away * (RANGED_KITE_EXTRA_DISTANCE + rng0.randf_range(-10.0, 10.0))
-						var kite_local := _dungeon_world_to_local(kite_world)
-						adv_targets[pid] = _clamp_to_room_rect(combat, kite_local)
+						var desired_sep := clampf(rng * RANGED_STANDOFF_RATIO, 10.0, maxf(10.0, rng - 2.0))
+						var standoff_world := best_actor_pos + away * (desired_sep + rng0.randf_range(-6.0, 6.0))
+						var standoff_local := _dungeon_world_to_local(standoff_world)
+						adv_targets[pid] = _clamp_to_room_rect(combat, standoff_local)
 						adv_pause[pid] = rng0.randf_range(MOVE_REACTION_DELAY_MIN, MOVE_REACTION_DELAY_MAX)
 						t = 0.0
 						continue

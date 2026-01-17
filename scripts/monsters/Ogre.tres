@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MonsterItem" load_steps=4 format=3 uid="uid://byh14piqi0f85"]
+
+[ext_resource type="Script" path="res://scripts/items/Monster.gd" id="1_mon"]
+[ext_resource type="Texture2D" uid="uid://dc7f5vrqtvldi" path="res://assets/icons/monsters/Icon_Ogre.tres" id="2_icon"]
+[ext_resource type="Resource" path="res://assets/threat/ThreatProfile_Melee.tres" id="3_prof"]
+
+[resource]
+script = ExtResource("1_mon")
+id = "ogre"
+display_name = "Ogre"
+icon = ExtResource("2_icon")
+threat_profile = ExtResource("3_prof")
+max_hp = 10
+attack_damage = 2
+attack_interval = 1.5
+range = 50.0
+size = 2.0

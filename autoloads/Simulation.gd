@@ -753,11 +753,11 @@ func _tick_one_spawner(sp: Dictionary, room_id: int, capacity: int, dt: float) -
 	while true:
 		if spawn_timer < interval:
 			break
-		var current_size_sum: int = 0
+		var current_size_sum := 0.0
 		if _monster_roster != null:
 			var minions_only := bool(sp.get("minions_only", false))
 			current_size_sum = _size_sum_in_room(room_id, minions_only)
-		if current_size_sum + mi.size > capacity:
+		if current_size_sum + float(mi.size) > float(capacity):
 			break
 		spawn_timer -= interval
 		var idx := 0
@@ -781,11 +781,11 @@ func _tick_one_spawner(sp: Dictionary, room_id: int, capacity: int, dt: float) -
 	return sp
 
 
-func _size_sum_in_room(room_id: int, minions_only: bool) -> int:
+func _size_sum_in_room(room_id: int, minions_only: bool) -> float:
 	if _monster_roster == null or room_id == 0:
 		return 0
 	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id)
-	var sum := 0
+	var sum := 0.0
 	for m in monsters:
 		var inst := m as MonsterInstance
 		if inst == null or not inst.is_alive():

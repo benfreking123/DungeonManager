@@ -79,6 +79,6 @@ func range_px() -> float:
 	return r
 
 
-func size_units() -> int:
-	return int(template.size) if template != null else 1
+func size_units() -> float:
+	return float(template.size) if template != null else 1.0
 

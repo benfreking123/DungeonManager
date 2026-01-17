@@ -20,6 +20,29 @@ const PAPER_BG_TEX: Texture2D = preload("res://assets/simple-old-paper-1.jpg")
 var selected_type_id: String = "hall"
 var hover_cell: Vector2i = Vector2i(-999, -999)
 
+const COMPOSITE_HALL_BBOX_SIZE := Vector2i(3, 3)
+const COMPOSITE_HALL_OFFSETS := {
+	# 3x3 bbox, anchored at hover cell (top-left).
+	# Plus shape:
+	#  .#.
+	#  ###
+	#  .#.
+	"hall_plus": [
+		Vector2i(1, 0),
+		Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1),
+		Vector2i(1, 2),
+	],
+	# Sideways T, stem points LEFT:
+	#  ..#
+	#  ###
+	#  ..#
+	"hall_t_left": [
+		Vector2i(2, 0),
+		Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1),
+		Vector2i(2, 2),
+	],
+}
+
 var _hover_slot_room_id: int = 0
 var _hover_slot_idx: int = -1
 
@@ -58,6 +81,17 @@ func _ready() -> void:
 
 func _now_s() -> float:
 	return float(Time.get_ticks_msec()) / 1000.0
+
+
+func _composite_cells_for_type(type_id: String, anchor: Vector2i) -> Array[Vector2i]:
+	var off: Array = COMPOSITE_HALL_OFFSETS.get(type_id, []) as Array
+	if off.is_empty():
+		return []
+	var out: Array[Vector2i] = []
+	for v in off:
+		var o := v as Vector2i
+		out.append(Vector2i(anchor.x + o.x, anchor.y + o.y))
+	return out
 
 
 func _trigger_room_stamp(rect: Rect2) -> void:
@@ -468,11 +502,19 @@ func _drop_room(d: Dictionary) -> void:
 	var size: Vector2i = res.get("size", Vector2i.ONE)
 	var cost: int = int(res.get("cost", 0))
 	var kind: String = String(res.get("kind", type_id))
+	var cells: Array = res.get("cells", [])
 
 	if not RoomInventory.consume(type_id, 1):
 		return
-	var id: int = int(_dungeon_grid.call("place_room", type_id, cell, size, kind, false))
-	if id == 0:
+	var placed_ok := false
+	if COMPOSITE_HALL_OFFSETS.has(type_id):
+		# Composite hallway placement: stamp multiple 1x1 rooms but consume only one piece.
+		var group_id: int = int(_dungeon_grid.call("place_room_group", type_id, cells, kind, false))
+		placed_ok = (group_id != 0)
+	else:
+		var id: int = int(_dungeon_grid.call("place_room", type_id, cell, size, kind, false))
+		placed_ok = (id != 0)
+	if not placed_ok:
 		RoomInventory.refund(type_id, 1)
 		return
 	# Stamp FX on success.
@@ -484,7 +526,7 @@ func _drop_room(d: Dictionary) -> void:
 
 
 func _can_place_type_at(type_id: String, cell: Vector2i) -> Dictionary:
-	# Returns { ok: bool, reason: String, size: Vector2i, cost: int, kind: String }
+	# Returns { ok: bool, reason: String, size: Vector2i, cost: int, kind: String, cells?: Array[Vector2i] }
 	if _room_db == null:
 		return { "ok": false, "reason": "missing_roomdb", "size": Vector2i.ONE, "cost": 0, "kind": "" }
 	var t: Dictionary = (_room_db.call("get_room_type", type_id) as Dictionary)
@@ -494,24 +536,39 @@ func _can_place_type_at(type_id: String, cell: Vector2i) -> Dictionary:
 	var size: Vector2i = t.get("size", Vector2i.ONE)
 	var cost: int = int(t.get("power_cost", 0))
 	var kind: String = String(t.get("kind", type_id))
+	var is_composite := COMPOSITE_HALL_OFFSETS.has(type_id)
+	var cells: Array[Vector2i] = []
+	if is_composite:
+		size = COMPOSITE_HALL_BBOX_SIZE
+		cells = _composite_cells_for_type(type_id, cell)
+		# Bounds check all footprint cells.
+		for c in cells:
+			if c.x < 0 or c.y < 0 or c.x >= _grid_w() or c.y >= _grid_h():
+				return { "ok": false, "reason": "out_of_bounds", "size": size, "cost": cost, "kind": kind, "cells": cells }
 
 	if cell.x < 0 or cell.y < 0 or cell.x + size.x > _grid_w() or cell.y + size.y > _grid_h():
-		return { "ok": false, "reason": "out_of_bounds", "size": size, "cost": cost, "kind": kind }
+		return { "ok": false, "reason": "out_of_bounds", "size": size, "cost": cost, "kind": kind, "cells": cells }
 
 	if _dungeon_grid != null and kind in ["entrance", "boss", "treasure"] and int(_dungeon_grid.call("count_kind", kind)) > 0:
-		return { "ok": false, "reason": "unique_room_already_placed", "size": size, "cost": cost, "kind": kind }
+		return { "ok": false, "reason": "unique_room_already_placed", "size": size, "cost": cost, "kind": kind, "cells": cells }
 
-	if _dungeon_grid == null or not bool(_dungeon_grid.call("can_place", type_id, cell, size)):
-		return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind }
+	if _dungeon_grid == null:
+		return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind, "cells": cells }
+	if is_composite:
+		if not bool(_dungeon_grid.call("can_place_cells", cells)):
+			return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind, "cells": cells }
+	else:
+		if not bool(_dungeon_grid.call("can_place", type_id, cell, size)):
+			return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind, "cells": cells }
 
 	if _game_state == null:
-		return { "ok": false, "reason": "missing_gamestate", "size": size, "cost": cost, "kind": kind }
+		return { "ok": false, "reason": "missing_gamestate", "size": size, "cost": cost, "kind": kind, "cells": cells }
 
 	var remaining: int = int(_game_state.get("power_capacity")) - int(_game_state.get("power_used"))
 	if cost > remaining:
-		return { "ok": false, "reason": "not_enough_power", "size": size, "cost": cost, "kind": kind }
+		return { "ok": false, "reason": "not_enough_power", "size": size, "cost": cost, "kind": kind, "cells": cells }
 
-	return { "ok": true, "reason": "ok", "size": size, "cost": cost, "kind": kind }
+	return { "ok": true, "reason": "ok", "size": size, "cost": cost, "kind": kind, "cells": cells }
 
 
 func _slot_at_local_pos(local_pos: Vector2) -> Dictionary:
@@ -614,6 +671,7 @@ func _try_remove_at_hover() -> void:
 		return
 
 	var type_id: String = room.get("type_id", "")
+	var group_id: int = int(room.get("group_id", 0))
 	var def: Dictionary = (_room_db.call("get_room_type", type_id) as Dictionary) if _room_db != null else {}
 	var cost: int = def.get("power_cost", 0)
 
@@ -625,12 +683,25 @@ func _try_remove_at_hover() -> void:
 		if installed != "":
 			PlayerInventory.refund(installed, 1)
 
-	if bool(_dungeon_grid.call("remove_room_at", hover_cell)):
-		# Return piece to room inventory (except entrance which is locked anyway).
-		if type_id != "":
-			RoomInventory.refund(type_id, 1)
-		var next_used: int = max(0, int(_game_state.get("power_used")) - cost)
-		_game_state.call("set_power_used", next_used)
+	if group_id != 0:
+		# Composite removal: remove all cells in group and refund only one piece.
+		var result: Dictionary = _dungeon_grid.call("remove_room_group_at", hover_cell) as Dictionary
+		if bool(result.get("ok", false)):
+			var group_type_id := String(result.get("group_type_id", type_id))
+			if group_type_id != "":
+				RoomInventory.refund(group_type_id, 1)
+			# Cost is charged once per composite.
+			var def2: Dictionary = (_room_db.call("get_room_type", group_type_id) as Dictionary) if _room_db != null else {}
+			var cost2: int = int(def2.get("power_cost", cost))
+			var next_used2: int = max(0, int(_game_state.get("power_used")) - cost2)
+			_game_state.call("set_power_used", next_used2)
+	else:
+		if bool(_dungeon_grid.call("remove_room_at", hover_cell)):
+			# Return piece to room inventory (except entrance which is locked anyway).
+			if type_id != "":
+				RoomInventory.refund(type_id, 1)
+			var next_used: int = max(0, int(_game_state.get("power_used")) - cost)
+			_game_state.call("set_power_used", next_used)
 	_emit_build_status()
 
 
@@ -706,16 +777,27 @@ func _draw() -> void:
 		var size: Vector2i = res.get("size", Vector2i.ONE)
 		var ok: bool = res.get("ok", false)
 		var col := accent_ok if ok else accent_bad
+		var cells: Array = res.get("cells", [])
 		var rect := Rect2(
 			Vector2(hover_cell.x, hover_cell.y) * px,
 			Vector2(size.x, size.y) * px
 		)
 		_update_preview_reason(ok, String(res.get("reason", "")))
-		if ok:
-			draw_rect(rect, col, false, 2.0)
+		if cells is Array and not (cells as Array).is_empty():
+			for c in (cells as Array):
+				var cc := c as Vector2i
+				var r := Rect2(Vector2(cc.x, cc.y) * px, Vector2.ONE * px)
+				if ok:
+					draw_rect(r, col, false, 2.0)
+				else:
+					_draw_dashed_rect(r, col, 2.0)
+					_draw_hatched_rect(r, col)
 		else:
-			_draw_dashed_rect(rect, col, 2.0)
-			_draw_hatched_rect(rect, col)
+			if ok:
+				draw_rect(rect, col, false, 2.0)
+			else:
+				_draw_dashed_rect(rect, col, 2.0)
+				_draw_hatched_rect(rect, col)
 	else:
 		_update_preview_reason(true, "")
 

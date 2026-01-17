@@ -7,6 +7,9 @@ var counts: Dictionary = {
 	"spike_trap": 1,
 	"floor_pit": 1,
 	"zombie": 1,
+	"skeleton": 1,
+	"ogre": 1,
+	"slime": 1,
 	# Boss upgrades
 	"armor": 1,
 	"attack_speed": 1,
@@ -53,6 +56,9 @@ func reset_all() -> void:
 		"spike_trap": 1,
 		"floor_pit": 1,
 		"zombie": 1,
+		"skeleton": 1,
+		"ogre": 1,
+		"slime": 1,
 		# Boss upgrades
 		"armor": 1,
 		"attack_speed": 1,

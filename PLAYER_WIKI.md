@@ -21,6 +21,8 @@ Rooms are placed during BUILD. Each room type has an `id` and a display label.
 - **`hall`**: Hallway
 - **`corridor`**: Corridor
 - **`stairs`**: Stairs
+- **`hall_plus`**: Hallway +
+- **`hall_t_left`**: Hallway T (Left)
 
 ## Traps
 Traps are installable items (usually into Trap room slots).
@@ -32,6 +34,9 @@ Traps are installable items (usually into Trap room slots).
 Monsters are installable items (usually into Monster room slots). Boss is its own monster.
 
 - **`zombie`**: Zombie
+- **`skeleton`**: Skeleton
+- **`ogre`**: Ogre
+- **`slime`**: Slime
 - **`boss`**: Boss
 
 ## Treasure

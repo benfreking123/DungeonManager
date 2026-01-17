@@ -13,7 +13,7 @@ const TREASURE_ROOM_EFFECT_ID: String = "treasure_room_power_capacity_plus_1"
 const TREASURE_ROOM_POWER_CAPACITY_PER_TREASURE: int = 1
 
 # Base power capacity (before treasure-based scaling).
-const BASE_POWER_CAPACITY: int = 10
+const BASE_POWER_CAPACITY: int = 20
 
 # Item ids for treasures.
 const TREASURE_ID_WARRIOR := "treasure_warrior"

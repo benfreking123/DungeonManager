@@ -183,13 +183,15 @@ func _item_stats(item_id: String) -> String:
 		var aps := 0.0
 		if float(m.attack_interval) > 0.0001:
 			aps = 1.0 / float(m.attack_interval)
+		var sz := float(m.size)
+		var sz_txt := ("%d" % int(round(sz))) if is_equal_approx(sz, round(sz)) else ("%.1f" % sz)
 		# Compact stats to keep popup short.
-		return "DMG %d  APS %.2f\nRNG %.0f  HP %d  SZ %d" % [
+		return "DMG %d  APS %.2f\nRNG %.0f  HP %d  SZ %s" % [
 			int(m.attack_damage),
 			aps,
 			float(m.range),
 			int(m.max_hp),
-			int(m.size),
+			sz_txt,
 		]
 	if res is TrapItem:
 		var t := res as TrapItem

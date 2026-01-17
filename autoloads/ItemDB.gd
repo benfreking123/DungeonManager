@@ -8,6 +8,8 @@ var classes: Dictionary = {}
 var treasures: Dictionary = {}
 var boss_upgrades: Dictionary = {}
 
+const MONSTERS_DIR := "res://scripts/monsters"
+
 
 func _ready() -> void:
 	# Traps
@@ -15,8 +17,7 @@ func _ready() -> void:
 	traps["floor_pit"] = load("res://scripts/items/FloorPit.tres")
 
 	# Monsters
-	monsters["zombie"] = load("res://scripts/items/Zombie.tres")
-	monsters["boss"] = load("res://scripts/items/Boss.tres")
+	_load_monsters()
 
 	# Classes (added later by this rollout)
 	classes["warrior"] = load("res://scripts/classes/Warrior.tres")
@@ -33,6 +34,52 @@ func _ready() -> void:
 
 	# Boss upgrades
 	_load_boss_upgrades()
+
+
+func _load_monsters() -> void:
+	monsters.clear()
+
+	# Load monsters from res://scripts/monsters (drop-in content).
+	var dir := DirAccess.open(MONSTERS_DIR)
+	if dir == null:
+		push_warning("ItemDB: missing monsters dir %s" % MONSTERS_DIR)
+	else:
+		dir.list_dir_begin()
+		while true:
+			var file_name := dir.get_next()
+			if file_name == "":
+				break
+			if dir.current_is_dir():
+				continue
+			if not file_name.ends_with(".tres"):
+				continue
+			var res_path := "%s/%s" % [MONSTERS_DIR, file_name]
+			_register_monster_resource(load(res_path))
+		dir.list_dir_end()
+
+	# Fallback: ensure core monsters are present even if directory scanning fails/misses.
+	# (This also makes behavior more stable in exports / edge-case filesystem issues.)
+	_try_load_monster("%s/Zombie.tres" % MONSTERS_DIR)
+	_try_load_monster("%s/Skeleton.tres" % MONSTERS_DIR)
+	_try_load_monster("%s/Ogre.tres" % MONSTERS_DIR)
+	_try_load_monster("%s/Slime.tres" % MONSTERS_DIR)
+
+	# Boss is still kept in scripts/items, but treated as a monster.
+	_register_monster_resource(load("res://scripts/items/Boss.tres"))
+
+
+func _register_monster_resource(res: Resource) -> void:
+	var mon := res as MonsterItem
+	if mon == null:
+		return
+	var id := String(mon.id)
+	if id == "":
+		return
+	monsters[id] = mon
+
+
+func _try_load_monster(res_path: String) -> void:
+	_register_monster_resource(load(res_path))
 
 
 func _load_boss_upgrades() -> void:
