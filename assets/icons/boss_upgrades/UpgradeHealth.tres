@@ -1,0 +1,14 @@
+[gd_resource type="AtlasTexture" load_steps=3 format=3 uid="uid://bsa4xih0meu0e"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_ssl4b"]
+load_path = "res://.godot/imported/ChatGPT Image Jan 17, 2026, 01_00_28 AM.png-c5f40f0e0b041c5c545c376851a4ac89.ctex"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hshm6"]
+atlas = SubResource("CompressedTexture2D_ssl4b")
+region = Rect2(520, 512, 240, 192)
+
+[resource]
+atlas = SubResource("AtlasTexture_hshm6")
+region = Rect2(520, 528, 240, 192)
+metadata/upgrade_id = "health"
+metadata/value = 5.0

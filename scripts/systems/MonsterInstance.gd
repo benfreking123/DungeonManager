@@ -15,6 +15,21 @@ var attack_timer: float = 0.0
 var actor: Node2D
 var template: MonsterItem
 
+# Boss upgrade runtime modifiers (safe defaults for non-bosses).
+var dmg_block: int = 0
+var reflect_damage: int = 0
+
+var double_strike_chance: float = 0.0
+var double_strike_delay_s: float = 0.1
+var _double_strike_pending: bool = false
+var _double_strike_t: float = 0.0
+var _double_strike_target_adv_id: int = 0
+
+var glop_damage: int = 0
+var glop_cooldown_s: float = 0.0
+var glop_range_px: float = 0.0
+var glop_t: float = 0.0
+
 
 func setup_from_template(mi: MonsterItem, spawn_room: int, room_now: int, actor_node: Node2D) -> void:
 	template = mi
@@ -29,6 +44,18 @@ func setup_from_template(mi: MonsterItem, spawn_room: int, room_now: int, actor_
 		max_hp = 1
 		hp = 1
 	attack_timer = 0.0
+	# Reset boss upgrade runtime state.
+	dmg_block = 0
+	reflect_damage = 0
+	double_strike_chance = 0.0
+	double_strike_delay_s = 0.1
+	_double_strike_pending = false
+	_double_strike_t = 0.0
+	_double_strike_target_adv_id = 0
+	glop_damage = 0
+	glop_cooldown_s = 0.0
+	glop_range_px = 0.0
+	glop_t = 0.0
 
 
 func is_alive() -> bool:

@@ -37,20 +37,26 @@ func ensure_room_defaults() -> bool:
 			max_slots = int(def.get("max_slots", 0))
 
 		# Ensure correct slot count for rooms with installable slots.
-		var want_kind := kind if kind in ["monster", "trap", "treasure"] else ""
 		var cur_slots: Array = r.get("slots", [])
 		if max_slots <= 0:
 			if not cur_slots.is_empty():
 				r["slots"] = []
 				changed = true
 		else:
-			if cur_slots.size() != max_slots:
-				var next_slots: Array = []
-				for si in range(max_slots):
-					var installed := ""
-					if si < cur_slots.size():
-						installed = String((cur_slots[si] as Dictionary).get("installed_item_id", ""))
-					next_slots.append({ "slot_kind": want_kind, "installed_item_id": installed })
+			var next_slots: Array = []
+			var needs_rebuild := (cur_slots.size() != max_slots)
+			for si in range(max_slots):
+				var installed := ""
+				var cur_kind := ""
+				if si < cur_slots.size():
+					var cur := cur_slots[si] as Dictionary
+					installed = String(cur.get("installed_item_id", ""))
+					cur_kind = String(cur.get("slot_kind", ""))
+				var want_kind := _slot_kind_for_room(kind, si, max_slots)
+				if want_kind != cur_kind:
+					needs_rebuild = true
+				next_slots.append({ "slot_kind": want_kind, "installed_item_id": installed })
+			if needs_rebuild:
 				r["slots"] = next_slots
 				changed = true
 
@@ -102,9 +108,9 @@ func place_room(type_id: String, pos: Vector2i, size: Vector2i, kind: String, lo
 		var def: Dictionary = room_db.call("get_room_type", type_id) as Dictionary
 		max_slots = int(def.get("max_slots", 0))
 
-	if max_slots > 0 and kind in ["trap", "monster", "treasure"]:
-		for _i in range(max_slots):
-			slots.append({ "slot_kind": kind, "installed_item_id": "" })
+	if max_slots > 0 and kind in ["trap", "monster", "treasure", "boss"]:
+		for si in range(max_slots):
+			slots.append({ "slot_kind": _slot_kind_for_room(kind, si, max_slots), "installed_item_id": "" })
 	if kind == "monster":
 		max_monster_size_capacity = 3
 
@@ -126,6 +132,23 @@ func place_room(type_id: String, pos: Vector2i, size: Vector2i, kind: String, lo
 	_rebuild_astar()
 	layout_changed.emit()
 	return id
+
+
+func _slot_kind_for_room(kind: String, slot_idx: int, max_slots: int) -> String:
+	# Slot kind policy by room kind.
+	match kind:
+		"boss":
+			# Boss room: 2 universal slots + 1 boss upgrade slot.
+			if slot_idx <= 1:
+				return "universal"
+			# Keep last slot as boss upgrade even if max_slots changes.
+			if slot_idx == max_slots - 1:
+				return "boss_upgrade"
+			return "universal"
+		"monster", "trap", "treasure":
+			return kind
+		_:
+			return ""
 
 
 func force_move_room_of_kind(kind: String, new_pos: Vector2i) -> bool:

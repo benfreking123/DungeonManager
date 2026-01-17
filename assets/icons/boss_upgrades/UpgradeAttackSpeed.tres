@@ -1,0 +1,9 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3 uid="uid://l1y770y2xxhw"]
+
+[ext_resource type="Texture2D" uid="uid://b44kkct70cdqb" path="res://assets/icons/boss_upgrades/BossUpgradeAtlas.tres" id="1_ii3i4"]
+
+[resource]
+atlas = ExtResource("1_ii3i4")
+region = Rect2(24, 16, 240, 192)
+metadata/upgrade_id = "attackspeed"
+metadata/value = 1.15

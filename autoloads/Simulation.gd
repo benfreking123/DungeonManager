@@ -408,10 +408,10 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 	var kind: String = String(room.get("kind", ""))
 	# Only fire room-entry effects when we actually enter a new room.
 	if entered_new_room:
-		if kind == "trap":
+		if kind == "trap" or kind == "boss":
 			if _trap_system != null:
 				_trap_system.call("on_room_enter", room, adv, _adventurers, _adv_last_room)
-		elif kind == "monster" or kind == "boss":
+		if kind == "monster" or kind == "boss":
 			if _combat != null:
 				_combat.call("join_room", room, adv)
 
@@ -515,12 +515,14 @@ func _room_center_cell(room: Dictionary, fallback: Vector2i) -> Vector2i:
 	return Vector2i(pos.x + int(size.x / 2), pos.y + int(size.y / 2))
 
 
-func _make_spawner(room_id: int, monster_item_id: String, capacity: int) -> Dictionary:
+func _make_spawner(room_id: int, monster_item_id: String, capacity: int, cooldown_per_size: float, minions_only: bool = false) -> Dictionary:
 	return {
 		"room_id": room_id,
 		"monster_item_id": monster_item_id,
 		"capacity": capacity,
 		"spawn_timer": 0.0,
+		"cooldown_per_size": cooldown_per_size,
+		"minions_only": minions_only,
 	}
 
 
@@ -530,6 +532,19 @@ func _make_room_spawner_record(room_id: int, capacity: int, spawners: Array) -> 
 		"capacity": capacity,
 		"spawners": spawners,
 	}
+
+
+func _room_spawn_config(room: Dictionary) -> Dictionary:
+	# Returns { capacity: int, cooldown_per_size: float } with sane fallbacks.
+	var cap := 3
+	var cd := float(SPAWN_SECONDS_PER_SIZE)
+	if _room_db != null and _room_db.has_method("get_room_type"):
+		var type_id := String(room.get("type_id", ""))
+		if type_id != "":
+			var def: Dictionary = _room_db.call("get_room_type", type_id) as Dictionary
+			cap = int(def.get("monster_capacity", cap))
+			cd = float(def.get("monster_cooldown_per_size", cd))
+	return { "capacity": cap, "cooldown_per_size": cd }
 
 
 func _clear_all_monster_actors() -> void:
@@ -543,13 +558,16 @@ func _init_room_spawners() -> void:
 	room_spawners_by_room_id.clear()
 	for r in _dungeon_grid.get("rooms"):
 		var room := r as Dictionary
-		if String(room.get("kind", "")) != "monster":
+		var kind := String(room.get("kind", ""))
+		if kind != "monster" and kind != "boss":
 			continue
 		var slots: Array = room.get("slots", [])
 		if slots.is_empty():
 			continue
 		var room_id: int = int(room.get("id", 0))
-		var cap: int = int(room.get("max_monster_size_capacity", 3))
+		var cfg := _room_spawn_config(room)
+		var cap: int = int(cfg.get("capacity", 3))
+		var cd: float = float(cfg.get("cooldown_per_size", float(SPAWN_SECONDS_PER_SIZE)))
 		var spawners: Array = []
 		for s in slots:
 			var sd := s as Dictionary
@@ -558,7 +576,24 @@ func _init_room_spawners() -> void:
 			var item_id := String(sd.get("installed_item_id", ""))
 			if item_id == "":
 				continue
-			spawners.append(_make_spawner(room_id, item_id, cap))
+			var slot_kind := String(sd.get("slot_kind", ""))
+			# Monster rooms: only monster slots spawn.
+			if kind == "monster":
+				if slot_kind != "monster":
+					continue
+				spawners.append(_make_spawner(room_id, item_id, cap, cd, false))
+				continue
+			# Boss rooms: only universal slots can spawn minions, and only if the installed item is a monster.
+			if kind == "boss":
+				if slot_kind != "universal":
+					continue
+				var item_kind := ""
+				if _item_db != null and _item_db.has_method("get_item_kind"):
+					item_kind = String(_item_db.call("get_item_kind", item_id))
+				if item_kind != "monster":
+					continue
+				# Boss room capacity is for MINIONS only (boss size does not consume it).
+				spawners.append(_make_spawner(room_id, item_id, cap, cd, true))
 		if spawners.is_empty():
 			continue
 		room_spawners_by_room_id[room_id] = _make_room_spawner_record(room_id, cap, spawners)
@@ -575,20 +610,22 @@ func _spawn_boss() -> void:
 	if room_id == 0:
 		return
 	# Prevent duplicates if start_day is called twice.
-	if room_spawners_by_room_id.has(room_id):
+	if _boss_exists_in_room(room_id):
 		return
 
 	var mi: MonsterItem = _item_db.call("get_monster", "boss") as MonsterItem
 	if mi == null:
 		return
 
-	# Boss spawner: static (no ticking), contains exactly one boss monster.
-	var sp := {
-		"room_id": room_id,
-		"capacity": mi.size,
-		"spawners": [],
-		"spawn_disabled": true,
-	}
+	# Collect boss upgrades installed in the boss room.
+	var upgrades := _boss_upgrades_in_room(boss_room)
+
+	# Apply boss upgrades to the boss template (stats).
+	var boss_template: MonsterItem = mi.duplicate(true) as MonsterItem
+	if boss_template == null:
+		boss_template = mi
+	for up in upgrades:
+		_apply_boss_upgrade_to_template(boss_template, up)
 
 	# Spawn boss actor at room center.
 	var actor: Node2D = _monster_scene.instantiate() as Node2D
@@ -596,17 +633,92 @@ func _spawn_boss() -> void:
 		_dungeon_view.add_child(actor)
 		var base: Vector2 = _dungeon_view.call("room_center_local", boss_room) as Vector2
 		actor.position = base + Vector2(0.0, 0.0)
-	actor.call("set_hp", mi.max_hp, mi.max_hp)
-	actor.call("set_icon", mi.icon)
+	actor.call("set_hp", boss_template.max_hp, boss_template.max_hp)
+	actor.call("set_icon", boss_template.icon)
 	actor.set_meta("collision_radius", COLLISION_RADIUS_BOSS)
 	actor.call("set_is_boss", true)
 	if _monster_roster != null:
 		var mon := preload("res://scripts/systems/MonsterInstance.gd").new()
-		mon.call("setup_from_template", mi, room_id, room_id, actor)
+		mon.call("setup_from_template", boss_template, room_id, room_id, actor)
+		for up in upgrades:
+			_apply_boss_upgrade_to_instance(mon, up)
 		_monster_roster.call("add", mon)
+	DbgLog.log("Boss spawned room_id=%d hp=%d" % [room_id, int(boss_template.max_hp)], "monsters")
 
-	room_spawners_by_room_id[room_id] = sp
-	DbgLog.log("Boss spawned room_id=%d hp=%d" % [room_id, mi.max_hp], "monsters")
+
+func _boss_exists_in_room(room_id: int) -> bool:
+	if room_id == 0 or _monster_roster == null:
+		return false
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id)
+	for m in monsters:
+		var mi := m as MonsterInstance
+		if mi != null and mi.is_boss() and mi.is_alive():
+			return true
+	return false
+
+
+func _boss_upgrades_in_room(boss_room: Dictionary) -> Array[BossUpgradeItem]:
+	var out: Array[BossUpgradeItem] = []
+	if boss_room.is_empty() or _item_db == null:
+		return out
+	var slots: Array = boss_room.get("slots", [])
+	for s in slots:
+		var sd := s as Dictionary
+		if sd.is_empty():
+			continue
+		if String(sd.get("slot_kind", "")) != "boss_upgrade":
+			continue
+		var item_id := String(sd.get("installed_item_id", ""))
+		if item_id == "":
+			continue
+		var up: BossUpgradeItem = null
+		if _item_db.has_method("get_boss_upgrade"):
+			up = _item_db.call("get_boss_upgrade", item_id) as BossUpgradeItem
+		if up != null:
+			out.append(up)
+	return out
+
+
+func _apply_boss_upgrade_to_template(boss_template: MonsterItem, up: BossUpgradeItem) -> void:
+	if boss_template == null or up == null:
+		return
+	match String(up.effect_id):
+		"boss_upgrade_damage":
+			boss_template.attack_damage = int(boss_template.attack_damage) + int(round(up.value))
+		"boss_upgrade_health":
+			boss_template.max_hp = int(boss_template.max_hp) + int(round(up.value))
+		"boss_upgrade_attack_speed":
+			# value is an attack-speed multiplier (e.g. 1.15 = 15% faster).
+			var mult := float(up.value)
+			if mult > 0.0001:
+				boss_template.attack_interval = float(boss_template.attack_interval) / mult
+		_:
+			pass
+
+
+func _apply_boss_upgrade_to_instance(mon: MonsterInstance, up: BossUpgradeItem) -> void:
+	if mon == null or up == null:
+		return
+	match String(up.effect_id):
+		"boss_upgrade_armor":
+			mon.dmg_block += int(round(up.value))
+		"boss_upgrade_reflect":
+			mon.reflect_damage += int(round(up.value))
+		"boss_upgrade_double_strike":
+			var ch := float(up.value)
+			if ch > 1.0:
+				ch = ch / 100.0
+			mon.double_strike_chance = clampf(ch, 0.0, 1.0)
+			var d := float(up.delay_s)
+			if d <= 0.0001:
+				d = 0.1
+			mon.double_strike_delay_s = d
+		"boss_upgrade_glop":
+			mon.glop_damage = int(round(up.value))
+			mon.glop_cooldown_s = float(up.cooldown_s) if float(up.cooldown_s) > 0.0001 else 3.0
+			mon.glop_range_px = float(up.range_px) if float(up.range_px) > 0.0001 else 160.0
+		_:
+			pass
 
 
 func _tick_spawners(dt: float) -> void:
@@ -636,7 +748,8 @@ func _tick_one_spawner(sp: Dictionary, room_id: int, capacity: int, dt: float) -
 	if item == null:
 		return sp
 	var mi := item as MonsterItem
-	var interval: float = float(mi.size) * SPAWN_SECONDS_PER_SIZE
+	var cooldown_per_size: float = float(sp.get("cooldown_per_size", float(SPAWN_SECONDS_PER_SIZE)))
+	var interval: float = float(mi.size) * cooldown_per_size
 	var spawn_timer: float = float(sp.get("spawn_timer", 0.0)) + dt
 
 	while true:
@@ -644,7 +757,8 @@ func _tick_one_spawner(sp: Dictionary, room_id: int, capacity: int, dt: float) -
 			break
 		var current_size_sum: int = 0
 		if _monster_roster != null:
-			current_size_sum = int(_monster_roster.call("size_sum_in_room", room_id))
+			var minions_only := bool(sp.get("minions_only", false))
+			current_size_sum = _size_sum_in_room(room_id, minions_only)
 		if current_size_sum + mi.size > capacity:
 			break
 		spawn_timer -= interval
@@ -667,6 +781,21 @@ func _tick_one_spawner(sp: Dictionary, room_id: int, capacity: int, dt: float) -
 
 	sp["spawn_timer"] = spawn_timer
 	return sp
+
+
+func _size_sum_in_room(room_id: int, minions_only: bool) -> int:
+	if _monster_roster == null or room_id == 0:
+		return 0
+	var monsters: Array = _monster_roster.call("get_monsters_in_room", room_id)
+	var sum := 0
+	for m in monsters:
+		var inst := m as MonsterInstance
+		if inst == null or not inst.is_alive():
+			continue
+		if minions_only and inst.is_boss():
+			continue
+		sum += inst.size_units()
+	return sum
 
 
 func _join_combat_for_adventurers_in_room(room_id: int) -> void:

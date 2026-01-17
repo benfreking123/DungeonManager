@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ThreatProfile" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="ThreatProfile" load_steps=2 format=3 uid="uid://bjfb3i1248m4c"]
 
 [ext_resource type="Script" path="res://scripts/systems/ThreatProfile.gd" id="1_prof"]
 
@@ -8,4 +8,3 @@ damage_weight = 0.85
 distance_weight = 30.0
 melee_range_cutoff = 80.0
 melee_distance_weight_multiplier = 8.0
-

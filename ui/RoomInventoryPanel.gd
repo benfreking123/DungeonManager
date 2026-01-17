@@ -178,6 +178,9 @@ func _refresh_boss() -> void:
 	_boss_grid.add_child(btn)
 	btn.call("set_item", item_id, display_name, icon, count)
 
+	# Boss upgrades also live in the Boss tab.
+	_refresh_item_group(_boss_grid, ItemDB.boss_upgrades)
+
 
 func _refresh_item_group(target_grid: Container, dict: Dictionary) -> void:
 	var ids: Array = dict.keys()
@@ -213,6 +216,8 @@ func _resource_display_name(res: Resource, fallback_id: String) -> String:
 		return (res as MonsterItem).display_name
 	if res is TreasureItem:
 		return (res as TreasureItem).display_name
+	if res is BossUpgradeItem:
+		return (res as BossUpgradeItem).display_name
 	return fallback_id
 
 
@@ -225,6 +230,8 @@ func _resource_icon(res: Resource, id: String) -> Texture2D:
 		return tex if tex != null else _get_monster_glyph_icon(id)
 	if res is TreasureItem:
 		return (res as TreasureItem).icon
+	if res is BossUpgradeItem:
+		return (res as BossUpgradeItem).icon
 	return _get_generic_item_glyph_icon(id)
 
 

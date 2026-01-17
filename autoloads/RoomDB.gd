@@ -56,6 +56,8 @@ func _to_dict(rt: Resource) -> Dictionary:
 	var v_power: Variant = rt.get("power_cost")
 	var v_max: Variant = rt.get("max_slots")
 	var v_eff: Variant = rt.get("effect_id")
+	var v_mon_cap: Variant = rt.get("monster_capacity")
+	var v_mon_cd: Variant = rt.get("monster_cooldown_per_size")
 	return {
 		"id": String(rt.get("id")),
 		"label": String(rt.get("label")),
@@ -64,6 +66,8 @@ func _to_dict(rt: Resource) -> Dictionary:
 		"kind": String(rt.get("kind")),
 		"max_slots": int(v_max) if v_max != null else 0,
 		"effect_id": String(v_eff) if v_eff != null else "",
+		"monster_capacity": int(v_mon_cap) if v_mon_cap != null else 3,
+		"monster_cooldown_per_size": float(v_mon_cd) if v_mon_cd != null else 5.0,
 	}
 
 

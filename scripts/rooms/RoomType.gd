@@ -9,3 +9,7 @@ class_name RoomType
 @export var max_slots: int = 0
 @export var effect_id: String = ""
 
+# Monster spawning knobs (used by monster rooms; also used by boss rooms for minion spawns).
+@export var monster_capacity: int = 3
+# Spawn interval is (monster.size * monster_cooldown_per_size) seconds.
+@export var monster_cooldown_per_size: float = 5.0

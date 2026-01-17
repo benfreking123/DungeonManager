@@ -141,6 +141,7 @@ DungeonView/colors/outline_dim = Color(0.18, 0.13, 0.08, 0.28)
 DungeonView/colors/slot_outline_monster = Color(0.25, 0.9, 0.5, 0.95)
 DungeonView/colors/slot_outline_trap = Color(0.25, 0.58, 1, 0.95)
 DungeonView/colors/slot_outline_treasure = Color(0.95, 0.78, 0.22, 0.95)
+DungeonView/colors/slot_outline_universal = Color(1, 1, 1, 0.95)
 DungeonView/constants/grid_w = 1
 DungeonView/constants/icon_w = 2
 DungeonView/constants/outline_w = 2

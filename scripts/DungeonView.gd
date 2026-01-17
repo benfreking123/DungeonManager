@@ -387,7 +387,14 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	var item_kind := ""
 	if ItemDB != null and ItemDB.has_method("get_item_kind"):
 		item_kind = String(ItemDB.call("get_item_kind", item_id))
-	return slot_kind == item_kind and PlayerInventory.get_count(item_id) > 0
+	var can_install := false
+	if slot_kind == "universal":
+		can_install = item_kind in ["trap", "monster", "treasure"]
+	elif slot_kind == "boss_upgrade":
+		can_install = item_kind == "boss_upgrade"
+	else:
+		can_install = (slot_kind == item_kind)
+	return can_install and PlayerInventory.get_count(item_id) > 0
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
@@ -769,6 +776,7 @@ func _draw_room(room: Dictionary) -> void:
 		var slot_treasure := _tcol("slot_outline_treasure", Color(0.95, 0.78, 0.22, 0.95))
 		var slot_trap := _tcol("slot_outline_trap", Color(0.25, 0.58, 1.0, 0.95))
 		var slot_monster := _tcol("slot_outline_monster", Color(0.25, 0.9, 0.5, 0.95))
+		var slot_universal := _tcol("slot_outline_universal", Color(1.0, 1.0, 1.0, 0.95))
 		for i in range(slots.size()):
 			var slot: Dictionary = slots[i]
 			var slot_rect := _slot_rect_local(rect, i)
@@ -781,6 +789,8 @@ func _draw_room(room: Dictionary) -> void:
 				base_col = slot_trap
 			elif sk == "monster":
 				base_col = slot_monster
+			elif sk == "universal":
+				base_col = slot_universal
 			# Slightly dim empty slots.
 			var col := base_col if installed != "" else Color(base_col.r, base_col.g, base_col.b, base_col.a * 0.55)
 			draw_rect(slot_rect, col, false, float(slot_outline_w))
@@ -810,6 +820,8 @@ func _get_item_icon(item_id: String) -> Texture2D:
 		return (r as MonsterItem).icon
 	if r is TreasureItem:
 		return (r as TreasureItem).icon
+	if r is BossUpgradeItem:
+		return (r as BossUpgradeItem).icon
 	return null
 
 

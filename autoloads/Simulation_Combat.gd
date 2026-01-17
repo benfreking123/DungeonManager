@@ -331,8 +331,15 @@ func _tick_adv_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 			if best_i != -1:
 				if best_dist <= rng:
 					var m: MonsterInstance = monsters[best_i] as MonsterInstance
+					var dealt := dmg
 					if m != null:
-						m.hp = int(m.hp) - dmg
+						# Boss upgrades: armor blocks damage per hit.
+						if m.is_boss() and int(m.dmg_block) > 0:
+							dealt = max(0, dealt - int(m.dmg_block))
+						m.hp = int(m.hp) - dealt
+						# Boss upgrades: reflect damage back to the attacker.
+						if m.is_boss() and int(m.reflect_damage) > 0:
+							p.call("apply_damage", int(m.reflect_damage))
 					_sync_monster_actor(m)
 					# Threat: the damaged monster will focus this adventurer more.
 					if _threat != null:
@@ -340,7 +347,7 @@ func _tick_adv_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 						var mon_key: int = 0
 						if actor_hit != null and is_instance_valid(actor_hit):
 							mon_key = int((actor_hit as Node2D).get_instance_id())
-						_threat.call("on_adv_damage", room_id, mon_key, pid, dmg)
+						_threat.call("on_adv_damage", room_id, mon_key, pid, dealt)
 					# Add a touch of jitter so parties don't swing in perfect unison.
 					var base_int := float(p.get("attack_interval"))
 					t += base_int * randf_range(0.9, 1.1)
@@ -397,6 +404,50 @@ func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 		var m: MonsterInstance = monsters[i] as MonsterInstance
 		if m == null or not m.is_alive():
 			continue
+
+		# Boss upgrades: resolve any pending double-strike hit.
+		if m.is_boss() and bool(m._double_strike_pending):
+			m._double_strike_t = float(m._double_strike_t) - dt
+			if float(m._double_strike_t) <= 0.0:
+				var target: Node2D = null
+				for p0 in participants:
+					if is_instance_valid(p0) and int((p0 as Node2D).get_instance_id()) == int(m._double_strike_target_adv_id):
+						target = p0 as Node2D
+						break
+				if target != null:
+					target.call("apply_damage", int(m.attack_damage()))
+					adv_hit[int(target.get_instance_id())] = RANGED_KITE_HIT_WINDOW
+				m._double_strike_pending = false
+				m._double_strike_t = 0.0
+				m._double_strike_target_adv_id = 0
+
+		# Boss upgrades: glop attack (separate cooldown).
+		if m.is_boss() and int(m.glop_damage) > 0:
+			m.glop_t = maxf(0.0, float(m.glop_t) - dt)
+			if float(m.glop_t) <= 0.0:
+				var gr := float(m.glop_range_px)
+				if gr <= 0.0:
+					gr = 160.0
+				var actor_glop: Variant = m.actor
+				var mon_pos_glop := (actor_glop as Node2D).global_position if actor_glop != null and is_instance_valid(actor_glop) else Vector2.ZERO
+				var best_adv_glop: Node2D = null
+				var best_dist_glop := 1e18
+				for p1 in participants:
+					if not is_instance_valid(p1):
+						continue
+					var a1 := p1 as Node2D
+					var d1 := mon_pos_glop.distance_to(a1.global_position)
+					if d1 <= gr and d1 < best_dist_glop:
+						best_dist_glop = d1
+						best_adv_glop = a1
+				if best_adv_glop != null:
+					best_adv_glop.call("apply_damage", int(m.glop_damage))
+					adv_hit[int(best_adv_glop.get_instance_id())] = RANGED_KITE_HIT_WINDOW
+					var cd := float(m.glop_cooldown_s)
+					if cd <= 0.0:
+						cd = 3.0
+					m.glop_t = cd
+
 		var t: float = float(m.attack_timer) - dt
 		if t <= 0.0:
 			# Monsters hit ONE adventurer per attack.
@@ -435,6 +486,16 @@ func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 					best_adv.call("apply_damage", dmg)
 					# Mark this adventurer as "recently hit" so ranged units can kite briefly.
 					adv_hit[int(best_adv.get_instance_id())] = RANGED_KITE_HIT_WINDOW
+					# Boss upgrades: double strike (bonus hit after a short delay).
+					if m.is_boss() and float(m.double_strike_chance) > 0.0 and not bool(m._double_strike_pending):
+						var ch := clampf(float(m.double_strike_chance), 0.0, 1.0)
+						if rng0.randf() <= ch:
+							m._double_strike_pending = true
+							m._double_strike_target_adv_id = int(best_adv.get_instance_id())
+							var dly := float(m.double_strike_delay_s)
+							if dly <= 0.0001:
+								dly = 0.1
+							m._double_strike_t = dly
 					# Add a touch of jitter so monsters don't swing in perfect unison.
 					t += float(m.attack_interval()) * randf_range(0.9, 1.1)
 				else:

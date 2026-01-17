@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="RoomType" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="RoomType" load_steps=2 format=3 uid="uid://tijhn1u8gapm"]
 
 [ext_resource type="Script" path="res://scripts/rooms/RoomType.gd" id="1_roomtype"]
 
@@ -10,4 +10,6 @@ size = Vector2i(3, 2)
 power_cost = 3
 kind = "monster"
 max_slots = 2
-
+effect_id = ""
+monster_capacity = 3
+monster_cooldown_per_size = 5.0
