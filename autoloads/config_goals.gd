@@ -5,26 +5,6 @@ extends Node
 # Goals are intentionally data-driven Dictionaries (not Resources) to keep iteration fast.
 # PartyAdventureSystem will interpret these weights when scoring candidate intents.
 
-const BASE_GOALS: Array[Dictionary] = [
-	{ "id": "kill_boss", "label": "Kill the Boss", "weight": 0 },
-	{ "id": "loot_dungeon", "label": "Loot the Dungeon", "weight": 0 },
-	{ "id": "explore_dungeon", "label": "Explore the Dungeon", "weight": 0 },
-]
-
-# Unique/specific goals. `weight` is the strength/priority modifier.
-const UNIQUE_GOALS: Array[Dictionary] = [
-	{ "id": "flee_on_any_damage", "label": "Will flee the dungeon after taking ANY damage", "weight": 0 },
-	{ "id": "flee_on_any_loot", "label": "Will flee the dungeon once they get any loot", "weight": 0 },
-	{ "id": "no_flee_until_boss_dead", "label": "Won't flee until the Boss is killed", "weight": 2 },
-	{ "id": "no_leave_until_full_loot", "label": "Won't leave until they have full loot", "weight": 1 },
-	{ "id": "explore_all_before_boss", "label": "Wants to explore everything before killing the boss", "weight": 1 },
-	{ "id": "no_leave_until_kill_x_monsters", "label": "Won't leave until they kill X monsters", "weight": 1 },
-	{ "id": "exit_when_full_loot", "label": "Will flee once fully looted", "weight": 1 },
-	{ "id": "cautious_hp_threshold", "label": "Will flee when hurt badly", "weight": 1 },
-	{ "id": "boss_rush", "label": "Wants to rush the boss once it is known", "weight": 1 },
-	{ "id": "greedy_then_leave", "label": "Wants to steal X treasures then leave", "weight": 1 },
-]
-
 # Intent scoring knobs (externalized).
 # These values replace the hard-coded coefficients in PartyAdventureSystem.
 const INTENT_SCORE: Dictionary = {
@@ -52,10 +32,20 @@ const INTENT_SCORE: Dictionary = {
 	},
 }
 
+# Intent stability knobs: clamp outliers and require a margin to switch.
+const INTENT_STABILITY: Dictionary = {
+	"switch_margin": 15,
+	"clamp_member_min": -300,
+	"clamp_member_max": 500,
+}
+
 # One canonical definition per goal id, including spawn-time roll rules and params.
 var GOAL_DEFS: Dictionary = {
 	# Base goals (always present)
 	"kill_boss": {
+		"kind": "base",
+		"pickable": true,
+		"order": 10,
 		"label": "Kill the Boss",
 		"dialogue": [
 			"I want to kill the boss.",
@@ -66,6 +56,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"loot_dungeon": {
+		"kind": "base",
+		"pickable": true,
+		"order": 20,
 		"label": "Loot the Dungeon",
 		"dialogue": [
 			"Let's grab the loot and get out.",
@@ -76,6 +69,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"explore_dungeon": {
+		"kind": "base",
+		"pickable": true,
+		"order": 30,
 		"label": "Explore the Dungeon",
 		"dialogue": [
 			"Let's explore the dungeon.",
@@ -88,6 +84,9 @@ var GOAL_DEFS: Dictionary = {
 
 	# Unique goals
 	"flee_on_any_damage": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 110,
 		"label": "Will flee the dungeon after taking ANY damage",
 		"dialogue": [
 			"One scratch and I'm out of here.",
@@ -98,6 +97,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"flee_on_any_loot": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 120,
 		"label": "Will flee once they get any loot",
 		"dialogue": [
 			"Got loot—I'm out of here.",
@@ -108,6 +110,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"no_flee_until_boss_dead": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 130,
 		"label": "Won't flee until the Boss is killed",
 		"dialogue": [
 			"We're not leaving until the boss is dead.",
@@ -118,6 +123,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"no_leave_until_full_loot": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 140,
 		"label": "Won't leave until they have full loot",
 		"dialogue": [
 			"I won't leave until my pockets are full.",
@@ -128,6 +136,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"exit_when_full_loot": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 150,
 		"label": "Will flee once fully looted",
 		"dialogue": [
 			"My pack is full—time to leave.",
@@ -138,6 +149,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"explore_all_before_boss": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 160,
 		"label": "Wants to explore everything before killing the boss",
 		"dialogue": [
 			"I want to explore every inch of this dungeon.",
@@ -148,6 +162,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"no_leave_until_kill_x_monsters": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 170,
 		"label": "Won't leave until they kill X monsters",
 		"dialogue": [
 			"I'm not leaving until we kill enough monsters.",
@@ -158,6 +175,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": { "kills_target_min": 3, "kills_target_max": 10 },
 	},
 	"cautious_hp_threshold": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 180,
 		"label": "Will flee when hurt badly",
 		"dialogue": [
 			"I'm hurt—I'm leaving.",
@@ -168,6 +188,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": { "hp_threshold_pct_min": 20, "hp_threshold_pct_max": 60 },
 	},
 	"boss_rush": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 190,
 		"label": "Wants to rush the boss once it is known",
 		"dialogue": [
 			"Forget the loot—go for the boss.",
@@ -178,6 +201,9 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": {},
 	},
 	"greedy_then_leave": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 200,
 		"label": "Wants to steal X treasures then leave",
 		"dialogue": [
 			"We steal a few more treasures, then we leave.",
@@ -249,16 +275,42 @@ const FLEE_DIALOGUE: Array[String] = [
 ]
 
 
-func all_base_goals() -> Array[Dictionary]:
-	return BASE_GOALS.duplicate(true)
-
-
-func all_unique_goals() -> Array[Dictionary]:
-	return UNIQUE_GOALS.duplicate(true)
-
-
 func get_intent_score() -> Dictionary:
 	return INTENT_SCORE.duplicate(true)
+
+
+func get_intent_stability() -> Dictionary:
+	return INTENT_STABILITY.duplicate(true)
+
+
+func _goal_order_lt(a: String, b: String) -> bool:
+	var da: Dictionary = GOAL_DEFS.get(String(a), {}) as Dictionary
+	var db: Dictionary = GOAL_DEFS.get(String(b), {}) as Dictionary
+	return int(da.get("order", 0)) < int(db.get("order", 0))
+
+
+func _goal_ids_by_kind(kind: String) -> Array[String]:
+	var out: Array[String] = []
+	for k in GOAL_DEFS.keys():
+		var id := String(k)
+		var d: Dictionary = GOAL_DEFS.get(id, {}) as Dictionary
+		if d.is_empty():
+			continue
+		if String(d.get("kind", "")) != String(kind):
+			continue
+		if not bool(d.get("pickable", true)):
+			continue
+		out.append(id)
+	out.sort_custom(Callable(self, "_goal_order_lt"))
+	return out
+
+
+func base_goal_ids() -> Array[String]:
+	return _goal_ids_by_kind("base")
+
+
+func unique_goal_ids() -> Array[String]:
+	return _goal_ids_by_kind("unique")
 
 
 func get_goal_def(goal_id: String) -> Dictionary:
@@ -304,37 +356,23 @@ func roll_goal_params(rng: RandomNumberGenerator, goal_id: String) -> Dictionary
 	return out
 
 
-func pick_unique_goals(rng: RandomNumberGenerator, max_count: int = 2) -> Array[Dictionary]:
+func pick_unique_goal_ids(rng: RandomNumberGenerator, max_count: int = 2) -> Array[String]:
 	# Picks up to max_count unique goals (uniform for now).
 	if rng == null:
 		return []
 	max_count = maxi(0, max_count)
 	if max_count <= 0:
 		return []
-	var pool: Array[Dictionary] = all_unique_goals()
+	var pool: Array[String] = unique_goal_ids()
 	if pool.is_empty():
 		return []
 	# Shuffle (Fisher-Yates)
 	for i in range(pool.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
-		var tmp: Dictionary = pool[i]
+		var tmp: String = pool[i]
 		pool[i] = pool[j]
 		pool[j] = tmp
 	return pool.slice(0, mini(max_count, pool.size()))
-
-
-func weights_from_goals(goals: Array[Dictionary]) -> Dictionary:
-	# Returns { goal_id: int weight }
-	var out: Dictionary = {}
-	for g0 in goals:
-		var g := g0 as Dictionary
-		if g.is_empty():
-			continue
-		var id := String(g.get("id", ""))
-		if id == "":
-			continue
-		out[id] = int(g.get("weight", 0))
-	return out
 
 
 func pick_dialogue_for_intent(rng: RandomNumberGenerator, intent_id: String) -> String:
@@ -347,7 +385,10 @@ func pick_dialogue_for_intent(rng: RandomNumberGenerator, intent_id: String) -> 
 
 
 func pick_dialogue_for_goal(rng: RandomNumberGenerator, goal_id: String) -> String:
-	var arr: Array = GOAL_DIALOGUE.get(String(goal_id), []) as Array
+	var def: Dictionary = get_goal_def(String(goal_id))
+	var arr: Array = def.get("dialogue", []) as Array
+	if arr.is_empty():
+		arr = GOAL_DIALOGUE.get(String(goal_id), []) as Array
 	if arr.is_empty():
 		return ""
 	if rng == null:

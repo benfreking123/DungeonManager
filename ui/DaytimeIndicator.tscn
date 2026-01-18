@@ -1,17 +1,17 @@
-[gd_scene load_steps=5 format=3 uid="uid://c3j0codad11to"]
+[gd_scene load_steps=6 format=3 uid="uid://c3j0codad11to"]
 
+[ext_resource type="Script" path="res://ui/DaytimeIndicator.gd" id="1_jy67g"]
 [ext_resource type="Texture2D" uid="uid://bsculkwubueag" path="res://assets/ChatGPT Image Jan 17, 2026, 04_30_17 PM.png" id="2_8sfd5"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ry3ih"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_j4uac"]
 content_margin_left = 0.0
 content_margin_top = 0.0
 content_margin_right = 0.0
 content_margin_bottom = 0.0
-bg_color = Color(0.294118, 0.219608, 0.196078, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
+bg_color = Color(0.88, 0.81, 0.68, 0.96)
+border_width_left = 6
+border_width_right = 6
+border_width_bottom = 6
 border_color = Color(0.18, 0.13, 0.08, 0.48)
 corner_radius_top_left = 6
 corner_radius_top_right = 6
@@ -44,7 +44,8 @@ shadow_offset = Vector2(0, 2)
 [node name="PanelContainer" type="PanelContainer"]
 offset_right = 142.0
 offset_bottom = 136.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_ry3ih")
+theme_override_styles/panel = SubResource("StyleBoxFlat_j4uac")
+script = ExtResource("1_jy67g")
 
 [node name="TextureRect" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(80, 80)
@@ -59,11 +60,11 @@ theme_override_constants/separation = 3
 
 [node name="Panel" type="Panel" parent="VBoxContainer"]
 z_index = -1
-custom_minimum_size = Vector2(0, 35)
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxEmpty_7k7au")
 
 [node name="Panel2" type="Panel" parent="VBoxContainer"]
-custom_minimum_size = Vector2(0, 35)
+custom_minimum_size = Vector2(0, 55)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_uc8ms")

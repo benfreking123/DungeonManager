@@ -6,6 +6,7 @@ extends Node2D
 
 signal died(world_pos: Vector2, class_id: String)
 signal damaged(amount: int)
+signal right_clicked(adv_id: int, screen_pos: Vector2)
 
 enum Phase { SURFACE, DUNGEON, DONE }
 
@@ -38,6 +39,8 @@ var party_id: int = 0
 var class_id: String = ""
 var class_icon: Texture2D
 var _dead: bool = false
+
+@onready var _click_area: Area2D = get_node_or_null("ClickArea") as Area2D
 
 
 func set_surface_target(target_world: Vector2, speed: float) -> void:
@@ -214,4 +217,13 @@ func _draw() -> void:
 func _ready() -> void:
 	hp = hp_max
 	_wiggle_seed = float(int(get_instance_id()) % 997) * 0.017
+	if _click_area != null:
+		_click_area.input_event.connect(_on_click_area_input_event)
 	queue_redraw()
+
+
+func _on_click_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_RIGHT:
+			right_clicked.emit(int(get_instance_id()), get_viewport().get_mouse_position())

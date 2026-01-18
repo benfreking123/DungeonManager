@@ -39,6 +39,8 @@ func _find_day_button() -> Button:
 
 	var paths := [
 		# New HUD layout (current)
+		"UI/HUD/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2/DayButton",
+		# New HUD layout (older variant)
 		"UI/HUD/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/DayButton",
 		# Legacy layout (fallback)
 		"UI/HUD/TopBar/HBox/DayButton",

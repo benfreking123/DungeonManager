@@ -40,12 +40,12 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 			# Base goals are always present, but weights/params are rolled per adventurer.
 			var goal_weights: Dictionary = {}
 			var goal_params: Dictionary = {}
+			var unique_ids: Array[String] = []
 			if goals_cfg != null:
 				# Roll base goal weights
-				var base_goals: Array[Dictionary] = goals_cfg.call("all_base_goals") as Array[Dictionary] if goals_cfg.has_method("all_base_goals") else []
-				for g0 in base_goals:
-					var g := g0 as Dictionary
-					var gid := String(g.get("id", ""))
+				var base_ids: Array = goals_cfg.call("base_goal_ids") as Array if goals_cfg.has_method("base_goal_ids") else []
+				for gid0 in base_ids:
+					var gid := String(gid0)
 					if gid == "":
 						continue
 					if goals_cfg.has_method("roll_goal_weight"):
@@ -55,12 +55,12 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 
 				# Roll 1–3 unique goals (uniform sample for now).
 				var uniq_n := rng.randi_range(1, 3)
-				var uniq: Array[Dictionary] = goals_cfg.call("pick_unique_goals", rng, uniq_n) as Array[Dictionary] if goals_cfg.has_method("pick_unique_goals") else []
-				for g1 in uniq:
-					var gd := g1 as Dictionary
-					var gid2 := String(gd.get("id", ""))
+				var uniq: Array = goals_cfg.call("pick_unique_goal_ids", rng, uniq_n) as Array if goals_cfg.has_method("pick_unique_goal_ids") else []
+				for gid2_0 in uniq:
+					var gid2 := String(gid2_0)
 					if gid2 == "":
 						continue
+					unique_ids.append(gid2)
 					if goals_cfg.has_method("roll_goal_weight"):
 						goal_weights[gid2] = int(goals_cfg.call("roll_goal_weight", rng, gid2))
 					if goals_cfg.has_method("roll_goal_params"):
@@ -78,6 +78,20 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 				"stolen_inv_cap": stolen_cap,
 				"stat_mods": stat_mods,
 			}
+
+			# Debug visibility: log each adventurer's roll once per day seed.
+			DbgLog.once(
+				"goals_roll:%d:%d" % [int(day_seed), int(mid)],
+				"Adv roll mid=%d party=%d unique=%s weights=%s params=%s" % [
+					int(mid),
+					int(pid),
+					str(unique_ids),
+					str(goal_weights),
+					str(goal_params),
+				],
+				"party",
+				DbgLog.Level.DEBUG
+			)
 
 		party_defs.append({ "party_id": pid, "member_ids": member_ids })
 

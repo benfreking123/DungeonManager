@@ -105,6 +105,80 @@ func active_party_count() -> int:
 	return _party_members.keys().size()
 
 
+func get_adv_tooltip(adv_id: int) -> Dictionary:
+	# Player-friendly tooltip fields for UI.
+	# Returns:
+	# {
+	#   morality_label: String,
+	#   top_goal_ids: Array[String],
+	#   top_goals: Array[String] (labels)
+	# }
+	var b: AdventurerBrain = _brains.get(int(adv_id), null) as AdventurerBrain
+	if b == null:
+		return {}
+	var out: Dictionary = {}
+	out["morality_label"] = _morality_label(int(b.morality))
+
+	var ids: Array[String] = _top_goal_ids(b, 3)
+	out["top_goal_ids"] = ids
+
+	var labels: Array[String] = []
+	for gid in ids:
+		var label := _goal_label(gid)
+		if label != "":
+			labels.append(label)
+	out["top_goals"] = labels
+	return out
+
+
+func _morality_label(m: int) -> String:
+	m = clampi(int(m), -5, 5)
+	if m <= -4:
+		return "Ruthless"
+	if m <= -2:
+		return "Selfish"
+	if m <= 1:
+		return "Neutral"
+	if m <= 3:
+		return "Honorable"
+	return "Noble"
+
+
+func _goal_label(goal_id: String) -> String:
+	if _goals_cfg != null and _goals_cfg.has_method("get_goal_def"):
+		var def: Dictionary = _goals_cfg.call("get_goal_def", String(goal_id)) as Dictionary
+		var label := String(def.get("label", ""))
+		if label != "":
+			return label
+	return String(goal_id)
+
+
+func _top_goal_ids(b: AdventurerBrain, max_count: int) -> Array[String]:
+	var out: Array[String] = []
+	if b == null:
+		return out
+	max_count = maxi(0, int(max_count))
+	if max_count <= 0:
+		return out
+
+	# Pick top goals by absolute rolled weight, excluding base goals (base goals are always present).
+	var w: Dictionary = b.goal_weights
+	var pairs: Array[Dictionary] = []
+	for k in w.keys():
+		var gid := String(k)
+		if gid in ["kill_boss", "loot_dungeon", "explore_dungeon"]:
+			continue
+		pairs.append({ "id": gid, "w": abs(int(w.get(k, 0))) })
+
+	pairs.sort_custom(func(a: Dictionary, c: Dictionary) -> bool:
+		return int(a.get("w", 0)) > int(c.get("w", 0))
+	)
+
+	for i in range(mini(max_count, pairs.size())):
+		out.append(String((pairs[i] as Dictionary).get("id", "")))
+	return out
+
+
 func register_adventurer(adv: Node2D, member_id: int) -> void:
 	# Called by Simulation after spawning an Adventurer actor.
 	if adv == null or not is_instance_valid(adv):
@@ -266,6 +340,13 @@ func decide_party_intent(party_id: int) -> String:
 
 	var loot_known := _has_any_known_treasure_room_with_loot()
 
+	var stab: Dictionary = {}
+	if _goals_cfg != null and _goals_cfg.has_method("get_intent_stability"):
+		stab = _goals_cfg.call("get_intent_stability") as Dictionary
+	var clamp_min := int(stab.get("clamp_member_min", -300))
+	var clamp_max := int(stab.get("clamp_member_max", 500))
+	var switch_margin := int(stab.get("switch_margin", 15))
+
 	var totals := {
 		INTENT_EXPLORE: 0,
 		INTENT_BOSS: 0,
@@ -278,19 +359,32 @@ func decide_party_intent(party_id: int) -> String:
 		var b: AdventurerBrain = _brains.get(aid, null) as AdventurerBrain
 		if b == null:
 			continue
-		totals[INTENT_EXPLORE] += _score_intent_for_member(b, INTENT_EXPLORE, boss_known, loot_known)
-		totals[INTENT_BOSS] += _score_intent_for_member(b, INTENT_BOSS, boss_known, loot_known)
-		totals[INTENT_LOOT] += _score_intent_for_member(b, INTENT_LOOT, boss_known, loot_known)
-		totals[INTENT_EXIT] += _score_intent_for_member(b, INTENT_EXIT, boss_known, loot_known)
+		totals[INTENT_EXPLORE] += clampi(_score_intent_for_member(b, INTENT_EXPLORE, boss_known, loot_known), clamp_min, clamp_max)
+		totals[INTENT_BOSS] += clampi(_score_intent_for_member(b, INTENT_BOSS, boss_known, loot_known), clamp_min, clamp_max)
+		totals[INTENT_LOOT] += clampi(_score_intent_for_member(b, INTENT_LOOT, boss_known, loot_known), clamp_min, clamp_max)
+		totals[INTENT_EXIT] += clampi(_score_intent_for_member(b, INTENT_EXIT, boss_known, loot_known), clamp_min, clamp_max)
 
 	# Deterministic tie-break order (prevents random “exit at entrance” when scores tie).
-	var best := INTENT_EXPLORE
+	var best_raw := INTENT_EXPLORE
 	var best_score := int(totals[INTENT_EXPLORE])
 	for k in [INTENT_BOSS, INTENT_LOOT, INTENT_EXIT]:
 		var sc := int(totals[k])
 		if sc > best_score:
 			best_score = sc
-			best = String(k)
+			best_raw = String(k)
+
+	# Intent hysteresis: require a margin to switch away from current party intent.
+	var chosen := String(best_raw)
+	var st0: PartyState = _parties.get(pid, null) as PartyState
+	var current_intent := String(st0.intent) if st0 != null else ""
+	if current_intent == "":
+		current_intent = INTENT_EXPLORE
+	if chosen != current_intent:
+		var cur_sc := int(totals.get(current_intent, -999999))
+		var new_sc := int(totals.get(chosen, -999999))
+		if (new_sc - cur_sc) < switch_margin:
+			chosen = current_intent
+
 	DbgLog.throttle(
 		"party_intent:%d" % pid,
 		0.65,
@@ -300,7 +394,7 @@ func decide_party_intent(party_id: int) -> String:
 			int(totals[INTENT_BOSS]),
 			int(totals[INTENT_LOOT]),
 			int(totals[INTENT_EXIT]),
-			best,
+			chosen,
 		],
 		"party",
 		DbgLog.Level.DEBUG
@@ -308,19 +402,19 @@ func decide_party_intent(party_id: int) -> String:
 
 	# Emit a single bubble per party on intent change (leader speaks).
 	var last: String = String(_last_party_intent_emitted.get(pid, ""))
-	if last != best:
+	if last != chosen:
 		var st: PartyState = _parties.get(pid, null) as PartyState
 		var leader := int(st.leader_adv_id) if st != null else 0
 		if leader != 0:
 			var text := ""
 			if _goals_cfg != null and _goals_cfg.has_method("pick_dialogue_for_intent"):
-				text = String(_goals_cfg.call("pick_dialogue_for_intent", _rng, best))
+				text = String(_goals_cfg.call("pick_dialogue_for_intent", _rng, chosen))
 			if text != "":
 				_bubble_events.append({ "type": "party_intent", "party_id": pid, "leader_adv_id": leader, "text": text })
 				# Only mark as emitted if we actually had a leader and emitted a bubble.
-				_last_party_intent_emitted[pid] = best
+				_last_party_intent_emitted[pid] = chosen
 
-	return best
+	return chosen
 
 
 func on_party_enter_room(party_id: int, room: Dictionary) -> Dictionary:

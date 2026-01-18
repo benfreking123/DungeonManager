@@ -9,6 +9,7 @@ signal day_started()
 signal day_ended()
 signal combat_started(room_id: int)
 signal combat_ended(room_id: int)
+signal adventurer_right_clicked(adv_id: int, screen_pos: Vector2)
 
 const SURFACE_SPEED := 64.0
 const DUNGEON_SPEED := 52.0
@@ -407,8 +408,35 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 		adv.connect("damaged", Callable(self, "_on_adventurer_damaged").bind(int(adv.get_instance_id())))
 	if adv.has_signal("died"):
 		adv.connect("died", Callable(self, "_on_adventurer_died").bind(int(adv.get_instance_id())))
+	if adv.has_signal("right_clicked"):
+		adv.connect("right_clicked", Callable(self, "_on_adventurer_right_clicked"))
 	_adventurers.append(adv)
 	_adv_was_in_combat[int(adv.get_instance_id())] = false
+
+
+func _on_adventurer_right_clicked(adv_id: int, screen_pos: Vector2) -> void:
+	# Adventurers only exist during DAY, but keep this safe.
+	if GameState != null and GameState.phase != GameState.Phase.DAY:
+		return
+	adventurer_right_clicked.emit(int(adv_id), screen_pos)
+
+
+func get_adv_tooltip_data(adv_id: int) -> Dictionary:
+	# Convenience for UI: merge actor runtime stats with PartyAdventureSystem tooltip fields.
+	var out: Dictionary = {}
+	var adv := _find_adv_by_id(int(adv_id))
+	if adv == null:
+		return {}
+	out["class_id"] = String(adv.get("class_id"))
+	out["party_id"] = int(adv.get("party_id"))
+	out["hp"] = int(adv.get("hp"))
+	out["hp_max"] = int(adv.get("hp_max"))
+	out["attack_damage"] = int(adv.get("attack_damage"))
+	if _party_adv != null and _party_adv.has_method("get_adv_tooltip"):
+		var t: Dictionary = _party_adv.call("get_adv_tooltip", int(adv_id)) as Dictionary
+		for k in t.keys():
+			out[k] = t.get(k)
+	return out
 
 
 func _on_adventurer_died(world_pos: Vector2, class_id: String, adv_id: int) -> void:

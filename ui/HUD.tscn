@@ -140,22 +140,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
 text = "Speed:"
 
-[node name="Speed1x" type="Button" parent="VBoxContainer/TopBar/HBox"]
-layout_mode = 2
-toggle_mode = true
-button_pressed = true
-text = "1x"
-
-[node name="Speed2x" type="Button" parent="VBoxContainer/TopBar/HBox"]
-layout_mode = 2
-toggle_mode = true
-text = "2x"
-
-[node name="Speed4x" type="Button" parent="VBoxContainer/TopBar/HBox"]
-layout_mode = 2
-toggle_mode = true
-text = "4x"
-
 [node name="TreasureLabel" type="Label" parent="VBoxContainer/TopBar/HBox"]
 visible = false
 layout_mode = 2
@@ -173,8 +157,8 @@ layout_mode = 2
 [node name="PanelContainer" type="PanelContainer" parent="VBoxContainer/Spacer3"]
 layout_mode = 0
 offset_top = 2.0
-offset_right = 1042.0
-offset_bottom = 18.0
+offset_right = 1309.0
+offset_bottom = 683.0
 theme_override_styles/panel = ExtResource("3_6nt7r")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
@@ -211,7 +195,7 @@ mouse_filter = 1
 [node name="TextureRect" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame"]
 layout_mode = 0
 offset_top = -435.0
-offset_right = 1024.0
+offset_right = 1053.0
 offset_bottom = 116.0
 texture = ExtResource("4_aah6i")
 expand_mode = 1
@@ -392,19 +376,19 @@ expand_mode = 1
 
 [node name="TextureRect19" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 989.0
-offset_top = 83.0
-offset_right = 1051.0
-offset_bottom = 313.0
+offset_left = 986.0
+offset_top = 85.0
+offset_right = 1048.0
+offset_bottom = 315.0
 rotation = 6.28318
 texture = SubResource("AtlasTexture_onsy8")
 expand_mode = 1
 
 [node name="TextureRect15" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 1008.0
+offset_left = 1004.0
 offset_top = 618.0
-offset_right = 1211.0
+offset_right = 1207.0
 offset_bottom = 662.0
 rotation = 4.71238
 texture = ExtResource("7_uqoya")
@@ -412,19 +396,19 @@ expand_mode = 1
 
 [node name="TextureRect14" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 1052.0
-offset_top = 648.0
-offset_right = 1155.0
-offset_bottom = 739.0
+offset_left = 1049.0
+offset_top = 649.0
+offset_right = 1152.0
+offset_bottom = 740.0
 rotation = 3.14159
 texture = SubResource("AtlasTexture_q2qws")
 expand_mode = 1
 
 [node name="TextureRect12" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 1010.0
+offset_left = 1006.0
 offset_top = 478.0
-offset_right = 1210.0
+offset_right = 1206.0
 offset_bottom = 522.0
 rotation = 4.71238
 texture = SubResource("AtlasTexture_hgkxh")
@@ -463,6 +447,17 @@ size_flags_horizontal = 4
 z_index = 1
 layout_mode = 2
 
+[node name="VBoxContainer2" type="VBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer"]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+
+[node name="DayButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2"]
+layout_mode = 2
+text = "Start Day"
+
 [node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 
@@ -489,9 +484,24 @@ text = "!"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="DayButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+[node name="HBoxContainer2" type="HBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
 layout_mode = 2
-text = "Start Day"
+
+[node name="Speed1x" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "1x"
+
+[node name="Speed2x" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2"]
+layout_mode = 2
+toggle_mode = true
+text = "2x"
+
+[node name="Speed4x" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2"]
+layout_mode = 2
+toggle_mode = true
+text = "4x"
 
 [node name="Panel" type="Panel" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2

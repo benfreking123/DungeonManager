@@ -2,6 +2,8 @@ extends Control
 
 const DungeonSetupStatusServiceScript := preload("res://scripts/services/DungeonSetupStatusService.gd")
 const SetupWarningPopupScene := preload("res://ui/SetupWarningPopup.tscn")
+const PauseIconTexture: Texture2D = preload("res://assets/icons/pause.svg")
+const PlayIconTexture: Texture2D = preload("res://assets/icons/play.svg")
 
 var treasure_label: Label = null
 var power_label: Label = null
@@ -28,6 +30,7 @@ var _dungeon_view: Node = null
 var _frame_paper_base: TextureRect = null
 var _town_texture: TextureRect = null
 var _room_popup: PanelContainer = null
+var _adventurer_popup: PanelContainer = null
 var _popup_layer: CanvasLayer = null
 var _shop: Control = null
 var _shop_layer: CanvasLayer = null
@@ -52,6 +55,8 @@ const ZOOM_MIN := 1.0
 const ZOOM_MAX := 2.5
 const ZOOM_STEP := 1.12
 
+var _last_nonzero_speed: float = 1.0
+
 
 func _ready() -> void:
 	_resolve_topbar_nodes()
@@ -64,7 +69,9 @@ func _ready() -> void:
 	resized.connect(_apply_world_transform)
 	_resolve_dungeon_view()
 	_resolve_room_popup()
+	_resolve_adventurer_popup()
 	_connect_room_popup()
+	_connect_adventurer_popup()
 	_connect_placement_hint()
 	_resolve_shop()
 	_resolve_room_inventory_panel()
@@ -75,7 +82,7 @@ func _ready() -> void:
 		_game_over.z_index = 4096
 		_game_over.z_as_relative = false
 	if day_button != null:
-		day_button.pressed.connect(_on_day_pressed)
+		day_button.pressed.connect(_on_action_pressed)
 	if shop_button != null:
 		shop_button.pressed.connect(_on_shop_pressed)
 	_simulation.day_ended.connect(_on_day_ended)
@@ -98,6 +105,14 @@ func _ready() -> void:
 		speed_2x.pressed.connect(func(): GameState.set_speed(2.0))
 	if speed_4x != null:
 		speed_4x.pressed.connect(func(): GameState.set_speed(4.0))
+	if GameState != null and GameState.has_signal("speed_changed"):
+		GameState.speed_changed.connect(_on_speed_changed)
+	if GameState != null and GameState.has_signal("phase_changed"):
+		GameState.phase_changed.connect(func(_new_phase: int) -> void:
+			_refresh_action_button()
+		)
+	# Ensure action button matches initial phase/speed immediately.
+	_refresh_action_button()
 	_apply_world_transform()
 	# Run once more after the first layout pass so sizes are valid and the initial
 	# pan/zoom clamp + backdrop sync don't start slightly offset.
@@ -112,24 +127,20 @@ func _resolve_topbar_nodes() -> void:
 	# Support old and new layouts:
 	# - TopBar/HBox/...
 	# - VBoxContainer/TopBar/HBox/...
+	# - (New) Right-side controls under VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/...
 	var bases := [
 		"TopBar/HBox",
 		"VBoxContainer/TopBar/HBox"
 	]
 	for base in bases:
 		var tl := get_node_or_null("%s/TreasureLabel" % base) as Label
-		var s1 := get_node_or_null("%s/Speed1x" % base) as Button
-		var s2 := get_node_or_null("%s/Speed2x" % base) as Button
-		var s4 := get_node_or_null("%s/Speed4x" % base) as Button
 		var sb := get_node_or_null("%s/ShopButton" % base) as Button
-		# In newer HUD layouts, PowerLabel/DayButton moved out of the TopBar.
-		# So only require the actual TopBar widgets here.
-		if tl != null and s1 != null and s2 != null and s4 != null:
+		# Only require actual topbar widgets here (speed/pause may live elsewhere now).
+		if tl != null:
 			treasure_label = tl
-			speed_1x = s1
-			speed_2x = s2
-			speed_4x = s4
+		if sb != null:
 			shop_button = sb
+		if treasure_label != null and shop_button != null:
 			break
 	# Fallback to whatever was found, even if partial
 	if treasure_label == null:
@@ -142,18 +153,109 @@ func _resolve_topbar_nodes() -> void:
 			power_label = get_node_or_null("TopBar/HBox/PowerLabel") as Label
 	if day_button == null:
 		# New HUD layout (right-side column)
-		day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/DayButton") as Button
+		day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2/DayButton") as Button
+		if day_button == null:
+			# Older new layout variant
+			day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/DayButton") as Button
 		if day_button == null:
 			# Legacy layout
 			day_button = get_node_or_null("TopBar/HBox/DayButton") as Button
 	if speed_1x == null:
-		speed_1x = get_node_or_null("TopBar/HBox/Speed1x") as Button
+		# New HUD layout (right-side speed row)
+		speed_1x = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2/Speed1x") as Button
+		if speed_1x == null:
+			speed_1x = get_node_or_null("TopBar/HBox/Speed1x") as Button
 	if speed_2x == null:
-		speed_2x = get_node_or_null("TopBar/HBox/Speed2x") as Button
+		speed_2x = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2/Speed2x") as Button
+		if speed_2x == null:
+			speed_2x = get_node_or_null("TopBar/HBox/Speed2x") as Button
 	if speed_4x == null:
-		speed_4x = get_node_or_null("TopBar/HBox/Speed4x") as Button
+		speed_4x = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2/Speed4x") as Button
+		if speed_4x == null:
+			speed_4x = get_node_or_null("TopBar/HBox/Speed4x") as Button
 	if shop_button == null:
 		shop_button = get_node_or_null("TopBar/HBox/ShopButton") as Button
+
+
+func _on_action_pressed() -> void:
+	if GameState == null:
+		return
+	match int(GameState.phase):
+		int(GameState.Phase.BUILD):
+			_on_day_pressed()
+		int(GameState.Phase.DAY):
+			_toggle_pause()
+		_:
+			return
+
+
+func _toggle_pause() -> void:
+	if GameState == null:
+		return
+	var s := float(GameState.speed)
+	if s > 0.0:
+		_last_nonzero_speed = s
+		GameState.set_speed(0.0)
+	else:
+		GameState.set_speed(maxf(0.1, _last_nonzero_speed))
+
+
+func _on_speed_changed(new_speed: float) -> void:
+	# Track last non-zero speed for pause toggle restore.
+	if float(new_speed) > 0.0:
+		_last_nonzero_speed = float(new_speed)
+	# Keep speed button UI in sync without triggering signals.
+	if speed_1x != null and speed_1x.has_method("set_pressed_no_signal"):
+		speed_1x.call("set_pressed_no_signal", is_equal_approx(float(new_speed), 1.0) or (float(new_speed) == 0.0 and is_equal_approx(_last_nonzero_speed, 1.0)))
+	if speed_2x != null and speed_2x.has_method("set_pressed_no_signal"):
+		speed_2x.call("set_pressed_no_signal", is_equal_approx(float(new_speed), 2.0) or (float(new_speed) == 0.0 and is_equal_approx(_last_nonzero_speed, 2.0)))
+	if speed_4x != null and speed_4x.has_method("set_pressed_no_signal"):
+		speed_4x.call("set_pressed_no_signal", is_equal_approx(float(new_speed), 4.0) or (float(new_speed) == 0.0 and is_equal_approx(_last_nonzero_speed, 4.0)))
+
+	_refresh_action_button()
+
+
+func _refresh_action_button() -> void:
+	if day_button == null or GameState == null:
+		return
+
+	var phase := int(GameState.phase)
+	var speed := float(GameState.speed)
+
+	# Default styling for a single-button control.
+	day_button.add_theme_constant_override("icon_margin", 0)
+	day_button.add_theme_constant_override("h_separation", 0)
+	if day_button.has_method("set") and _node_has_property(day_button, "icon_alignment"):
+		day_button.set("icon_alignment", HORIZONTAL_ALIGNMENT_CENTER)
+
+	if phase == int(GameState.Phase.BUILD):
+		day_button.disabled = false
+		day_button.text = "Start"
+		day_button.icon = null
+		day_button.tooltip_text = "Start Day"
+		return
+
+	if phase == int(GameState.Phase.DAY):
+		day_button.disabled = false
+		day_button.text = ""
+		day_button.icon = PlayIconTexture if speed == 0.0 else PauseIconTexture
+		day_button.tooltip_text = "Resume" if speed == 0.0 else "Pause"
+		return
+
+	# RESULTS (and any future phases): disable by default.
+	day_button.disabled = true
+	day_button.text = ""
+	day_button.icon = null
+	day_button.tooltip_text = "Results"
+
+
+func _node_has_property(obj: Object, prop_name: String) -> bool:
+	if obj == null or prop_name == "":
+		return false
+	for p in obj.get_property_list():
+		if String(p.get("name", "")) == prop_name:
+			return true
+	return false
 
 
 func _resolve_setup_warning() -> void:
@@ -391,11 +493,37 @@ func _resolve_room_popup() -> void:
 		_room_popup = inst
 
 
+func _resolve_adventurer_popup() -> void:
+	if _popup_layer == null:
+		_popup_layer = get_node_or_null("PopupLayer") as CanvasLayer
+		if _popup_layer == null:
+			_popup_layer = CanvasLayer.new()
+			_popup_layer.name = "PopupLayer"
+			_popup_layer.layer = 100
+			add_child(_popup_layer)
+	_adventurer_popup = get_node_or_null("AdventurerPopup") as PanelContainer
+	if _adventurer_popup == null:
+		var scene := preload("res://ui/adventurer_popup.tscn")
+		var inst := scene.instantiate() as PanelContainer
+		_popup_layer.add_child(inst)
+		inst.name = "AdventurerPopup"
+		inst.z_as_relative = false
+		inst.z_index = 4096
+		_adventurer_popup = inst
+
+
 func _connect_room_popup() -> void:
 	if _dungeon_view == null or _room_popup == null:
 		return
 	if _dungeon_view.has_signal("room_clicked"):
 		_dungeon_view.connect("room_clicked", Callable(self, "_on_room_clicked"))
+
+
+func _connect_adventurer_popup() -> void:
+	if _simulation == null:
+		return
+	if _simulation.has_signal("adventurer_right_clicked"):
+		_simulation.connect("adventurer_right_clicked", Callable(self, "_on_adventurer_right_clicked"))
 
 
 func _on_room_clicked(room_id: int, screen_pos: Vector2) -> void:
@@ -408,6 +536,17 @@ func _on_room_clicked(room_id: int, screen_pos: Vector2) -> void:
 	else:
 		# Fallback for older popup implementations.
 		_room_popup.call("open", room_id)
+
+
+func _on_adventurer_right_clicked(adv_id: int, screen_pos: Vector2) -> void:
+	if _adventurer_popup == null:
+		_resolve_adventurer_popup()
+	if _adventurer_popup == null:
+		return
+	if _adventurer_popup.has_method("open_at"):
+		_adventurer_popup.call("open_at", int(adv_id), screen_pos)
+	else:
+		_adventurer_popup.visible = true
 
 
 func _connect_placement_hint() -> void:
@@ -484,16 +623,11 @@ func _sync_world_backdrops() -> void:
 func _on_day_pressed() -> void:
 	if GameState.phase == GameState.Phase.BUILD:
 		_simulation.call("start_day")
-		if GameState.phase == GameState.Phase.DAY:
-			if day_button != null:
-				day_button.text = "Day Running"
-				day_button.disabled = true
+	_refresh_action_button()
 
 
 func _on_day_ended() -> void:
-	if day_button != null:
-		day_button.text = "Start Day"
-		day_button.disabled = false
+	_refresh_action_button()
 
 
 func set_power(used: int, cap: int) -> void:
@@ -530,6 +664,18 @@ func _input(event: InputEvent) -> void:
 				can_close = bool(_room_popup.call("can_close_from_outside_click"))
 			if can_close and not _room_popup.get_global_rect().has_point(mouse_global):
 				_room_popup.call("close")
+				get_viewport().set_input_as_handled()
+				# Still allow pan/zoom logic below if needed; but the popup is closed now.
+
+	# If adventurer popup is open, clicking anywhere outside closes it.
+	if _adventurer_popup != null and _adventurer_popup.visible and event is InputEventMouseButton:
+		var mb1 := event as InputEventMouseButton
+		if mb1.button_index == MOUSE_BUTTON_LEFT and mb1.pressed:
+			var can_close2 := true
+			if _adventurer_popup.has_method("can_close_from_outside_click"):
+				can_close2 = bool(_adventurer_popup.call("can_close_from_outside_click"))
+			if can_close2 and not _adventurer_popup.get_global_rect().has_point(mouse_global):
+				_adventurer_popup.call("close")
 				get_viewport().set_input_as_handled()
 				# Still allow pan/zoom logic below if needed; but the popup is closed now.
 

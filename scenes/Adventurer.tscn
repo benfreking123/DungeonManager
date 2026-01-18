@@ -2,5 +2,13 @@
 
 [ext_resource type="Script" path="res://scripts/Adventurer.gd" id="1_c0g8p"]
 
+[sub_resource type="CircleShape2D" id="CircleShape2D_click"]
+radius = 14.0
+
 [node name="Adventurer" type="Node2D"]
 script = ExtResource("1_c0g8p")
+
+[node name="ClickArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ClickArea"]
+shape = SubResource("CircleShape2D_click")
