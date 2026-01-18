@@ -439,6 +439,23 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 	return out
 
 
+func find_adventurer_at_screen_pos(screen_pos: Vector2, radius_px: float = 16.0) -> int:
+	# Robust hit-test for UI-driven clicks (avoids Control mouse capture blocking Area2D input).
+	# `screen_pos` is viewport mouse position (same space as CanvasItem global_position).
+	var best_id := 0
+	var best_d2 := 0.0
+	var r := maxf(0.0, float(radius_px))
+	var r2 := r * r
+	for a in _adventurers:
+		if a == null or not is_instance_valid(a):
+			continue
+		var d2 := a.global_position.distance_squared_to(screen_pos)
+		if d2 <= r2 and (best_id == 0 or d2 < best_d2):
+			best_id = int(a.get_instance_id())
+			best_d2 = d2
+	return best_id
+
+
 func _on_adventurer_died(world_pos: Vector2, class_id: String, adv_id: int) -> void:
 	var entered_dungeon := int(_adv_last_room.get(adv_id, 0)) != 0
 	# Only drop loot if the adventurer has entered the dungeon (has a non-zero last room).

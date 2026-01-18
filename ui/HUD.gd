@@ -653,6 +653,23 @@ func _input(event: InputEvent) -> void:
 	var mouse_global: Vector2 = get_viewport().get_mouse_position()
 	var over_world: bool = _world_frame.get_global_rect().has_point(mouse_global)
 
+	# DAY-only: right-click an adventurer to open its tooltip.
+	# We do this at the HUD level because Control mouse capture can prevent Area2D input events.
+	if event is InputEventMouseButton:
+		var mb_adv := event as InputEventMouseButton
+		if mb_adv.button_index == MOUSE_BUTTON_RIGHT and mb_adv.pressed:
+			if GameState != null and GameState.phase == GameState.Phase.DAY and over_world and _simulation != null:
+				if _simulation.has_method("find_adventurer_at_screen_pos"):
+					var adv_id := int(_simulation.call("find_adventurer_at_screen_pos", mouse_global, 16.0))
+					if adv_id != 0:
+						if _adventurer_popup == null:
+							_resolve_adventurer_popup()
+						if _adventurer_popup != null and _adventurer_popup.has_method("open_at"):
+							_adventurer_popup.call("open_at", adv_id, mouse_global)
+							DbgLog.debug("Adv tooltip open adv_id=%d" % adv_id, "ui")
+							get_viewport().set_input_as_handled()
+							return
+
 	# If room popup is open, clicking anywhere outside closes it.
 	# This runs in _input so it works even if other UI consumes the click; we rely on the
 	# popup's short "ignore" window to avoid closing on the opening click.
