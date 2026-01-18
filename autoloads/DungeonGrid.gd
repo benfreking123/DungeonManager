@@ -4,7 +4,7 @@ signal layout_changed()
 
 const CELL_SIZE := 32
 const GRID_W := 40
-const GRID_H := 20
+const GRID_H := 23
 
 # Navigation/pathfinding on occupied cells.
 var astar: AStarGrid2D
