@@ -7,6 +7,7 @@ const PlayIconTexture: Texture2D = preload("res://assets/icons/play.svg")
 
 var treasure_label: Label = null
 var power_label: Label = null
+var day_label: Label = null
 var day_button: Button = null
 var speed_1x: Button = null
 var speed_2x: Button = null
@@ -110,9 +111,13 @@ func _ready() -> void:
 	if GameState != null and GameState.has_signal("phase_changed"):
 		GameState.phase_changed.connect(func(_new_phase: int) -> void:
 			_refresh_action_button()
+			_refresh_day_label()
+			_maybe_open_shop_for_phase(int(_new_phase))
 		)
 	# Ensure action button matches initial phase/speed immediately.
 	_refresh_action_button()
+	_refresh_day_label()
+	_maybe_open_shop_for_phase(int(GameState.phase) if GameState != null else 0)
 	_apply_world_transform()
 	# Run once more after the first layout pass so sizes are valid and the initial
 	# pan/zoom clamp + backdrop sync don't start slightly offset.
@@ -151,6 +156,8 @@ func _resolve_topbar_nodes() -> void:
 		if power_label == null:
 			# Legacy layout
 			power_label = get_node_or_null("TopBar/HBox/PowerLabel") as Label
+	if day_label == null:
+		day_label = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/DayLabel") as Label
 	if day_button == null:
 		# New HUD layout (right-side column)
 		day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2/DayButton") as Button
@@ -175,6 +182,15 @@ func _resolve_topbar_nodes() -> void:
 			speed_4x = get_node_or_null("TopBar/HBox/Speed4x") as Button
 	if shop_button == null:
 		shop_button = get_node_or_null("TopBar/HBox/ShopButton") as Button
+
+
+func _refresh_day_label() -> void:
+	if day_label == null or GameState == null:
+		return
+	var di := 1
+	if "day_index" in GameState:
+		di = int(GameState.get("day_index"))
+	day_label.text = "Day: %d" % di
 
 
 func _on_action_pressed() -> void:
@@ -397,8 +413,12 @@ func _on_shop_opened() -> void:
 	# Lock room menu to Treasure tab and prevent tab changes until shop is closed.
 	if _room_inventory_panel == null:
 		_resolve_room_inventory_panel()
-	if _room_inventory_panel != null and _room_inventory_panel.has_method("lock_tabs_to"):
-		_room_inventory_panel.call("lock_tabs_to", "treasure")
+	if _room_inventory_panel != null:
+		if _room_inventory_panel.has_method("select_tab"):
+			_room_inventory_panel.call("select_tab", "treasure")
+		elif _room_inventory_panel.has_method("lock_tabs_to"):
+			# Fallback: older behavior (locked).
+			_room_inventory_panel.call("lock_tabs_to", "treasure")
 	_set_shop_interaction_mode(true)
 
 
@@ -406,6 +426,13 @@ func _on_shop_closed() -> void:
 	if _room_inventory_panel != null and _room_inventory_panel.has_method("unlock_tabs"):
 		_room_inventory_panel.call("unlock_tabs")
 	_set_shop_interaction_mode(false)
+	# Closing the shop returns to BUILD phase.
+	if GameState != null and GameState.phase == GameState.Phase.SHOP:
+		# Advance the run's day counter once per full loop (end-of-day shop close).
+		if GameState.has_method("advance_day"):
+			GameState.advance_day()
+		_refresh_day_label()
+		GameState.set_phase(GameState.Phase.BUILD)
 
 
 func _set_shop_interaction_mode(enabled: bool) -> void:
@@ -436,6 +463,27 @@ func _on_shop_pressed() -> void:
 		_shop.call("open")
 	else:
 		_shop.visible = true
+
+
+func _maybe_open_shop_for_phase(new_phase: int) -> void:
+	if GameState == null:
+		return
+	if int(new_phase) != int(GameState.Phase.SHOP):
+		return
+	if _shop == null:
+		_resolve_shop()
+	if _shop == null:
+		return
+	# Pause time while shopping.
+	GameState.set_speed(0.0)
+	# Deterministic seeded offers per night.
+	var seed := 0
+	if _simulation != null and _simulation.has_method("get_shop_seed"):
+		seed = int(_simulation.call("get_shop_seed"))
+	if _shop.has_method("open_with_seed"):
+		_shop.call("open_with_seed", seed)
+	else:
+		_shop.call("open")
 
 func _apply_paper_theme() -> void:
 	# Keep background nodes theme-driven (so changing the Theme updates everything).
@@ -807,7 +855,7 @@ func _apply_world_transform() -> void:
 func _on_boss_killed() -> void:
 	# Stop simulation and show game over overlay.
 	GameState.set_speed(0.0)
-	_simulation.call_deferred("end_day")
+	_simulation.call_deferred("end_day", "loss")
 	if _game_over != null:
 		_game_over.visible = true
 
@@ -816,7 +864,7 @@ func _restart_game() -> void:
 	# Full reset of run state.
 	var sim := get_node_or_null("/root/Simulation")
 	if sim != null:
-		sim.call("end_day")
+		sim.call("end_day", "loss")
 	var dg := get_node_or_null("/root/DungeonGrid")
 	if dg != null:
 		dg.call("clear")

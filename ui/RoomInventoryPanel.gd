@@ -111,6 +111,24 @@ func unlock_tabs() -> void:
 		_tab_treasure.disabled = false
 
 
+func select_tab(which: String) -> void:
+	# Select a tab/page without locking (player can still change tabs).
+	unlock_tabs()
+	_show_page(which)
+	# Ensure the correct button appears selected.
+	match which:
+		"room":
+			if _tab_room != null: _tab_room.button_pressed = true
+		"monsters":
+			if _tab_monsters != null: _tab_monsters.button_pressed = true
+		"traps":
+			if _tab_traps != null: _tab_traps.button_pressed = true
+		"boss":
+			if _tab_boss != null: _tab_boss.button_pressed = true
+		"treasure":
+			if _tab_treasure != null: _tab_treasure.button_pressed = true
+
+
 func get_treasure_collect_target_global_pos() -> Vector2:
 	# Used for end-of-day loot collection animation.
 	# Aim for the Treasure tab button center (stable even if Treasure page isn't visible).
@@ -118,6 +136,32 @@ func get_treasure_collect_target_global_pos() -> Vector2:
 		var r := _tab_treasure.get_global_rect()
 		return r.position + r.size * 0.5
 	return global_position
+
+
+func get_collect_target_global_pos(tab_id: String) -> Vector2:
+	# Used by the shop purchase animation: fly an icon into the relevant inventory tab.
+	match String(tab_id):
+		"room":
+			if _tab_room != null:
+				var r := _tab_room.get_global_rect()
+				return r.position + r.size * 0.5
+		"monsters":
+			if _tab_monsters != null:
+				var r := _tab_monsters.get_global_rect()
+				return r.position + r.size * 0.5
+		"traps":
+			if _tab_traps != null:
+				var r := _tab_traps.get_global_rect()
+				return r.position + r.size * 0.5
+		"boss":
+			if _tab_boss != null:
+				var r := _tab_boss.get_global_rect()
+				return r.position + r.size * 0.5
+		"treasure":
+			return get_treasure_collect_target_global_pos()
+		_:
+			return get_treasure_collect_target_global_pos()
+	return get_treasure_collect_target_global_pos()
 
 
 func _refresh() -> void:

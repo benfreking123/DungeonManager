@@ -57,6 +57,13 @@ offset_left = -800.0
 offset_right = -760.0
 offset_bottom = 40.0
 
+[node name="Items" type="Control" parent="."]
+anchors_preset = 0
+offset_left = -800.0
+offset_right = -760.0
+offset_bottom = 40.0
+mouse_filter = 1
+
 [node name="BlackSquare" type="TextureRect" parent="Squares"]
 layout_mode = 1
 anchors_preset = 15

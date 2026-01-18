@@ -25,8 +25,11 @@ const SOFT_PARTY_CAP: int = 15
 # Stolen treasure inventory per adventurer (member) defaults.
 const STOLEN_INV_CAP_DEFAULT: int = 2
 
-# Strength scaling: each treasure contributes this much Strength (then rounded).
-const STRENGTH_PER_TREASURE: float = 0.6
+# Strength scaling (day-based):
+# Strength is now computed from day number rather than treasure totals.
+const STRENGTH_DAY_BASE: int = 3
+const STRENGTH_DAY_GROWTH: float = 1.25
+const STRENGTH_DAY_MAX: int = 999999
 
 # Strength tiers: maps total Strength S -> party count + party-size distribution.
 # Party size distribution is a weighted table (bias toward 4).

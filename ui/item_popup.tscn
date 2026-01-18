@@ -1,0 +1,26 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/item_popup.gd" id="1_popup"]
+
+[node name="ItemPopup" type="PanelContainer"]
+visible = false
+z_index = 4096
+z_as_relative = false
+mouse_filter = 2
+script = ExtResource("1_popup")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Item"
+
+[node name="Body" type="RichTextLabel" parent="VBox"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+text = ""
+

@@ -118,6 +118,8 @@ theme_override_constants/separation = 2
 layout_mode = 2
 
 [node name="TopBar" type="PanelContainer" parent="VBoxContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 85)
 layout_mode = 2
 theme_type_variation = &"TopBar"
 theme_override_styles/panel = ExtResource("3_6nt7r")
@@ -136,6 +138,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="SpeedLabel" type="Label" parent="VBoxContainer/TopBar/HBox"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
 text = "Speed:"
@@ -147,6 +150,7 @@ theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
 text = "Treasure: 0"
 
 [node name="ShopButton" type="Button" parent="VBoxContainer/TopBar/HBox"]
+visible = false
 layout_mode = 2
 text = "Shop"
 
@@ -156,10 +160,10 @@ layout_mode = 2
 
 [node name="PanelContainer" type="PanelContainer" parent="VBoxContainer/Spacer3"]
 layout_mode = 0
-offset_left = 19.0
-offset_top = -270.0
-offset_right = 1328.0
-offset_bottom = 411.0
+offset_left = -12.0
+offset_top = 1.0
+offset_right = 1687.0
+offset_bottom = 844.0
 theme_override_styles/panel = ExtResource("3_6nt7r")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
@@ -503,6 +507,11 @@ text = "2x"
 layout_mode = 2
 toggle_mode = true
 text = "4x"
+
+[node name="DayLabel" type="Label" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
+text = "Day: 1"
 
 [node name="Panel" type="Panel" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2

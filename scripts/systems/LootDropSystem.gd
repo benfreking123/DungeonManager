@@ -83,13 +83,27 @@ func collect_all_to(target_world_pos: Vector2, on_done: Callable) -> void:
 			on_done.call()
 		return
 
-	var remaining := _active_loot.size()
+	# Use shared mutable state to avoid fragile closure-captured locals.
+	# Goal: ensure `on_done` is called exactly once, even if some nodes are invalid.
+	var state: Dictionary = { "remaining": 0, "done": false }
+
+	var finish_once := func() -> void:
+		if bool(state.get("done", false)):
+			return
+		state["done"] = true
+		_active_loot.clear()
+		if DbgLog != null and DbgLog.is_enabled("game_state"):
+			DbgLog.debug("Loot collection done (callback)", "game_state")
+		if on_done.is_valid():
+			on_done.call()
+
 	for d in _active_loot:
 		var node: Node2D = d.get("node", null) as Node2D
 		var item_id: String = String(d.get("item_id", ""))
 		if node == null or not is_instance_valid(node):
-			remaining -= 1
 			continue
+
+		state["remaining"] = int(state.get("remaining", 0)) + 1
 
 		# Credit inventory at the end of the animation.
 		var t := node.create_tween()
@@ -102,10 +116,12 @@ func collect_all_to(target_world_pos: Vector2, on_done: Callable) -> void:
 				PlayerInventory.refund(item_id, 1)
 			if is_instance_valid(node):
 				node.queue_free()
-			remaining -= 1
-			if remaining <= 0:
-				_active_loot.clear()
-				if on_done.is_valid():
-					on_done.call()
+			state["remaining"] = int(state.get("remaining", 0)) - 1
+			if int(state.get("remaining", 0)) <= 0:
+				finish_once.call()
 		)
+
+	# If nothing was animating (all nodes invalid), finish immediately.
+	if int(state.get("remaining", 0)) <= 0:
+		finish_once.call()
 

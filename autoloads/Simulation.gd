@@ -25,6 +25,8 @@ var _world_canvas: CanvasItem
 
 var _active: bool = false
 var _adventurers: Array[Node2D] = []
+var _tracked_adv: Dictionary = {} # adv_id -> true
+var _alive_adv_count: int = 0
 
 var _dungeon_grid: Node
 var _room_db: Node
@@ -84,6 +86,10 @@ var _trap_system: RefCounted
 var _room_inventory_panel: Node
 var _ending_day: bool = false
 var _monster_roster: RefCounted
+
+var _last_day_seed: int = 0
+var _shop_seed: int = 0
+var _end_day_reason: String = "success" # "success" or "loss"
 
 
 func set_views(town_view: Control, dungeon_view: Control) -> void:
@@ -175,15 +181,23 @@ func start_day() -> void:
 		goals_cfg = preload("res://autoloads/config_goals.gd").new()
 	var strength_s := 0
 	if _strength_service != null:
-		strength_s = _strength_service.compute_strength_s(get_node_or_null("/root/PlayerInventory"), _dungeon_grid, _item_db)
+		var day_idx := 1
+		if GameState != null and "day_index" in GameState:
+			day_idx = int(GameState.get("day_index"))
+		if _strength_service.has_method("compute_strength_s_for_day"):
+			strength_s = int(_strength_service.call("compute_strength_s_for_day", day_idx, cfg))
 	var day_seed := int(Time.get_ticks_usec()) ^ (strength_s * 1103515245)
 	var gen := {}
 	if _party_gen != null:
 		gen = _party_gen.generate_parties(strength_s, cfg, goals_cfg, day_seed)
+	_last_day_seed = int(gen.get("day_seed", day_seed))
 	if _party_adv != null:
-		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, int(gen.get("day_seed", day_seed)))
+		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, _last_day_seed)
 		_party_adv.init_from_generated(gen)
-	DbgLog.info("Day start: StrengthS=%d seed=%d" % [strength_s, int(gen.get("day_seed", day_seed))], "game_state")
+	var di := 1
+	if GameState != null and "day_index" in GameState:
+		di = int(GameState.get("day_index"))
+	DbgLog.info("Day start: Day=%d StrengthS=%d seed=%d" % [di, strength_s, _last_day_seed], "game_state")
 	_begin_party_spawn(gen)
 	if _loot_system != null:
 		_loot_system.call("reset")
@@ -191,27 +205,55 @@ func start_day() -> void:
 		_trap_system.call("reset")
 
 
-func end_day() -> void:
+func end_day(reason: String = "success") -> void:
 	if _ending_day:
 		return
 	_ending_day = true
+	_end_day_reason = String(reason)
 	_active = false
 	_spawn_queue.clear()
 	_party_spawn_ctx.clear()
 
+	# Derive a deterministic shop seed from the day seed.
+	# (Only used if this day ends in success and transitions into SHOP.)
+	_shop_seed = int(_last_day_seed) ^ 0x9E3779B9
+
 	# Collect ground loot (animate to Treasure tab) before final cleanup.
 	var target := _loot_collect_target_world_pos()
-	if _loot_system != null and bool(_loot_system.call("has_loot")) and target != Vector2.ZERO:
+	var has_loot := (_loot_system != null and bool(_loot_system.call("has_loot")))
+	var waiting_for_loot := (_end_day_reason != "loss" and has_loot and target != Vector2.ZERO)
+	DbgLog.info(
+		"Day end requested reason=%s has_loot=%s target_ok=%s waiting_for_loot=%s" % [
+			_end_day_reason,
+			str(has_loot),
+			str(target != Vector2.ZERO),
+			str(waiting_for_loot),
+		],
+		"game_state"
+	)
+	if waiting_for_loot:
 		_loot_system.call("collect_all_to", target, Callable(self, "_finish_end_day_cleanup"))
+		# Failsafe: if loot callback never arrives, don't remain stuck in DAY.
+		var timer := get_tree().create_timer(3.0)
+		timer.timeout.connect(func():
+			if _ending_day and GameState != null and int(GameState.phase) == int(GameState.Phase.DAY):
+				DbgLog.warn("End-day failsafe triggered: forcing cleanup", "game_state")
+				_finish_end_day_cleanup()
+		)
 	else:
 		_finish_end_day_cleanup()
 
 
 func _finish_end_day_cleanup() -> void:
+	# Guard against duplicate callbacks (e.g. failsafe timeout + late loot callback).
+	if not _ending_day:
+		return
 	for a in _adventurers:
 		if is_instance_valid(a):
 			a.queue_free()
 	_adventurers.clear()
+	_tracked_adv.clear()
+	_alive_adv_count = 0
 	_adv_last_room.clear()
 	_adv_last_cell.clear()
 	_adv_was_in_combat.clear()
@@ -221,9 +263,18 @@ func _finish_end_day_cleanup() -> void:
 		_combat.call("reset")
 	if _monster_roster != null:
 		_monster_roster.call("reset")
-	GameState.set_phase(GameState.Phase.RESULTS)
+	if _end_day_reason == "loss":
+		DbgLog.info("Day ended: LOSS (boss dead)", "game_state")
+		GameState.set_phase(GameState.Phase.RESULTS)
+	else:
+		DbgLog.info("Day ended: CLEAR -> SHOP", "game_state")
+		GameState.set_phase(GameState.Phase.SHOP)
 	day_ended.emit()
 	_ending_day = false
+
+
+func get_shop_seed() -> int:
+	return int(_shop_seed)
 
 
 func _process(delta: float) -> void:
@@ -262,14 +313,40 @@ func _process(delta: float) -> void:
 			alive.append(a)
 	_adventurers = alive
 
+	# Diagnostics: if we're close to ending but not ending, show what's left.
+	if _active and not _ending_day and _alive_adv_count > 0 and _alive_adv_count <= 3:
+		var parts: Array[String] = []
+		for a2 in _adventurers:
+			if a2 == null or not is_instance_valid(a2):
+				continue
+			var aid2 := int(a2.get_instance_id())
+			parts.append("adv=%d hp=%d/%d in_combat=%s room=%d phase=%s" % [
+				aid2,
+				int(a2.get("hp")),
+				int(a2.get("hp_max")),
+				str(bool(a2.get("in_combat"))),
+				int(a2.get("combat_room_id")),
+				str(int(a2.get("phase"))),
+			])
+		DbgLog.throttle(
+			"adv_low_count",
+			1.0,
+			"Adv remaining (%d): %s" % [_alive_adv_count, " | ".join(parts)],
+			"adventurers",
+			DbgLog.Level.DEBUG
+		)
+
+	# Authoritative day-end trigger: all adventurers gone.
+	if _alive_adv_count <= 0 and not _ending_day:
+		end_day()
+		return
+
 	# Regroup check: keep party cohesive by forcing stragglers to path to the party goal cell.
 	_tick_party_regroup()
 
 	_resolve_soft_collisions()
 
-	if _adventurers.is_empty():
-		# For MVP, end the day if no adventurers remain (died or finished).
-		end_day()
+	# (Removed) redundant empty-array day-end; `_alive_adv_count` owns this now.
 
 
 func _begin_party_spawn(gen: Dictionary) -> void:
@@ -411,6 +488,7 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	if adv.has_signal("right_clicked"):
 		adv.connect("right_clicked", Callable(self, "_on_adventurer_right_clicked"))
 	_adventurers.append(adv)
+	_track_adv(adv)
 	_adv_was_in_combat[int(adv.get_instance_id())] = false
 
 
@@ -467,6 +545,7 @@ func _on_adventurer_died(world_pos: Vector2, class_id: String, adv_id: int) -> v
 		if entered_dungeon and _loot_system != null:
 			for tid in stolen:
 				_loot_system.call("spawn_treasure_drop", world_pos, String(tid))
+	_remove_adv_from_tracking(int(adv_id))
 
 
 func _find_room_inventory_panel() -> Node:
@@ -474,6 +553,44 @@ func _find_room_inventory_panel() -> Node:
 	if scene == null:
 		return null
 	return scene.find_child("RoomInventoryPanel", true, false)
+
+
+func _track_adv(adv: Node2D) -> void:
+	if adv == null or not is_instance_valid(adv):
+		return
+	var aid := int(adv.get_instance_id())
+	if aid == 0:
+		return
+	if bool(_tracked_adv.get(aid, false)):
+		return
+	_tracked_adv[aid] = true
+	_alive_adv_count += 1
+	# Safety net: if freed without explicit death/exit path, decrement.
+	if not adv.tree_exited.is_connected(Callable(self, "_on_adv_tree_exited").bind(aid)):
+		adv.tree_exited.connect(Callable(self, "_on_adv_tree_exited").bind(aid))
+
+
+func _on_adv_tree_exited(aid: int) -> void:
+	_remove_adv_from_tracking(int(aid))
+
+
+func _remove_adv_from_tracking(adv_id: int) -> void:
+	var aid := int(adv_id)
+	if aid == 0:
+		return
+	if not bool(_tracked_adv.get(aid, false)):
+		return
+	_tracked_adv.erase(aid)
+	_alive_adv_count = maxi(0, _alive_adv_count - 1)
+	_adv_last_room.erase(aid)
+	_adv_last_cell.erase(aid)
+	_adv_was_in_combat.erase(aid)
+	# Remove from list immediately so `find_adventurer_at_screen_pos` doesn't hit dead refs.
+	var next: Array[Node2D] = []
+	for a in _adventurers:
+		if is_instance_valid(a) and int(a.get_instance_id()) != aid:
+			next.append(a)
+	_adventurers = next
 
 
 func _loot_collect_target_world_pos() -> Vector2:
@@ -517,6 +634,9 @@ func _on_boss_killed() -> void:
 	if _party_adv != null:
 		_party_adv.on_boss_killed()
 	DbgLog.info("Boss killed", "game_state")
+	# Loss condition: boss died. End the day as a loss (no shop).
+	if _active and not _ending_day:
+		end_day("loss")
 
 
 func _on_monster_room_cleared(_room_id: int, adv_ids: Array[int], killed: int) -> void:
@@ -702,6 +822,7 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 		var intent := _party_adv.effective_intent_for_adv(aid_exit, _party_adv.party_intent(party_id))
 		if intent == PartyAdventureSystem.INTENT_EXIT:
 			_party_adv.on_adv_exited(aid_exit)
+			_remove_adv_from_tracking(aid_exit)
 			adv.queue_free()
 			return
 

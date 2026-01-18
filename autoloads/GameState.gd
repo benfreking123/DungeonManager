@@ -4,10 +4,11 @@ signal phase_changed(new_phase: int)
 signal speed_changed(new_speed: float)
 signal economy_changed()
 
-enum Phase { BUILD, DAY, RESULTS }
+enum Phase { BUILD, DAY, SHOP, RESULTS }
 
 var phase: int = Phase.BUILD
 var speed: float = 1.0
+var day_index: int = 1
 
 var power_used: int = 0
 var power_capacity: int = 10
@@ -94,6 +95,11 @@ func _count_installed_treasures_in_effect_rooms(effect_id: String) -> int:
 func reset_all() -> void:
 	power_used = 0
 	power_capacity = 10
+	day_index = 1
 	set_speed(1.0)
 	set_phase(Phase.BUILD)
 	economy_changed.emit()
+
+
+func advance_day() -> void:
+	day_index = maxi(1, int(day_index) + 1)
