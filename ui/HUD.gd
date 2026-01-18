@@ -118,28 +118,34 @@ func _resolve_topbar_nodes() -> void:
 	]
 	for base in bases:
 		var tl := get_node_or_null("%s/TreasureLabel" % base) as Label
-		var pl := get_node_or_null("%s/PowerLabel" % base) as Label
-		var db := get_node_or_null("%s/DayButton" % base) as Button
 		var s1 := get_node_or_null("%s/Speed1x" % base) as Button
 		var s2 := get_node_or_null("%s/Speed2x" % base) as Button
 		var s4 := get_node_or_null("%s/Speed4x" % base) as Button
 		var sb := get_node_or_null("%s/ShopButton" % base) as Button
-		if tl != null and pl != null and db != null and s1 != null and s2 != null and s4 != null:
+		# In newer HUD layouts, PowerLabel/DayButton moved out of the TopBar.
+		# So only require the actual TopBar widgets here.
+		if tl != null and s1 != null and s2 != null and s4 != null:
 			treasure_label = tl
-			power_label = pl
-			day_button = db
 			speed_1x = s1
 			speed_2x = s2
 			speed_4x = s4
 			shop_button = sb
-			return
+			break
 	# Fallback to whatever was found, even if partial
 	if treasure_label == null:
 		treasure_label = get_node_or_null("TopBar/HBox/TreasureLabel") as Label
 	if power_label == null:
-		power_label = get_node_or_null("TopBar/HBox/PowerLabel") as Label
+		# New HUD layout (right-side column)
+		power_label = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PowerLabel") as Label
+		if power_label == null:
+			# Legacy layout
+			power_label = get_node_or_null("TopBar/HBox/PowerLabel") as Label
 	if day_button == null:
-		day_button = get_node_or_null("TopBar/HBox/DayButton") as Button
+		# New HUD layout (right-side column)
+		day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/DayButton") as Button
+		if day_button == null:
+			# Legacy layout
+			day_button = get_node_or_null("TopBar/HBox/DayButton") as Button
 	if speed_1x == null:
 		speed_1x = get_node_or_null("TopBar/HBox/Speed1x") as Button
 	if speed_2x == null:
@@ -152,6 +158,9 @@ func _resolve_topbar_nodes() -> void:
 
 func _resolve_setup_warning() -> void:
 	var bases := [
+		# New HUD layout (right-side column)
+		"VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer",
+		# Legacy top bar layouts
 		"TopBar/HBox",
 		"VBoxContainer/TopBar/HBox"
 	]
@@ -160,7 +169,7 @@ func _resolve_setup_warning() -> void:
 		if w != null:
 			_setup_warning = w
 			return
-	_setup_warning = get_node_or_null("TopBar/HBox/SetupWarning") as Control
+	_setup_warning = null
 
 
 func _resolve_setup_warning_popup() -> void:

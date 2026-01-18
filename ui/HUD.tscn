@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3 uid="uid://dhh6eeqqo51gg"]
+[gd_scene load_steps=25 format=3 uid="uid://dhh6eeqqo51gg"]
 
 [ext_resource type="Script" path="res://ui/HUD.gd" id="1_2b4c7"]
 [ext_resource type="Script" path="res://scripts/DungeonView.gd" id="2_2t2p0"]
@@ -11,6 +11,7 @@
 [ext_resource type="Shader" path="res://ui/shaders/vignette.gdshader" id="8_vignette"]
 [ext_resource type="Texture2D" uid="uid://clia71e760qmr" path="res://assets/simple-old-paper-1.jpg" id="9_old_paper"]
 [ext_resource type="PackedScene" uid="uid://edd24i7ldah4" path="res://ui/SetupWarningPopup.tscn" id="10_setup_popup"]
+[ext_resource type="PackedScene" uid="uid://c3j0codad11to" path="res://ui/DaytimeIndicator.tscn" id="10_ultn7"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
 shader = ExtResource("8_vignette")
@@ -18,28 +19,17 @@ shader_parameter/strength = 0.03
 shader_parameter/feather = 0.18
 shader_parameter/ink_color = Color(0.18, 0.13, 0.08, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jjt0d"]
-content_margin_left = 10.0
-content_margin_right = 9.0
-bg_color = Color(0.975, 0.95, 0.88, 0.92)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.18, 0.13, 0.08, 0.35)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
-shadow_color = Color(0.18, 0.13, 0.08, 0.1)
-shadow_offset = Vector2(0, 3)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_g7pc7"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jsax1"]
 content_margin_left = 0.0
 content_margin_top = 0.0
 content_margin_right = 0.0
 content_margin_bottom = 0.0
 bg_color = Color(0.294118, 0.219608, 0.196078, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.294118, 0.219608, 0.196078, 1)
 
 [sub_resource type="CompressedTexture2D" id="CompressedTexture2D_gue03"]
 load_path = "res://.godot/imported/ChatGPT Image Jan 15, 2026, 07_29_23 PM.png-89f51b0c03a620bcd6075f9790fe30f0.ctex"
@@ -74,6 +64,22 @@ region = Rect2(816, 64, 576, 160)
 atlas = SubResource("CompressedTexture2D_dich3")
 region = Rect2(1200, 384, 224, 480)
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jjt0d"]
+content_margin_left = 10.0
+content_margin_right = 9.0
+bg_color = Color(0.975, 0.95, 0.88, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.13, 0.08, 0.35)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.1)
+shadow_offset = Vector2(0, 3)
+
 [node name="HUD" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -106,6 +112,7 @@ layout_mode = 0
 layout_mode = 0
 offset_right = 1278.0
 offset_bottom = 721.0
+theme_override_constants/separation = 2
 
 [node name="Spacer2" type="Control" parent="VBoxContainer"]
 layout_mode = 2
@@ -123,6 +130,10 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.03
+
+[node name="Spacer" type="Control" parent="VBoxContainer/TopBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="SpeedLabel" type="Label" parent="VBoxContainer/TopBar/HBox"]
 layout_mode = 2
@@ -146,37 +157,10 @@ toggle_mode = true
 text = "4x"
 
 [node name="TreasureLabel" type="Label" parent="VBoxContainer/TopBar/HBox"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
 text = "Treasure: 0"
-
-[node name="Spacer" type="Control" parent="VBoxContainer/TopBar/HBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="PowerLabel" type="Label" parent="VBoxContainer/TopBar/HBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
-text = "Power: 0/0"
-
-[node name="SetupWarning" type="PanelContainer" parent="VBoxContainer/TopBar/HBox"]
-layout_mode = 2
-mouse_filter = 1
-theme_override_styles/panel = SubResource("StyleBoxFlat_jjt0d")
-
-[node name="Label" type="Label" parent="VBoxContainer/TopBar/HBox/SetupWarning"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.84, 0.2, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 22
-text = "!"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="DayButton" type="Button" parent="VBoxContainer/TopBar/HBox"]
-layout_mode = 2
-text = "Start Day"
 
 [node name="ShopButton" type="Button" parent="VBoxContainer/TopBar/HBox"]
 layout_mode = 2
@@ -188,20 +172,21 @@ layout_mode = 2
 
 [node name="PanelContainer" type="PanelContainer" parent="VBoxContainer/Spacer3"]
 layout_mode = 0
-offset_left = -1.0
-offset_right = 1034.0
-offset_bottom = 16.0
+offset_top = 2.0
+offset_right = 1042.0
+offset_bottom = 18.0
 theme_override_styles/panel = ExtResource("3_6nt7r")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_constants/separation = -4
 
 [node name="DungeonFrame" type="PanelContainer" parent="VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"DungeonFrame"
-theme_override_styles/panel = SubResource("StyleBoxFlat_g7pc7")
+theme_override_styles/panel = SubResource("StyleBoxFlat_jsax1")
 
 [node name="FrameLayer" type="Control" parent="VBoxContainer/HBoxContainer/DungeonFrame"]
 layout_mode = 2
@@ -283,6 +268,16 @@ offset_top = -114.0
 offset_right = 1014.0
 offset_bottom = -114.0
 
+[node name="TextureRect17" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
+layout_mode = 0
+offset_left = 676.0
+offset_top = 92.0
+offset_right = 879.0
+offset_bottom = 136.0
+rotation = 6.28318
+texture = ExtResource("7_uqoya")
+expand_mode = 1
+
 [node name="TextureRect11" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
 offset_left = 585.0
@@ -313,9 +308,9 @@ expand_mode = 1
 [node name="TextureRect5" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
 offset_left = 402.0
-offset_top = 601.999
+offset_top = 602.999
 offset_right = 602.0
-offset_bottom = 645.999
+offset_bottom = 646.999
 texture = SubResource("AtlasTexture_hgkxh")
 expand_mode = 1
 
@@ -330,20 +325,11 @@ expand_mode = 1
 
 [node name="TextureRect6" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 39.0
-offset_top = 598.0
-offset_right = 239.0
-offset_bottom = 642.0
+offset_left = 38.0
+offset_top = 605.0
+offset_right = 238.0
+offset_bottom = 649.0
 texture = SubResource("AtlasTexture_hgkxh")
-expand_mode = 1
-
-[node name="TextureRect7" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
-layout_mode = 0
-offset_left = 222.0
-offset_top = 600.0
-offset_right = 422.0
-offset_bottom = 644.0
-texture = ExtResource("7_uqoya")
 expand_mode = 1
 
 [node name="TextureRect" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
@@ -359,7 +345,7 @@ expand_mode = 1
 layout_mode = 0
 offset_left = 10.0
 offset_top = 349.0
-offset_right = 210.0
+offset_right = 230.0
 offset_bottom = 393.0
 rotation = 1.57079
 texture = SubResource("AtlasTexture_hgkxh")
@@ -375,51 +361,30 @@ rotation = 1.57079
 texture = ExtResource("7_uqoya")
 expand_mode = 1
 
+[node name="TextureRect7" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
+layout_mode = 0
+offset_left = 222.0
+offset_top = 604.0
+offset_right = 422.0
+offset_bottom = 648.0
+texture = ExtResource("7_uqoya")
+expand_mode = 1
+
 [node name="TextureRect4" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = -35.0
-offset_top = 637.0
-offset_right = 68.0
-offset_bottom = 728.0
+offset_left = -34.0
+offset_top = 646.0
+offset_right = 69.0
+offset_bottom = 737.0
 rotation = -1.57079
 texture = SubResource("AtlasTexture_q2qws")
 expand_mode = 1
 
-[node name="TextureRect12" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
-layout_mode = 0
-offset_left = 988.0
-offset_top = 486.0
-offset_right = 1188.0
-offset_bottom = 530.0
-rotation = 4.71238
-texture = SubResource("AtlasTexture_hgkxh")
-expand_mode = 1
-
-[node name="TextureRect16" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
-layout_mode = 0
-offset_left = 755.0
-offset_top = 601.0
-offset_right = 955.0
-offset_bottom = 645.0
-rotation = 6.28318
-texture = SubResource("AtlasTexture_hgkxh")
-expand_mode = 1
-
-[node name="TextureRect17" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
-layout_mode = 0
-offset_left = 670.0
-offset_top = 91.0
-offset_right = 873.0
-offset_bottom = 135.0
-rotation = 6.28318
-texture = ExtResource("7_uqoya")
-expand_mode = 1
-
 [node name="TextureRect18" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 840.0
+offset_left = 858.0
 offset_top = 89.0
-offset_right = 985.0
+offset_right = 1003.0
 offset_bottom = 133.0
 rotation = 6.28318
 texture = SubResource("AtlasTexture_dkiqp")
@@ -427,9 +392,9 @@ expand_mode = 1
 
 [node name="TextureRect19" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 972.0
+offset_left = 989.0
 offset_top = 83.0
-offset_right = 1034.0
+offset_right = 1051.0
 offset_bottom = 313.0
 rotation = 6.28318
 texture = SubResource("AtlasTexture_onsy8")
@@ -437,22 +402,42 @@ expand_mode = 1
 
 [node name="TextureRect15" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 984.0
-offset_top = 620.0
-offset_right = 1187.0
-offset_bottom = 664.0
+offset_left = 1008.0
+offset_top = 618.0
+offset_right = 1211.0
+offset_bottom = 662.0
 rotation = 4.71238
 texture = ExtResource("7_uqoya")
 expand_mode = 1
 
 [node name="TextureRect14" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 1025.0
-offset_top = 644.0
-offset_right = 1128.0
-offset_bottom = 735.0
+offset_left = 1052.0
+offset_top = 648.0
+offset_right = 1155.0
+offset_bottom = 739.0
 rotation = 3.14159
 texture = SubResource("AtlasTexture_q2qws")
+expand_mode = 1
+
+[node name="TextureRect12" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
+layout_mode = 0
+offset_left = 1010.0
+offset_top = 478.0
+offset_right = 1210.0
+offset_bottom = 522.0
+rotation = 4.71238
+texture = SubResource("AtlasTexture_hgkxh")
+expand_mode = 1
+
+[node name="TextureRect16" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
+layout_mode = 0
+offset_left = 772.0
+offset_top = 601.0
+offset_right = 972.0
+offset_bottom = 645.0
+rotation = 6.28318
+texture = SubResource("AtlasTexture_hgkxh")
 expand_mode = 1
 
 [node name="DungeonView" type="Control" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid"]
@@ -466,7 +451,52 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_2t2p0")
 
-[node name="RoomInventoryPanel" parent="VBoxContainer/HBoxContainer" instance=ExtResource("6_roominv")]
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/HBoxContainer"]
+z_index = 2
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="PanelContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer" instance=ExtResource("10_ultn7")]
+z_index = 1
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="PowerLabel" type="Label" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
+text = "Power: 0/0"
+
+[node name="SetupWarning" type="PanelContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_jjt0d")
+
+[node name="Label" type="Label" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/SetupWarning"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.84, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 22
+text = "!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DayButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+text = "Start Day"
+
+[node name="Panel" type="Panel" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="RoomInventoryPanel" parent="VBoxContainer/HBoxContainer/VBoxContainer" instance=ExtResource("6_roominv")]
 layout_mode = 2
 
 [node name="Spacer" type="Control" parent="VBoxContainer"]

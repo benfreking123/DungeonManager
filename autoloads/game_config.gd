@@ -15,6 +15,38 @@ const TREASURE_ROOM_POWER_CAPACITY_PER_TREASURE: int = 1
 # Base power capacity (before treasure-based scaling).
 const BASE_POWER_CAPACITY: int = 20
 
+# Party/adventure scaling
+const MAX_PARTIES: int = 10
+const MAX_PARTY_SIZE: int = 5
+
+# Soft cap includes micro-parties created by defections.
+const SOFT_PARTY_CAP: int = 15
+
+# Stolen treasure inventory per adventurer (member) defaults.
+const STOLEN_INV_CAP_DEFAULT: int = 2
+
+# Strength scaling: each treasure contributes this much Strength (then rounded).
+const STRENGTH_PER_TREASURE: float = 0.6
+
+# Strength tiers: maps total Strength S -> party count + party-size distribution.
+# Party size distribution is a weighted table (bias toward 4).
+# Shape:
+# {
+#   "min_s": int, "max_s": int,
+#   "party_count": int,
+#   "party_size_weights": Dictionary[int, int]
+# }
+const PARTY_SCALING_TIERS: Array[Dictionary] = [
+	# Early: one strong party of ~4.
+	{ "min_s": 0, "max_s": 4, "party_count": 1, "party_size_weights": { 4: 10, 3: 2, 5: 1 } },
+	# Mid: two parties, mostly 4.
+	{ "min_s": 5, "max_s": 10, "party_count": 2, "party_size_weights": { 4: 12, 3: 2, 5: 2, 2: 1 } },
+	# Late: three parties.
+	{ "min_s": 11, "max_s": 20, "party_count": 3, "party_size_weights": { 4: 14, 5: 3, 3: 2, 2: 1 } },
+	# Endgame-ish: four parties.
+	{ "min_s": 21, "max_s": 999999, "party_count": 4, "party_size_weights": { 4: 16, 5: 4, 3: 2, 2: 1 } },
+]
+
 # Item ids for treasures.
 const TREASURE_ID_WARRIOR := "treasure_warrior"
 const TREASURE_ID_MAGE := "treasure_mage"

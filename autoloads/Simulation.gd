@@ -53,17 +53,25 @@ const COLLISION_RADIUS_MON := 3.25
 const COLLISION_RADIUS_BOSS := 4.5
 const COLLISION_ITERATIONS := 1
 
-# New: central AI and path service
+# AI/path + party/adventure systems
 var _party_ai: PartyAI
 var _path_service: PathService
+
+var _strength_service: StrengthService
+var _party_gen: PartyGenerator
+var _fog: FogOfWarService
+var _steal: TreasureStealService
+var _party_adv: PartyAdventureSystem
+var _bubble_service: DialogueBubbleService
 
 # adv_instance_id -> last reached cell (for retargeting / resume)
 var _adv_last_cell: Dictionary = {}
 # adv_instance_id -> was_in_combat last tick
 var _adv_was_in_combat: Dictionary = {}
 
-# Party spawn queue (spawn one by one in town)
-var _party_spawn_queue: Array[String] = []
+# Spawn queue (spawn members one by one in town)
+# Each entry: { member_id:int, party_id:int, class_id:String, idx_in_party:int }
+var _spawn_queue: Array[Dictionary] = []
 var _party_spawn_timer: float = 0.0
 var _party_spawn_index: int = 0
 var _party_spawn_ctx: Dictionary = {}
@@ -105,6 +113,14 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_party_ai = preload("res://scripts/ai/PartyAI.gd").new()
 	_party_ai.setup(_dungeon_grid, _path_service)
 
+	_strength_service = preload("res://scripts/services/StrengthService.gd").new()
+	_party_gen = preload("res://scripts/services/PartyGenerator.gd").new()
+	_fog = preload("res://scripts/services/FogOfWarService.gd").new()
+	_fog.setup(_dungeon_grid)
+	_steal = preload("res://scripts/services/TreasureStealService.gd").new()
+	_party_adv = preload("res://scripts/services/PartyAdventureSystem.gd").new()
+	_bubble_service = preload("res://scripts/services/DialogueBubbleService.gd").new()
+
 	# Loot system (separate file): spawns on-ground treasure drops and collects at day end.
 	_loot_system = preload("res://scripts/systems/LootDropSystem.gd").new()
 	_loot_system.call("setup", _world_canvas, _item_db, get_node_or_null("/root/game_config"))
@@ -112,6 +128,11 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	# Trap system: handles trap room entry effects.
 	_trap_system = preload("res://scripts/systems/TrapSystem.gd").new()
 	_trap_system.call("setup", _item_db)
+
+	# Wire boss killed event into party logic once.
+	var cb := Callable(self, "_on_boss_killed")
+	if not boss_killed.is_connected(cb):
+		boss_killed.connect(cb)
 
 
 func start_day() -> void:
@@ -142,9 +163,27 @@ func start_day() -> void:
 		_combat.call("reset")
 	if _dungeon_grid != null:
 		_dungeon_grid.call("ensure_room_defaults")
+		if _fog != null:
+			_fog.reset_for_new_day()
 		_init_room_spawners()
 		_spawn_boss()
-	_begin_party_spawn()
+	# Generate parties/members for the day (Strength-scaled).
+	var cfg := get_node_or_null("/root/game_config")
+	var goals_cfg := get_node_or_null("/root/config_goals")
+	if goals_cfg == null:
+		goals_cfg = preload("res://autoloads/config_goals.gd").new()
+	var strength_s := 0
+	if _strength_service != null:
+		strength_s = _strength_service.compute_strength_s(get_node_or_null("/root/PlayerInventory"), _dungeon_grid, _item_db)
+	var day_seed := int(Time.get_ticks_usec()) ^ (strength_s * 1103515245)
+	var gen := {}
+	if _party_gen != null:
+		gen = _party_gen.generate_parties(strength_s, cfg, goals_cfg, day_seed)
+	if _party_adv != null:
+		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, int(gen.get("day_seed", day_seed)))
+		_party_adv.init_from_generated(gen)
+	DbgLog.info("Day start: StrengthS=%d seed=%d" % [strength_s, int(gen.get("day_seed", day_seed))], "game_state")
+	_begin_party_spawn(gen)
 	if _loot_system != null:
 		_loot_system.call("reset")
 	if _trap_system != null:
@@ -156,7 +195,7 @@ func end_day() -> void:
 		return
 	_ending_day = true
 	_active = false
-	_party_spawn_queue.clear()
+	_spawn_queue.clear()
 	_party_spawn_ctx.clear()
 
 	# Collect ground loot (animate to Treasure tab) before final cleanup.
@@ -232,7 +271,7 @@ func _process(delta: float) -> void:
 		end_day()
 
 
-func _begin_party_spawn() -> void:
+func _begin_party_spawn(gen: Dictionary) -> void:
 	if _town_view == null or _dungeon_view == null:
 		end_day()
 		return
@@ -246,10 +285,6 @@ func _begin_party_spawn() -> void:
 		return
 
 	var start_cell: Vector2i = entrance.get("pos", Vector2i.ZERO)
-	# Party goal: decided by PartyAI (boss-first, fallback weighted).
-	var initial_goal: Vector2i = _party_ai.decide_initial_goal(1, start_cell)
-
-	var path: Array[Vector2i] = _party_ai.compute_initial_path(start_cell, initial_goal)
 
 	var spawn_world := _town_view.call("get_spawn_world_pos") as Vector2
 	var entrance_world := _dungeon_view.call("entrance_surface_world_pos") as Vector2
@@ -257,34 +292,75 @@ func _begin_party_spawn() -> void:
 	_party_spawn_ctx = {
 		"spawn_world": spawn_world,
 		"entrance_world": entrance_world,
-		"path": path,
+		"start_cell": start_cell,
+		"paths_by_party_id": {},
 	}
 
-	_party_spawn_queue = ["warrior", "mage", "priest", "rogue"]
+	_spawn_queue.clear()
+
+	var member_defs: Dictionary = gen.get("member_defs", {}) as Dictionary
+	var party_defs: Array = gen.get("party_defs", []) as Array
+	var paths_by_party_id: Dictionary = {}
+
+	for p0 in party_defs:
+		var pd := p0 as Dictionary
+		var pid := int(pd.get("party_id", 0))
+		if pid == 0:
+			continue
+		var goal: Vector2i = start_cell
+		if _party_adv != null:
+			goal = _party_adv.party_goal_cell(pid, start_cell)
+		if _party_ai != null:
+			_party_ai.set_goal(pid, goal)
+		var path: Array[Vector2i] = []
+		if _path_service != null:
+			path = _path_service.path(start_cell, goal, true)
+		paths_by_party_id[pid] = path
+
+		var mids: Array = pd.get("member_ids", []) as Array
+		for i in range(mids.size()):
+			var mid := int(mids[i])
+			var md: Dictionary = member_defs.get(mid, {}) as Dictionary
+			if md.is_empty():
+				continue
+			_spawn_queue.append({
+				"member_id": mid,
+				"party_id": pid,
+				"class_id": String(md.get("class_id", "")),
+				"idx_in_party": i,
+			})
+
+	_party_spawn_ctx["paths_by_party_id"] = paths_by_party_id
 	_party_spawn_timer = 0.0
 	_party_spawn_index = 0
 
 
 func _tick_party_spawn(dt: float) -> void:
-	if _party_spawn_queue.is_empty():
+	if _spawn_queue.is_empty():
 		return
 	_party_spawn_timer -= dt
-	while _party_spawn_timer <= 0.0 and not _party_spawn_queue.is_empty():
-		var class_id: String = _party_spawn_queue.pop_front()
-		_spawn_one_party_member(class_id, _party_spawn_index)
+	while _party_spawn_timer <= 0.0 and not _spawn_queue.is_empty():
+		var entry: Dictionary = _spawn_queue.pop_front()
+		_spawn_one_party_member(entry, _party_spawn_index)
 		_party_spawn_index += 1
 		_party_spawn_timer += PARTY_SPAWN_INTERVAL
 
 
-func _spawn_one_party_member(class_id: String, idx: int) -> void:
+func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	if _town_view == null or _dungeon_view == null or _dungeon_grid == null:
 		return
 	if _party_spawn_ctx.is_empty():
 		return
 
+	var member_id: int = int(entry.get("member_id", 0))
+	var party_id: int = int(entry.get("party_id", 0))
+	var class_id: String = String(entry.get("class_id", ""))
+	var idx_in_party: int = int(entry.get("idx_in_party", idx))
+
 	var spawn_world: Vector2 = _party_spawn_ctx.get("spawn_world", Vector2.ZERO)
 	var entrance_world: Vector2 = _party_spawn_ctx.get("entrance_world", Vector2.ZERO)
-	var path: Array[Vector2i] = _party_spawn_ctx.get("path", []) as Array[Vector2i]
+	var paths_by_party_id: Dictionary = _party_spawn_ctx.get("paths_by_party_id", {}) as Dictionary
+	var path: Array[Vector2i] = paths_by_party_id.get(party_id, []) as Array[Vector2i]
 
 	var adv := _adv_scene.instantiate() as Node2D
 	if _world_canvas != null:
@@ -300,17 +376,22 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 		Vector2(-2, 2),
 		Vector2(2, 3),
 	]
+	var party_offset := Vector2(float((party_id - 1) * 18), float(((party_id - 1) % 3) * 12))
 	if _world_canvas != null:
 		var inv_wc: Transform2D = _world_canvas.get_global_transform().affine_inverse()
-		adv.position = (inv_wc * spawn_world) + scatter[idx % scatter.size()]
+		adv.position = (inv_wc * spawn_world) + party_offset + scatter[idx_in_party % scatter.size()]
 	else:
-		adv.position = _town_view.get_global_transform().affine_inverse() * (spawn_world + scatter[idx % scatter.size()])
-	adv.set("party_id", 1)
+		adv.position = _town_view.get_global_transform().affine_inverse() * (spawn_world + party_offset + scatter[idx_in_party % scatter.size()])
 
 	var cls_res: Resource = null
 	if _item_db != null:
 		cls_res = _item_db.call("get_adv_class", class_id) as Resource
 	adv.call("apply_class", cls_res)
+
+	# Register with party/adventure system (assigns party_id and applies stat mods).
+	if _party_adv != null:
+		_party_adv.register_adventurer(adv, member_id)
+		_drain_party_bubble_events()
 
 	adv.set_meta("collision_radius", COLLISION_RADIUS_ADV)
 	# Store the surface target in WorldCanvas-local space so camera transforms don't affect movement.
@@ -322,6 +403,8 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 	adv.call("set_dungeon_targets", _dungeon_view, path, DUNGEON_SPEED)
 	adv.call("set_on_reach_goal", Callable(self, "_on_adventurer_finished").bind(adv))
 	adv.connect("cell_reached", Callable(self, "_on_adventurer_cell_reached").bind(adv))
+	if adv.has_signal("damaged"):
+		adv.connect("damaged", Callable(self, "_on_adventurer_damaged").bind(int(adv.get_instance_id())))
 	if adv.has_signal("died"):
 		adv.connect("died", Callable(self, "_on_adventurer_died").bind(int(adv.get_instance_id())))
 	_adventurers.append(adv)
@@ -329,11 +412,16 @@ func _spawn_one_party_member(class_id: String, idx: int) -> void:
 
 
 func _on_adventurer_died(world_pos: Vector2, class_id: String, adv_id: int) -> void:
+	var entered_dungeon := int(_adv_last_room.get(adv_id, 0)) != 0
 	# Only drop loot if the adventurer has entered the dungeon (has a non-zero last room).
-	if int(_adv_last_room.get(adv_id, 0)) == 0:
-		return
-	if _loot_system != null:
+	if entered_dungeon and _loot_system != null:
 		_loot_system.call("on_adventurer_died", world_pos, class_id)
+	# Always clear party system state; only spawn forced drops if they died in-dungeon.
+	if _party_adv != null:
+		var stolen: Array[String] = _party_adv.on_adv_died(int(adv_id))
+		if entered_dungeon and _loot_system != null:
+			for tid in stolen:
+				_loot_system.call("spawn_treasure_drop", world_pos, String(tid))
 
 
 func _find_room_inventory_panel() -> Node:
@@ -366,23 +454,159 @@ func _on_adventurer_finished(adv: Node2D) -> void:
 	if from_cell == Vector2i(-1, -1):
 		return
 	var pid := int(adv.get("party_id"))
-	_party_ai.retarget_from_cell(pid, from_cell)
-	# Apply paths for party toward new goal
-	var cells_by_adv := {}
-	for a2 in _adventurers:
-		if not is_instance_valid(a2):
+	_retarget_party(pid, from_cell)
+
+
+func _on_adventurer_damaged(_amount: int, adv_id: int) -> void:
+	# Route damage events into the party/adventure system (flee rules, morale, etc.)
+	if _party_adv != null:
+		var adv := _find_adv_by_id(int(adv_id))
+		if adv != null:
+			_party_adv.on_adv_damaged(int(adv_id), int(adv.get("hp")), int(adv.get("hp_max")))
+		else:
+			_party_adv.on_adv_damaged(int(adv_id))
+		_drain_party_bubble_events()
+
+
+func _on_boss_killed() -> void:
+	if _party_adv != null:
+		_party_adv.on_boss_killed()
+	DbgLog.info("Boss killed", "game_state")
+
+
+func _on_monster_room_cleared(_room_id: int, adv_ids: Array[int], killed: int) -> void:
+	if _party_adv != null:
+		_party_adv.on_monster_room_cleared(adv_ids, int(killed))
+
+
+func _retarget_party(party_id: int, from_cell: Vector2i) -> void:
+	if not _active or _dungeon_grid == null:
+		return
+	if _party_adv == null or _path_service == null or _party_ai == null:
+		return
+
+	# Sync party ids onto actors (micro-party splits update brains first).
+	for a0 in _adventurers:
+		if not is_instance_valid(a0):
 			continue
-		if int(a2.get("party_id")) != pid:
+		var aid0 := int(a0.get_instance_id())
+		var pid0 := _party_adv.party_id_for_adv(aid0)
+		if pid0 != 0:
+			a0.set("party_id", pid0)
+
+	# Retarget the requested party, and any newly created parties that don't yet have a goal.
+	var parties_to_retarget: Dictionary = {}
+	for a1 in _adventurers:
+		if not is_instance_valid(a1):
 			continue
-		var aid2: int = int(a2.get_instance_id())
-		cells_by_adv[aid2] = _adv_last_cell.get(aid2, from_cell)
-	var updates: Dictionary = _party_ai.paths_to_current_goal(pid, cells_by_adv)
-	for k in updates.keys():
-		var aid3: int = int(k)
-		var p: Array[Vector2i] = updates[k]
-		for a3 in _adventurers:
-			if is_instance_valid(a3) and int(a3.get_instance_id()) == aid3 and not bool(a3.get("in_combat")):
-				a3.call("set_path", p)
+		if bool(a1.get("in_combat")):
+			continue
+		var pid1 := int(a1.get("party_id"))
+		if pid1 == 0:
+			continue
+		if not parties_to_retarget.has(pid1):
+			var aid1 := int(a1.get_instance_id())
+			parties_to_retarget[pid1] = _adv_last_cell.get(aid1, from_cell)
+
+	for pid_key in parties_to_retarget.keys():
+		var pid := int(pid_key)
+		var existing_goal: Vector2i = _party_ai.get_current_goal(pid)
+		if pid != int(party_id) and existing_goal != Vector2i(-1, -1):
+			continue
+
+		var base_cell: Vector2i = parties_to_retarget[pid_key]
+		if base_cell == Vector2i(-1, -1):
+			base_cell = from_cell
+
+		var party_intent := _party_adv.party_intent(pid)
+		var party_goal: Vector2i = _party_adv.party_goal_cell(pid, base_cell)
+		_party_ai.set_goal(pid, party_goal)
+
+		for a in _adventurers:
+			if not is_instance_valid(a):
+				continue
+			if bool(a.get("in_combat")):
+				continue
+			if int(a.get("party_id")) != pid:
+				continue
+			var aid := int(a.get_instance_id())
+			var cur_cell: Vector2i = _adv_last_cell.get(aid, base_cell)
+			if cur_cell == Vector2i(-1, -1):
+				cur_cell = base_cell
+			var eff_intent := _party_adv.effective_intent_for_adv(aid, party_intent)
+			var goal := party_goal if eff_intent == party_intent else _party_adv.goal_cell_for_intent(eff_intent, cur_cell)
+			var p: Array[Vector2i] = _path_service.path(cur_cell, goal, true)
+			a.call("set_path", p)
+		_drain_party_bubble_events()
+
+
+func _drain_party_bubble_events() -> void:
+	if _party_adv == null or _bubble_service == null:
+		return
+	var events: Array = _party_adv.consume_bubble_events()
+	if events.is_empty():
+		return
+	DbgLog.throttle(
+		"bubble_events",
+		0.75,
+		"Bubble events consumed: %d" % events.size(),
+		"ui",
+		DbgLog.Level.DEBUG
+	)
+	for e0 in events:
+		var e := e0 as Dictionary
+		if e.is_empty():
+			continue
+		var t := String(e.get("type", ""))
+		var text := String(e.get("text", ""))
+		if text == "":
+			continue
+		if t == "party_intent":
+			var leader := int(e.get("leader_adv_id", 0))
+			var adv := _find_adv_by_id(leader)
+			if adv != null:
+				_bubble_service.show_for_actor(adv, text, "party_intent:%d" % int(e.get("party_id", 0)))
+			else:
+				DbgLog.throttle(
+					"bubble_missing_leader:%d" % leader,
+					1.0,
+					"Bubble skipped: missing leader adv_id=%d party_id=%d" % [leader, int(e.get("party_id", 0))],
+					"ui",
+					DbgLog.Level.DEBUG
+				)
+		elif t == "defect":
+			var adv2 := _find_adv_by_id(int(e.get("adv_id", 0)))
+			if adv2 != null:
+				_bubble_service.show_for_actor(adv2, text, "defect")
+			else:
+				DbgLog.throttle(
+					"bubble_missing_defect:%d" % int(e.get("adv_id", 0)),
+					1.0,
+					"Bubble skipped: missing defector adv_id=%d" % int(e.get("adv_id", 0)),
+					"ui",
+					DbgLog.Level.DEBUG
+				)
+		elif t == "flee":
+			var adv3 := _find_adv_by_id(int(e.get("adv_id", 0)))
+			if adv3 != null:
+				_bubble_service.show_for_actor(adv3, text, "flee")
+			else:
+				DbgLog.throttle(
+					"bubble_missing_flee:%d" % int(e.get("adv_id", 0)),
+					1.0,
+					"Bubble skipped: missing flee adv_id=%d" % int(e.get("adv_id", 0)),
+					"ui",
+					DbgLog.Level.DEBUG
+				)
+
+
+func _find_adv_by_id(adv_id: int) -> Node2D:
+	if adv_id == 0:
+		return null
+	for a in _adventurers:
+		if is_instance_valid(a) and int(a.get_instance_id()) == adv_id:
+			return a
+	return null
 
 
 func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
@@ -415,33 +639,35 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 			if _combat != null:
 				_combat.call("join_room", room, adv)
 
-	# Exploration AI: after entering a room (and if not in combat), retarget occasionally.
+	# Fog of war + stealing are room-entry events.
+	var party_id: int = int(adv.get("party_id"))
+	if entered_new_room:
+		if _fog != null:
+			_fog.reveal_on_enter(room_id)
+		if _party_adv != null:
+			var steal_evt: Dictionary = _party_adv.on_party_enter_room(party_id, room)
+			if not steal_evt.is_empty() and DbgLog.is_enabled("theft"):
+				var stolen: Array = steal_evt.get("stolen", [])
+				if not stolen.is_empty():
+					DbgLog.info("Theft room_id=%d party=%d stolen=%d" % [room_id, party_id, stolen.size()], "theft")
+
+	# Exit handling: if an adventurer reaches entrance while intending to exit, remove them.
+	if kind == "entrance" and _party_adv != null:
+		var aid_exit := int(adv.get_instance_id())
+		var intent := _party_adv.effective_intent_for_adv(aid_exit, _party_adv.party_intent(party_id))
+		if intent == PartyAdventureSystem.INTENT_EXIT:
+			_party_adv.on_adv_exited(aid_exit)
+			adv.queue_free()
+			return
+
+	# If in combat, don't retarget paths now.
 	if bool(adv.get("in_combat")):
 		return
-	var party_id: int = int(adv.get("party_id"))
+
+	# Retarget when reaching the current party goal (or if none exists yet).
 	var party_goal: Vector2i = _party_ai.get_current_goal(party_id)
-	if party_goal == Vector2i(-1, -1):
-		_party_ai.retarget_from_cell(party_id, cell)
-		return
-	# If the party reached its current goal room, pick a new party goal.
-	if cell == party_goal:
-		_party_ai.retarget_from_cell(party_id, cell)
-		# Apply fresh paths to members toward the new goal.
-		var cells_by_adv := {}
-		for a2 in _adventurers:
-			if not is_instance_valid(a2):
-				continue
-			if int(a2.get("party_id")) != party_id:
-				continue
-			var aid2: int = int(a2.get_instance_id())
-			cells_by_adv[aid2] = _adv_last_cell.get(aid2, cell)
-		var updates: Dictionary = _party_ai.paths_to_current_goal(party_id, cells_by_adv)
-		for k in updates.keys():
-			var aid3: int = int(k)
-			var p: Array[Vector2i] = updates[k]
-			for a3 in _adventurers:
-				if is_instance_valid(a3) and int(a3.get_instance_id()) == aid3 and not bool(a3.get("in_combat")):
-					a3.call("set_path", p)
+	if party_goal == Vector2i(-1, -1) or cell == party_goal:
+		_retarget_party(party_id, cell)
 
 
 #

@@ -165,6 +165,9 @@ Run-Step "Script + scene load check" @("--headless", "--path", $ProjectPath, "-s
 # Run the main scene headlessly for 1 frame (smoke test).
 Run-Step "Run main scene (headless smoke test)" @("--headless", "--quit", "--path", $ProjectPath, $MainScene)
 
+# Smoke test: Start Day button flow (ensures boss requirement + connectivity).
+Run-Step "Start Day button (headless smoke test)" @("--headless", "--path", $ProjectPath, "-s", "res://tools/ci/smoke_start_day.gd")
+
 Write-Host ""
 Write-Host "All CI checks passed."
 

@@ -8,6 +8,7 @@ This folder contains a tiny "does the project load/run?" validation that works i
 - **Script parse / load**: loads every `.gd` under `autoloads/`, `scripts/`, `ui/`
 - **Scene load**: loads every `.tscn` under `scenes/`, `ui/`
 - **Run main scene**: starts `res://scenes/Main.tscn` headlessly and exits after one frame
+- **Start Day button**: loads the main scene, places a boss room adjacent to Entrance, presses **Start Day**, and asserts the game enters the `DAY` phase
 
 ### Run on Windows (PowerShell)
 

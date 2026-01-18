@@ -5,6 +5,7 @@ extends Node2D
 # - Then moves cell-to-cell along a dungeon path
 
 signal died(world_pos: Vector2, class_id: String)
+signal damaged(amount: int)
 
 enum Phase { SURFACE, DUNGEON, DONE }
 
@@ -151,6 +152,7 @@ func apply_damage(amount: int) -> void:
 	hp = max(0, hp - amount)
 	queue_redraw()
 	DbgLog.log("Adventurer dmg=%d hp=%d/%d" % [amount, hp, hp_max], "adventurers")
+	damaged.emit(amount)
 	if hp <= 0:
 		die()
 

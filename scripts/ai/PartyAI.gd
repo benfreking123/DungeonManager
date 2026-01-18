@@ -72,7 +72,8 @@ func tick_regroup_and_paths(party_id: int, cells_by_adv: Dictionary) -> Dictiona
 				break
 		if all_close:
 			_party_regroup.erase(party_id)
-			_retarget_from_cell(party_id, regroup)
+			# Do NOT pick a new goal here. Higher-level systems (PartyAdventureSystem) own
+			# goal selection; PartyAI is responsible only for regroup/leash/path application.
 		else:
 			for aid in cells_by_adv.keys():
 				var c2: Vector2i = cells_by_adv[aid]
@@ -106,6 +107,10 @@ func tick_regroup_and_paths(party_id: int, cells_by_adv: Dictionary) -> Dictiona
 			p = _path.path(c4, leader, true)
 		updates[int(aid3)] = p
 	return updates
+
+
+func set_goal(party_id: int, goal: Vector2i) -> void:
+	_party_goal[int(party_id)] = goal
 
 
 func retarget_from_cell(party_id: int, from_cell: Vector2i) -> void:

@@ -32,6 +32,10 @@ echo "=== Run main scene (headless smoke test) ==="
 "${GODOT_BIN}" --headless --quit --path "${PROJECT_PATH}" "${MAIN_SCENE}"
 
 echo ""
+echo "=== Start Day button (headless smoke test) ==="
+"${GODOT_BIN}" --headless --path "${PROJECT_PATH}" -s res://tools/ci/smoke_start_day.gd
+
+echo ""
 echo "All CI checks passed."
 
 

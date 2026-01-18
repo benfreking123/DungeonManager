@@ -44,8 +44,17 @@ func on_adventurer_died(world_pos: Vector2, class_id: String) -> void:
 		tid = String(_cfg.call("treasure_id_for_class", class_id))
 	if tid == "":
 		return
+	spawn_treasure_drop(world_pos, tid)
 
-	var tr: TreasureItem = _item_db.call("get_treasure", tid) as TreasureItem
+
+func spawn_treasure_drop(world_pos: Vector2, treasure_item_id: String) -> void:
+	# Spawns a ground loot node for a specific treasure item id (used for forced drops).
+	if _world_canvas == null or _item_db == null:
+		return
+	if treasure_item_id == "":
+		return
+
+	var tr: TreasureItem = _item_db.call("get_treasure", treasure_item_id) as TreasureItem
 	if tr == null or tr.icon == null:
 		return
 
@@ -58,10 +67,10 @@ func on_adventurer_died(world_pos: Vector2, class_id: String) -> void:
 	node.z_index = 8
 	node.z_as_relative = false
 
-	node.set("item_id", tid)
+	node.set("item_id", treasure_item_id)
 	node.call("set_icon", tr.icon)
 
-	_active_loot.append({ "node": node, "item_id": tid })
+	_active_loot.append({ "node": node, "item_id": treasure_item_id })
 
 
 func has_loot() -> bool:

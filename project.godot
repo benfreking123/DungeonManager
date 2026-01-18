@@ -26,6 +26,8 @@ DbgLog="*res://autoloads/DbgLog.gd"
 ItemDB="*res://autoloads/ItemDB.gd"
 RoomInventory="*res://autoloads/RoomInventory.gd"
 game_config="*res://autoloads/game_config.gd"
+config_goals="*res://autoloads/config_goals.gd"
+StolenStash="*res://autoloads/StolenStash.gd"
 
 [display]
 

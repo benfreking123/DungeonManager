@@ -217,6 +217,14 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 		_monster_roster.call("remove", mi.instance_id)
 
 	if not any_alive:
+		# Notify Simulation: attribute monster clears to participants (first pass).
+		if _simulation != null and _simulation.has_method("_on_monster_room_cleared"):
+			var adv_ids: Array[int] = []
+			for p0 in participants:
+				if p0 != null and is_instance_valid(p0):
+					adv_ids.append(int((p0 as Node2D).get_instance_id()))
+			var killed := monsters.size()
+			_simulation.call("_on_monster_room_cleared", room_id, adv_ids, killed)
 		# Reset monster spawn cooldown when combat ends (prevents immediate respawn as party leaves).
 		if room_spawners_by_room_id.has(room_id):
 			var rec: Dictionary = room_spawners_by_room_id[room_id]

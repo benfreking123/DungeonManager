@@ -14,6 +14,9 @@ var enabled: Dictionary = {
 	"rooms": { "enabled": true, "level": Level.DEBUG },
 	"monsters": { "enabled": true, "level": Level.DEBUG },
 	"adventurers": { "enabled": true, "level": Level.DEBUG },
+	"party": { "enabled": true, "level": Level.DEBUG },
+	"fog": { "enabled": true, "level": Level.DEBUG },
+	"theft": { "enabled": true, "level": Level.DEBUG },
 	"ui": { "enabled": true, "level": Level.DEBUG },
 	# Combat/encounter + boss-upgrade detail logs (safe to turn off in one place).
 	"combat": { "enabled": true, "level": Level.INFO },

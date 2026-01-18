@@ -839,8 +839,13 @@ func _draw_room(room: Dictionary) -> void:
 	var center := rect.position + rect.size * 0.5
 	# Minimap: prefer installed item icons for rooms with installable slots.
 	var kind: String = String(room.get("kind", "hall"))
+
+	# Fog-of-war rendering: unknown rooms should not reveal trap/monster/treasure info.
+	# Treat unknown rooms as generic hallway for icon + hide slot markers/icons.
+	var show_details := known
+	var display_kind := kind if show_details else "hall"
 	var center_icon: Texture2D = null
-	if kind == "trap" or kind == "monster" or kind == "treasure":
+	if show_details and (kind == "trap" or kind == "monster" or kind == "treasure"):
 		var slots0: Array = room.get("slots", [])
 		if not slots0.is_empty():
 			var slot0: Dictionary = slots0[0]
@@ -851,11 +856,11 @@ func _draw_room(room: Dictionary) -> void:
 	if center_icon != null:
 		_draw_room_center_icon(center, center_icon)
 	else:
-		_draw_icon_stamp(center, kind, known)
+		_draw_icon_stamp(center, display_kind, known)
 
 	# Slot markers
 	var slots: Array = room.get("slots", [])
-	if not slots.is_empty():
+	if show_details and not slots.is_empty():
 		var slot_outline_w := float(_tconst("slot_outline_w", 2))
 		var slot_treasure := _tcol("slot_outline_treasure", Color(0.95, 0.78, 0.22, 0.95))
 		var slot_trap := _tcol("slot_outline_trap", Color(0.25, 0.58, 1.0, 0.95))

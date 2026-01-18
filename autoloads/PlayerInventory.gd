@@ -18,11 +18,11 @@ var counts: Dictionary = {
 	"glop": 1,
 	"health": 1,
 	"reflect": 1,
-	"treasure_base": 0,
-	"treasure_mage": 0,
-	"treasure_priest": 0,
-	"treasure_rogue": 0,
-	"treasure_warrior": 0,
+	"treasure_base": 1,
+	"treasure_mage": 1,
+	"treasure_priest": 1,
+	"treasure_rogue": 1,
+	"treasure_warrior": 1,
 }
 
 
@@ -67,11 +67,11 @@ func reset_all() -> void:
 		"glop": 1,
 		"health": 1,
 		"reflect": 1,
-		"treasure_base": 0,
-		"treasure_mage": 0,
-		"treasure_priest": 0,
-		"treasure_rogue": 0,
-		"treasure_warrior": 0,
+		"treasure_base": 1,
+		"treasure_mage": 1,
+		"treasure_priest": 1,
+		"treasure_rogue": 1,
+		"treasure_warrior": 1,
 	}
 	inventory_changed.emit()
 
