@@ -4,29 +4,83 @@ class_name PartyGenerator
 const DEFAULT_CLASSES := ["warrior", "mage", "priest", "rogue"]
 
 
-func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int) -> Dictionary:
+func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int, adventurers_count: int = 0) -> Dictionary:
 	# Returns:
 	# {
 	#   "day_seed": int,
 	#   "party_defs": Array[Dictionary], # { party_id, member_ids:Array[int] }
-	#   "member_defs": Dictionary, # member_id -> { member_id, party_id, class_id, morality, goal_weights, stolen_inv_cap, stat_mods }
+	#   "member_defs": Dictionary, # member_id -> { member_id, party_id, class_id, morality, goal_weights, goal_params, stolen_inv_cap, stat_mods }
 	# }
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(day_seed)
 
-	var tier: Dictionary = _pick_tier(int(strength_s), cfg)
-	var party_count := int(tier.get("party_count", 1))
-	var size_weights: Dictionary = tier.get("party_size_weights", { 4: 1 }) as Dictionary
-	party_count = clampi(party_count, 1, int(cfg.get("MAX_PARTIES")) if cfg != null else 10)
-
+	# Determine adventurer count A (fallback from S) and party count P with a soft bias toward 3–4 sizes.
+	var max_parties := int(cfg.get("MAX_PARTIES")) if cfg != null else 10
+	var max_party_size := int(cfg.get("MAX_PARTY_SIZE")) if cfg != null else 5
 	var stolen_cap := int(cfg.get("STOLEN_INV_CAP_DEFAULT")) if cfg != null else 2
+
+	var S_total := maxi(0, int(strength_s))
+	var A := int(adventurers_count)
+	if A <= 0:
+		# Default: ~3 strength per adventurer, clamped to [4, 50].
+		A = clampi(int(round(float(S_total) / 3.0)), 4, 50)
+	else:
+		A = clampi(A, 1, 50)
+
+	var party_count := clampi(int(round(float(A) / 3.6)), 1, max_parties)
+
+	# Party size weights (favor 4). Read from config if provided.
+	var size_weights: Dictionary = {
+		4: 12,
+		3: 4,
+		5: 3,
+		2: 1,
+	}
+	if cfg != null and cfg.has_method("get"):
+		var maybe: Variant = cfg.get("PARTY_SIZE_WEIGHT_DEFAULTS")
+		if typeof(maybe) == TYPE_DICTIONARY and not (maybe as Dictionary).is_empty():
+			size_weights = maybe as Dictionary
+
+	# Sample party sizes, then adjust to hit the exact A members target (±0).
+	var sizes: Array[int] = []
+	for _i in range(party_count):
+		sizes.append(clampi(_weighted_pick_int(rng, size_weights, 4), 1, max_party_size))
+	var size_sum := 0
+	for s in sizes:
+		size_sum += int(s)
+	# If short, increment the smallest parties first; if over, decrement the largest parties first.
+	while size_sum < A:
+		var idx_small := _index_of_smallest(sizes)
+		if idx_small < 0:
+			break
+		if sizes[idx_small] < max_party_size:
+			sizes[idx_small] += 1
+			size_sum += 1
+		else:
+			# All at max; append a size-1 micro party if within cap.
+			if sizes.size() < max_parties:
+				sizes.append(1)
+				size_sum += 1
+			else:
+				break
+	while size_sum > A and not sizes.is_empty():
+		var idx_large := _index_of_largest(sizes)
+		if idx_large < 0:
+			break
+		if sizes[idx_large] > 1:
+			sizes[idx_large] -= 1
+			size_sum -= 1
+		else:
+			# Remove empty/size-0 parties defensively (shouldn't happen).
+			if sizes[idx_large] <= 0:
+				sizes.remove_at(idx_large)
 
 	var party_defs: Array[Dictionary] = []
 	var member_defs: Dictionary = {}
 	var next_member_id := 1
 
-	for pid in range(1, party_count + 1):
-		var party_size := clampi(_weighted_pick_int(rng, size_weights, 4), 1, int(cfg.get("MAX_PARTY_SIZE")) if cfg != null else 5)
+	for pid in range(1, sizes.size() + 1):
+		var party_size := clampi(int(sizes[pid - 1]), 1, max_party_size)
 		var class_ids := _pick_party_classes(rng, party_size)
 		var member_ids: Array[int] = []
 
@@ -101,22 +155,6 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 		"member_defs": member_defs,
 	}
 
-
-func _pick_tier(strength_s: int, cfg: Node) -> Dictionary:
-	if cfg == null:
-		return {}
-	var tiers: Array = cfg.get("PARTY_SCALING_TIERS") as Array
-	for t0 in tiers:
-		var t := t0 as Dictionary
-		if t.is_empty():
-			continue
-		var mn := int(t.get("min_s", -999999))
-		var mx := int(t.get("max_s", 999999))
-		if strength_s >= mn and strength_s <= mx:
-			return t
-	return tiers[0] as Dictionary if not tiers.is_empty() else {}
-
-
 func _weighted_pick_int(rng: RandomNumberGenerator, weights: Dictionary, fallback: int) -> int:
 	if rng == null or weights == null or weights.is_empty():
 		return fallback
@@ -171,3 +209,27 @@ func _roll_stat_mods(rng: RandomNumberGenerator) -> Dictionary:
 		"hp_bonus": hp_bonus,
 		"dmg_bonus": dmg_bonus,
 	}
+
+
+func _index_of_smallest(a: Array[int]) -> int:
+	if a.is_empty():
+		return -1
+	var idx := 0
+	var best := a[0]
+	for i in range(1, a.size()):
+		if a[i] < best:
+			best = a[i]
+			idx = i
+	return idx
+
+
+func _index_of_largest(a: Array[int]) -> int:
+	if a.is_empty():
+		return -1
+	var idx := 0
+	var best := a[0]
+	for i in range(1, a.size()):
+		if a[i] > best:
+			best = a[i]
+			idx = i
+	return idx

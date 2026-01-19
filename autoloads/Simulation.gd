@@ -189,7 +189,10 @@ func start_day() -> void:
 	var day_seed := int(Time.get_ticks_usec()) ^ (strength_s * 1103515245)
 	var gen := {}
 	if _party_gen != null:
-		gen = _party_gen.generate_parties(strength_s, cfg, goals_cfg, day_seed)
+		# Determine A (adventurers to spawn today). Default from S if not provided elsewhere.
+		var A_default := clampi(int(round(float(strength_s) / 3.0)), 4, 50)
+		gen = _party_gen.generate_parties(strength_s, cfg, goals_cfg, day_seed, A_default)
+		_log_party_generation(strength_s, gen, A_default, day_seed)
 	_last_day_seed = int(gen.get("day_seed", day_seed))
 	if _party_adv != null:
 		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, _last_day_seed)
@@ -763,6 +766,33 @@ func _drain_party_bubble_events() -> void:
 					"ui",
 					DbgLog.Level.DEBUG
 				)
+
+
+func _log_party_generation(strength_s: int, gen: Dictionary, adventurers_used: int, day_seed: int) -> void:
+	# Emit a summary and details for adventure/party generation.
+	if not DbgLog.is_enabled("party_gen"):
+		return
+	var party_defs: Array = gen.get("party_defs", []) as Array
+	var member_defs: Dictionary = gen.get("member_defs", {}) as Dictionary
+	DbgLog.info(
+		"PartyGen: S=%d A=%d parties=%d seed=%d" % [int(strength_s), int(adventurers_used), party_defs.size(), int(day_seed)],
+		"party_gen"
+	)
+	for p0 in party_defs:
+		var pd := p0 as Dictionary
+		if pd.is_empty():
+			continue
+		var pid := int(pd.get("party_id", 0))
+		var mids: Array = pd.get("member_ids", []) as Array
+		var classes: Array[String] = []
+		for m0 in mids:
+			var mid := int(m0)
+			var md: Dictionary = member_defs.get(mid, {}) as Dictionary
+			var cls := String(md.get("class_id", ""))
+			if cls != "":
+				classes.append(cls)
+		var classes_label := str(classes)
+		DbgLog.debug("Party pid=%d size=%d classes=%s" % [pid, mids.size(), classes_label], "party_gen")
 
 
 func _find_adv_by_id(adv_id: int) -> Node2D:

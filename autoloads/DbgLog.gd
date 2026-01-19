@@ -15,6 +15,7 @@ var enabled: Dictionary = {
 	"monsters": { "enabled": true, "level": Level.DEBUG },
 	"adventurers": { "enabled": true, "level": Level.DEBUG },
 	"party": { "enabled": true, "level": Level.DEBUG },
+	"party_gen": { "enabled": true, "level": Level.DEBUG },
 	"fog": { "enabled": true, "level": Level.DEBUG },
 	"theft": { "enabled": true, "level": Level.DEBUG },
 	"ui": { "enabled": true, "level": Level.DEBUG },

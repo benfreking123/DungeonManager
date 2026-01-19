@@ -10,8 +10,8 @@
 [ext_resource type="Texture2D" uid="uid://cbqqhnpreh5x0" path="res://assets/RockFrame.tres" id="7_uqoya"]
 [ext_resource type="Shader" path="res://ui/shaders/vignette.gdshader" id="8_vignette"]
 [ext_resource type="Texture2D" uid="uid://clia71e760qmr" path="res://assets/simple-old-paper-1.jpg" id="9_old_paper"]
-[ext_resource type="PackedScene" uid="uid://edd24i7ldah4" path="res://ui/SetupWarningPopup.tscn" id="10_setup_popup"]
-[ext_resource type="PackedScene" uid="uid://c3j0codad11to" path="res://ui/DaytimeIndicator.tscn" id="10_ultn7"]
+[ext_resource type="PackedScene" path="res://ui/SetupWarningPopup.tscn" id="10_setup_popup"]
+[ext_resource type="PackedScene" path="res://ui/DaytimeIndicator.tscn" id="10_ultn7"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
 shader = ExtResource("8_vignette")

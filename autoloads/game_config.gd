@@ -31,6 +31,28 @@ const STRENGTH_DAY_BASE: int = 3
 const STRENGTH_DAY_GROWTH: float = 1.25
 const STRENGTH_DAY_MAX: int = 999999
 
+# Daily Strength S scaling (exponential ~2x every 5 days)
+# S(1) ≈ 10, doubles roughly every S_DOUBLING_DAYS days.
+const S_BASE: float = 10.0
+const S_DOUBLING_DAYS: float = 5.0
+const S_R: float = pow(2.0, 1.0 / S_DOUBLING_DAYS)
+
+func PARTY_SCALING(day: int) -> float:
+	# Returns the total daily strength budget S for the given day.
+	var d: int = maxi(1, day)
+	var s := S_BASE * pow(S_R, float(d - 1))
+	return min(float(STRENGTH_DAY_MAX), s)
+
+# Party generation weights/knobs (favor size 4; expose variance controls)
+const PARTY_SIZE_WEIGHT_DEFAULTS := {
+	4: 12,
+	3: 4,
+	5: 3,
+	2: 1,
+}
+const PARTY_STRENGTH_SIZE_EXP: float = 1.1
+const PARTY_STRENGTH_NOISE_PCT: float = 0.10
+
 # Strength tiers: maps total Strength S -> party count + party-size distribution.
 # Party size distribution is a weighted table (bias toward 4).
 # Shape:
