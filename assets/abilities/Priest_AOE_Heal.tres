@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=2]
+
+[ext_resource type="Script" path="res://scripts/resources/Ability.gd" id=1]
+
+[resource]
+script = ExtResource("1")
+ability_id = "priest_aoe_heal"
+trigger_name = "PartyMemberLow"
+cooldown_s = 6.0
+charges_per_day = 2
+s_delta = 3
+params = { "radius_px": 60, "heal": 3 }
+cast_time_s = 1.0

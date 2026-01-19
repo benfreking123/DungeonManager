@@ -28,6 +28,8 @@ var _party_members: Dictionary = {}
 # adv_id -> AdventurerBrain
 var _brains: Dictionary = {}
 
+# adv_id -> member_id (from generator)
+var _adv_to_member_id: Dictionary = {}
 # adv_id -> soft defy state { intent:String, rooms_left:int }
 var _soft_defy: Dictionary = {}
 
@@ -54,6 +56,17 @@ func _to_int_array(a: Array) -> Array[int]:
 	return out
 
 
+func _has_property(obj: Object, prop_name: String) -> bool:
+	if obj == null:
+		return false
+	var plist: Array = obj.get_property_list()
+	for p in plist:
+		var d := p as Dictionary
+		if String(d.get("name", "")) == String(prop_name):
+			return true
+	return false
+
+
 func setup(dungeon_grid: Node, item_db: Node, cfg: Node, goals_cfg: Node, fog: FogOfWarService, steal: TreasureStealService, day_seed: int) -> void:
 	_grid = dungeon_grid
 	_item_db = item_db
@@ -67,6 +80,7 @@ func setup(dungeon_grid: Node, item_db: Node, cfg: Node, goals_cfg: Node, fog: F
 	_parties.clear()
 	_party_members.clear()
 	_brains.clear()
+	_adv_to_member_id.clear()
 	_soft_defy.clear()
 	_next_party_id = 1000
 	_party_started.clear()
@@ -128,6 +142,14 @@ func get_adv_tooltip(adv_id: int) -> Dictionary:
 		if label != "":
 			labels.append(label)
 	out["top_goals"] = labels
+	# Traits and ability (if asked by UI later).
+	var md := {}
+	var mid := int(_adv_to_member_id.get(int(adv_id), 0))
+	if mid != 0:
+		md = _member_defs.get(mid, {}) as Dictionary
+	if not md.is_empty():
+		out["traits"] = md.get("traits", [])
+		out["ability_id"] = md.get("ability_id", "")
 	return out
 
 
@@ -204,6 +226,58 @@ func register_adventurer(adv: Node2D, member_id: int) -> void:
 	if dmg_bonus != 0:
 		adv.set("attack_damage", int(adv.get("attack_damage")) + dmg_bonus)
 
+	# Apply trait modifiers (percent first, then flat).
+	var traits: Array = md.get("traits", []) as Array
+	if not traits.is_empty():
+		var traits_cfg: Node = load("res://autoloads/traits_config.gd").new()
+		# Percent modifiers
+		for t0 in traits:
+			var tid := String(t0)
+			var td: Dictionary = traits_cfg.get_trait_def(tid) if traits_cfg != null else {}
+			var pct: Dictionary = (td.get("mods", {}) as Dictionary).get("pct", {}) as Dictionary
+			for stat_key in pct.keys():
+				var percent := int(pct.get(stat_key, 0))
+				if percent == 0:
+					continue
+				var sk := String(stat_key)
+				if not _has_property(adv, sk):
+					continue
+				var v: Variant = adv.get(sk)
+				var cur_val := 0
+				if v is int:
+					cur_val = int(v)
+				elif v is float:
+					cur_val = int(round(float(v)))
+				else:
+					continue
+				var new_val := int(round(float(cur_val) * (1.0 + float(percent) / 100.0)))
+				adv.set(sk, new_val)
+				if sk == "hp_max":
+					adv.set("hp", int(adv.get("hp_max")))
+		# Flat modifiers
+		for t1 in traits:
+			var tid2 := String(t1)
+			var td2: Dictionary = traits_cfg.get_trait_def(tid2) if traits_cfg != null else {}
+			var flat: Dictionary = (td2.get("mods", {}) as Dictionary).get("flat", {}) as Dictionary
+			for stat_key2 in flat.keys():
+				var delta := int(flat.get(stat_key2, 0))
+				if delta == 0:
+					continue
+				var sk2 := String(stat_key2)
+				if not _has_property(adv, sk2):
+					continue
+				var v2: Variant = adv.get(sk2)
+				var cur_val2 := 0
+				if v2 is int:
+					cur_val2 = int(v2)
+				elif v2 is float:
+					cur_val2 = int(round(float(v2)))
+				else:
+					continue
+				adv.set(sk2, cur_val2 + delta)
+				if sk2 == "hp_max":
+					adv.set("hp", int(adv.get("hp_max")))
+
 	# Brain
 	var brain := AdventurerBrain.new()
 	brain.setup(
@@ -215,6 +289,7 @@ func register_adventurer(adv: Node2D, member_id: int) -> void:
 		int(md.get("stolen_inv_cap", int(_cfg.get("STOLEN_INV_CAP_DEFAULT")) if _cfg != null else 2))
 	)
 	_brains[aid] = brain
+	_adv_to_member_id[aid] = int(member_id)
 
 	# Party membership
 	if not _party_members.has(pid):
@@ -866,6 +941,21 @@ func _has_any_known_treasure_room_with_loot() -> bool:
 		if _room_has_installed_treasure(r):
 			return true
 	return false
+
+
+func full_loot_member_ids(party_id: int) -> Array[int]:
+	# Returns adv_ids for members whose stolen inventory is full (cannot steal more).
+	var out: Array[int] = []
+	var pid := int(party_id)
+	var members: Array = _party_members.get(pid, []) as Array
+	for aid0 in members:
+		var aid := int(aid0)
+		var b: AdventurerBrain = _brains.get(aid, null) as AdventurerBrain
+		if b == null:
+			continue
+		if not b.can_steal_more():
+			out.append(aid)
+	return out
 
 
 func _create_micro_party(party_id: int, adv_ids: Array[int]) -> void:

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=2]
+
+[ext_resource type="Script" path="res://scripts/resources/Ability.gd" id=1]
+
+[resource]
+script = ExtResource("1")
+ability_id = "warrior_reflect"
+trigger_name = "WhenAttacked"
+cooldown_s = 8.0
+charges_per_day = 1
+s_delta = 2
+params = { "reflect_damage": 2, "duration_s": 3.0 }
+cast_time_s = 0.3

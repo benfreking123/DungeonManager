@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=2]
+
+[ext_resource type="Script" path="res://scripts/resources/Ability.gd" id=1]
+
+[resource]
+script = ExtResource("1")
+ability_id = "mage_single_stun"
+trigger_name = "WhenAttack"
+cooldown_s = 5.0
+charges_per_day = 2
+s_delta = 2
+params = { "stun_s": 1.0 }
+cast_time_s = 0.6

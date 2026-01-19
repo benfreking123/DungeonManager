@@ -66,6 +66,7 @@ var _fog: FogOfWarService
 var _steal: TreasureStealService
 var _party_adv: PartyAdventureSystem
 var _bubble_service: DialogueBubbleService
+var _ability_system: AbilitySystem
 
 # adv_instance_id -> last reached cell (for retargeting / resume)
 var _adv_last_cell: Dictionary = {}
@@ -127,6 +128,7 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_steal = preload("res://scripts/services/TreasureStealService.gd").new()
 	_party_adv = preload("res://scripts/services/PartyAdventureSystem.gd").new()
 	_bubble_service = preload("res://scripts/services/DialogueBubbleService.gd").new()
+	_ability_system = preload("res://scripts/services/AbilitySystem.gd").new()
 
 	# Loot system (separate file): spawns on-ground treasure drops and collects at day end.
 	_loot_system = preload("res://scripts/systems/LootDropSystem.gd").new()
@@ -197,6 +199,8 @@ func start_day() -> void:
 	if _party_adv != null:
 		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, _last_day_seed)
 		_party_adv.init_from_generated(gen)
+	if _ability_system != null:
+		_ability_system.setup(self, _dungeon_grid, _last_day_seed)
 	var di := 1
 	if GameState != null and "day_index" in GameState:
 		di = int(GameState.get("day_index"))
@@ -408,6 +412,8 @@ func _begin_party_spawn(gen: Dictionary) -> void:
 				"member_id": mid,
 				"party_id": pid,
 				"class_id": String(md.get("class_id", "")),
+				"ability_id": String(md.get("ability_id", "")),
+				"ability_charges": int(md.get("ability_charges", 1)),
 				"idx_in_party": i,
 			})
 
@@ -436,6 +442,8 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	var member_id: int = int(entry.get("member_id", 0))
 	var party_id: int = int(entry.get("party_id", 0))
 	var class_id: String = String(entry.get("class_id", ""))
+	var ability_id: String = String(entry.get("ability_id", ""))
+	var ability_charges: int = int(entry.get("ability_charges", 1))
 	var idx_in_party: int = int(entry.get("idx_in_party", idx))
 
 	var spawn_world: Vector2 = _party_spawn_ctx.get("spawn_world", Vector2.ZERO)
@@ -473,6 +481,8 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	if _party_adv != null:
 		_party_adv.register_adventurer(adv, member_id)
 		_drain_party_bubble_events()
+	if _ability_system != null and ability_id != "":
+		_ability_system.register_adv_ability(adv, ability_id, ability_charges)
 
 	adv.set_meta("collision_radius", COLLISION_RADIUS_ADV)
 	# Store the surface target in WorldCanvas-local space so camera transforms don't affect movement.
@@ -548,6 +558,16 @@ func _on_adventurer_died(world_pos: Vector2, class_id: String, adv_id: int) -> v
 		if entered_dungeon and _loot_system != null:
 			for tid in stolen:
 				_loot_system.call("spawn_treasure_drop", world_pos, String(tid))
+	# Ability: notify party peers about a member dying (same party).
+	if _ability_system != null and _party_adv != null:
+		var pid := _party_adv.party_id_for_adv(int(adv_id))
+		if pid != 0:
+			var ids: Array[int] = []
+			for a1 in _adventurers:
+				if is_instance_valid(a1) and int(a1.get("party_id")) == pid:
+					ids.append(int(a1.get_instance_id()))
+			if not ids.is_empty():
+				_ability_system.on_party_member_died(ids)
 	_remove_adv_from_tracking(int(adv_id))
 
 
@@ -627,10 +647,48 @@ func _on_adventurer_damaged(_amount: int, adv_id: int) -> void:
 	if _party_adv != null:
 		var adv := _find_adv_by_id(int(adv_id))
 		if adv != null:
-			_party_adv.on_adv_damaged(int(adv_id), int(adv.get("hp")), int(adv.get("hp_max")))
+			var hp_now := int(adv.get("hp"))
+			var hp_max := int(adv.get("hp_max"))
+			_party_adv.on_adv_damaged(int(adv_id), hp_now, hp_max)
+			# PartyMemberLow: if hp% <= 25%, notify the party.
+			if hp_max > 0 and float(hp_now) / float(hp_max) <= 0.25 and _ability_system != null:
+				var pid := _party_adv.party_id_for_adv(int(adv_id))
+				if pid != 0:
+					var ids_low: Array[int] = []
+					for a1 in _adventurers:
+						if is_instance_valid(a1) and int(a1.get("party_id")) == pid:
+							ids_low.append(int(a1.get_instance_id()))
+					if not ids_low.is_empty():
+						_ability_system.on_party_member_low(ids_low)
+			# PartyMemberHalf: if hp% <= 50%, notify the party.
+			if hp_max > 0 and float(hp_now) / float(hp_max) <= 0.50 and _ability_system != null:
+				var pid2 := _party_adv.party_id_for_adv(int(adv_id))
+				if pid2 != 0:
+					var ids_half: Array[int] = []
+					for a2 in _adventurers:
+						if is_instance_valid(a2) and int(a2.get("party_id")) == pid2:
+							ids_half.append(int(a2.get_instance_id()))
+					if not ids_half.is_empty():
+						_ability_system.on_party_member_half(ids_half)
 		else:
 			_party_adv.on_adv_damaged(int(adv_id))
 		_drain_party_bubble_events()
+		# PartyMemberDamaged: notify all members of this party.
+		if _ability_system != null:
+			var pid := _party_adv.party_id_for_adv(int(adv_id))
+			if pid != 0:
+				var ids: Array[int] = []
+				for a1 in _adventurers:
+					if is_instance_valid(a1) and int(a1.get("party_id")) == pid:
+						ids.append(int(a1.get_instance_id()))
+				if not ids.is_empty():
+					_ability_system.on_party_member_damaged(ids)
+	# Ability trigger: WhenDamaged and WhenAttacked (considered equivalent at damage time)
+	if _ability_system != null:
+		_ability_system.on_adv_damaged(int(adv_id))
+		_ability_system.on_attacked(int(adv_id))
+	if _ability_system != null:
+		_ability_system.on_adv_damaged(int(adv_id))
 
 
 func _on_boss_killed() -> void:
@@ -785,14 +843,24 @@ func _log_party_generation(strength_s: int, gen: Dictionary, adventurers_used: i
 		var pid := int(pd.get("party_id", 0))
 		var mids: Array = pd.get("member_ids", []) as Array
 		var classes: Array[String] = []
+		var traits_line_parts: Array[String] = []
+		var abilities_line_parts: Array[String] = []
 		for m0 in mids:
 			var mid := int(m0)
 			var md: Dictionary = member_defs.get(mid, {}) as Dictionary
 			var cls := String(md.get("class_id", ""))
 			if cls != "":
 				classes.append(cls)
+			var tr: Array = md.get("traits", []) as Array
+			if not tr.is_empty():
+				traits_line_parts.append("%d:%s" % [mid, str(tr)])
+			var abid := String(md.get("ability_id", ""))
+			if abid != "":
+				abilities_line_parts.append("%d:%s" % [mid, abid])
 		var classes_label := str(classes)
-		DbgLog.debug("Party pid=%d size=%d classes=%s" % [pid, mids.size(), classes_label], "party_gen")
+		var traits_label := str(traits_line_parts)
+		var abilities_label := str(abilities_line_parts)
+		DbgLog.debug("Party pid=%d size=%d classes=%s traits={%s} abilities={%s}" % [pid, mids.size(), classes_label, traits_label, abilities_label], "party_gen")
 
 
 func _find_adv_by_id(adv_id: int) -> Node2D:
@@ -802,6 +870,25 @@ func _find_adv_by_id(adv_id: int) -> Node2D:
 		if is_instance_valid(a) and int(a.get_instance_id()) == adv_id:
 			return a
 	return null
+
+
+func get_party_member_ids(party_id: int) -> Array[int]:
+	var out: Array[int] = []
+	var pid := int(party_id)
+	for a in _adventurers:
+		if is_instance_valid(a) and int(a.get("party_id")) == pid:
+			out.append(int(a.get_instance_id()))
+	return out
+
+
+func on_adv_attack(adv_id: int) -> void:
+	if _ability_system != null:
+		_ability_system.on_attack(int(adv_id))
+
+
+func on_adv_attacked(adv_id: int) -> void:
+	if _ability_system != null:
+		_ability_system.on_attacked(int(adv_id))
 
 
 func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
@@ -833,6 +920,8 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 		if kind == "monster" or kind == "boss":
 			if _combat != null:
 				_combat.call("join_room", room, adv)
+		if _ability_system != null:
+			_ability_system.on_enter_room(int(adv.get_instance_id()), kind)
 
 	# Fog of war + stealing are room-entry events.
 	var party_id: int = int(adv.get("party_id"))
@@ -845,12 +934,27 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 				var stolen: Array = steal_evt.get("stolen", [])
 				if not stolen.is_empty():
 					DbgLog.info("Theft room_id=%d party=%d stolen=%d" % [room_id, party_id, stolen.size()], "theft")
+					# Ability trigger: notify LootGathered for the whole party.
+					if _ability_system != null:
+						var ids2: Array[int] = []
+						for a2 in _adventurers:
+							if is_instance_valid(a2) and int(a2.get("party_id")) == party_id:
+								ids2.append(int(a2.get_instance_id()))
+						if not ids2.is_empty():
+							_ability_system.on_loot_gathered(ids2)
+					# Ability trigger: FullLoot for members that reached capacity.
+					if _ability_system != null and _party_adv != null:
+						var full_ids: Array[int] = _party_adv.full_loot_member_ids(party_id)
+						if not full_ids.is_empty():
+							_ability_system.on_full_loot(full_ids)
 
 	# Exit handling: if an adventurer reaches entrance while intending to exit, remove them.
 	if kind == "entrance" and _party_adv != null:
 		var aid_exit := int(adv.get_instance_id())
 		var intent := _party_adv.effective_intent_for_adv(aid_exit, _party_adv.party_intent(party_id))
 		if intent == PartyAdventureSystem.INTENT_EXIT:
+			if _ability_system != null:
+				_ability_system.on_flee(aid_exit)
 			_party_adv.on_adv_exited(aid_exit)
 			_remove_adv_from_tracking(aid_exit)
 			adv.queue_free()

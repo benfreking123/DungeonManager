@@ -32,6 +32,7 @@ var hp: int = 10
 var attack_damage: int = 2
 var attack_interval: float = 1.0
 var range: float = 40.0
+var armor: int = 0
 
 var in_combat: bool = false
 var combat_room_id: int = 0

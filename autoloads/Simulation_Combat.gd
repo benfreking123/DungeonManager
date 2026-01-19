@@ -376,6 +376,9 @@ func _tick_adv_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 						# Boss upgrades: reflect damage back to the attacker.
 						if m.is_boss() and int(m.reflect_damage) > 0:
 							p.call("apply_damage", int(m.reflect_damage))
+					# Ability trigger: WhenAttack
+					if _simulation != null and _simulation.has_method("on_adv_attack"):
+						_simulation.call("on_adv_attack", int(pid))
 					_sync_monster_actor(m)
 					# Threat: the damaged monster will focus this adventurer more.
 					if _threat != null:
@@ -457,6 +460,9 @@ func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 						break
 				if target != null:
 					target.call("apply_damage", int(m.attack_damage()))
+					# Ability trigger: WhenAttacked
+					if _simulation != null and _simulation.has_method("on_adv_attacked"):
+						_simulation.call("on_adv_attacked", int(target.get_instance_id()))
 					adv_hit[int(target.get_instance_id())] = RANGED_KITE_HIT_WINDOW
 				m._double_strike_pending = false
 				m._double_strike_t = 0.0
@@ -493,6 +499,8 @@ func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 						"boss_upgrades"
 					)
 					best_adv_glop.call("apply_damage", int(m.glop_damage))
+					if _simulation != null and _simulation.has_method("on_adv_attacked"):
+						_simulation.call("on_adv_attacked", int(best_adv_glop.get_instance_id()))
 					adv_hit[int(best_adv_glop.get_instance_id())] = RANGED_KITE_HIT_WINDOW
 					var cd := float(m.glop_cooldown_s)
 					if cd <= 0.0:
@@ -543,6 +551,8 @@ func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 				var best_dist := mon_pos.distance_to(best_adv.global_position)
 				if best_dist <= rng:
 					best_adv.call("apply_damage", dmg)
+					if _simulation != null and _simulation.has_method("on_adv_attacked"):
+						_simulation.call("on_adv_attacked", int(best_adv.get_instance_id()))
 					# Mark this adventurer as "recently hit" so ranged units can kite briefly.
 					adv_hit[int(best_adv.get_instance_id())] = RANGED_KITE_HIT_WINDOW
 					# Boss upgrades: double strike (bonus hit after a short delay).

@@ -78,6 +78,9 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 	var party_defs: Array[Dictionary] = []
 	var member_defs: Dictionary = {}
 	var next_member_id := 1
+	# Load traits and abilities index once per generation.
+	var traits_cfg: Node = load("res://autoloads/traits_config.gd").new()
+	var abilities_by_class := _index_abilities_by_class()
 
 	for pid in range(1, sizes.size() + 1):
 		var party_size := clampi(int(sizes[pid - 1]), 1, max_party_size)
@@ -121,6 +124,40 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 						goal_params[gid2] = goals_cfg.call("roll_goal_params", rng, gid2)
 
 			var stat_mods := _roll_stat_mods(rng)
+			# Roll 0–2 traits by weight.
+			var traits: Array[String] = []
+			if traits_cfg != null:
+				var tcount := rng.randi_range(0, 2)
+				var ids: Array[String] = traits_cfg.trait_ids()
+				for _ti in range(tcount):
+					if ids.is_empty():
+						break
+					var tid := _weighted_pick_trait(rng, traits_cfg, ids)
+					if tid == "" or traits.has(tid):
+						# Prevent duplicates; remove and continue.
+						ids.erase(tid)
+						continue
+					traits.append(tid)
+					# Remove picked id to prevent duplicates.
+					ids.erase(tid)
+			# Pick 0–1 ability based on class, if available.
+			var ability_id := ""
+			var ability_charges := 1
+			var ability_s_delta := 0
+			if abilities_by_class.has(String(ci)):
+				var opts: Array = abilities_by_class[String(ci)] as Array
+				if not opts.is_empty() and rng.randf() < 0.9:
+					ability_id = String(opts[rng.randi_range(0, opts.size() - 1)])
+					# Load resource to read charges and s_delta
+					var ab_res := _load_ability(ability_id)
+					if ab_res != null:
+						ability_charges = int(ab_res.charges_per_day)
+						ability_s_delta = int(ab_res.s_delta)
+			# S contribution (for logging/budgeting): sum trait s_deltas + ability s_delta
+			var s_contrib := 0
+			for t_id in traits:
+				s_contrib += int(traits_cfg.trait_s_delta(String(t_id)))
+			s_contrib += int(ability_s_delta)
 
 			member_defs[mid] = {
 				"member_id": mid,
@@ -131,6 +168,10 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 				"goal_params": goal_params,
 				"stolen_inv_cap": stolen_cap,
 				"stat_mods": stat_mods,
+				"traits": traits,
+				"ability_id": ability_id,
+				"ability_charges": ability_charges,
+				"s_contrib": s_contrib,
 			}
 
 			# Debug visibility: log each adventurer's roll once per day seed.
@@ -210,6 +251,84 @@ func _roll_stat_mods(rng: RandomNumberGenerator) -> Dictionary:
 		"dmg_bonus": dmg_bonus,
 	}
 
+func _weighted_pick_trait(rng: RandomNumberGenerator, traits_cfg: Node, ids: Array[String]) -> String:
+	if traits_cfg == null or ids.is_empty():
+		return ""
+	var total := 0
+	var weights: Dictionary = {}
+	for id in ids:
+		var w := int(traits_cfg.trait_weight(String(id)))
+		weights[String(id)] = w
+		total += maxi(0, w)
+	if total <= 0:
+		return String(ids[rng.randi_range(0, ids.size() - 1)])
+	var roll := rng.randi_range(1, total)
+	var acc := 0
+	for id2 in ids:
+		acc += maxi(0, int(weights.get(String(id2), 0)))
+		if roll <= acc:
+			return String(id2)
+	return String(ids[0])
+
+
+func _index_abilities_by_class() -> Dictionary:
+	# Scan abilities dir and group ability_ids by class prefix.
+	var out := {
+		"warrior": [],
+		"mage": [],
+		"rogue": [],
+		"priest": [],
+	}
+	var dir := DirAccess.open("res://assets/abilities")
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	while true:
+		var file_name := dir.get_next()
+		if file_name == "":
+			break
+		if dir.current_is_dir():
+			continue
+		if not file_name.ends_with(".tres"):
+			continue
+		var res_path := "res://assets/abilities/%s" % file_name
+		var res := load(res_path)
+		var ab := res as Ability
+		if ab == null:
+			continue
+		var id := String(ab.ability_id)
+		if id.begins_with("warrior_"):
+			(out["warrior"] as Array).append(id)
+		elif id.begins_with("mage_"):
+			(out["mage"] as Array).append(id)
+		elif id.begins_with("rogue_"):
+			(out["rogue"] as Array).append(id)
+		elif id.begins_with("priest_"):
+			(out["priest"] as Array).append(id)
+	dir.list_dir_end()
+	return out
+
+
+func _load_ability(ability_id: String) -> Ability:
+	# Find and load an ability resource by id (linear scan once).
+	var dir := DirAccess.open("res://assets/abilities")
+	if dir == null:
+		return null
+	dir.list_dir_begin()
+	while true:
+		var file_name := dir.get_next()
+		if file_name == "":
+			break
+		if dir.current_is_dir() or not file_name.ends_with(".tres"):
+			continue
+		var res_path := "res://assets/abilities/%s" % file_name
+		var res := load(res_path)
+		var ab := res as Ability
+		if ab != null and String(ab.ability_id) == String(ability_id):
+			dir.list_dir_end()
+			return ab
+	dir.list_dir_end()
+	return null
 
 func _index_of_smallest(a: Array[int]) -> int:
 	if a.is_empty():

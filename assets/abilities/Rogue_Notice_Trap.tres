@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=2]
+
+[ext_resource type="Script" path="res://scripts/resources/Ability.gd" id=1]
+
+[resource]
+script = ExtResource("1")
+ability_id = "rogue_notice_trap"
+trigger_name = "EnteringTrapRoom"
+cooldown_s = 0.0
+charges_per_day = 1
+s_delta = 1
+params = {}
+cast_time_s = 0.2

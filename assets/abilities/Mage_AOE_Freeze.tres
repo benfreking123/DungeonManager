@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=2]
+
+[ext_resource type="Script" path="res://scripts/resources/Ability.gd" id=1]
+
+[resource]
+script = ExtResource("1")
+ability_id = "mage_aoe_freeze"
+trigger_name = "WhenAttack"
+cooldown_s = 8.0
+charges_per_day = 1
+s_delta = 3
+params = { "radius_px": 60, "stun_s": 1.5 }
+cast_time_s = 1.0
