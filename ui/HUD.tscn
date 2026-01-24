@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3 uid="uid://dhh6eeqqo51gg"]
+[gd_scene load_steps=26 format=3 uid="uid://dhh6eeqqo51gg"]
 
 [ext_resource type="Script" path="res://ui/HUD.gd" id="1_2b4c7"]
 [ext_resource type="Script" path="res://scripts/DungeonView.gd" id="2_2t2p0"]
@@ -80,6 +80,24 @@ corner_radius_bottom_left = 6
 shadow_color = Color(0.18, 0.13, 0.08, 0.1)
 shadow_offset = Vector2(0, 3)
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2ebxq"]
+content_margin_left = 5.0
+content_margin_top = 0.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.88, 0.81, 0.68, 0.96)
+border_width_left = 5
+border_width_right = 9
+border_width_bottom = 8
+border_color = Color(0.18, 0.13, 0.08, 0.48)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0.18, 0.13, 0.08, 0.12)
+shadow_size = 6
+shadow_offset = Vector2(0, 2)
+
 [node name="HUD" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -155,18 +173,6 @@ visible = false
 layout_mode = 2
 text = "Shop"
 
-[node name="Spacer3" type="Control" parent="VBoxContainer"]
-custom_minimum_size = Vector2(0, 7)
-layout_mode = 2
-
-[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer/Spacer3"]
-layout_mode = 0
-offset_left = -12.0
-offset_top = 1.0
-offset_right = 1687.0
-offset_bottom = 844.0
-theme_override_styles/panel = ExtResource("3_6nt7r")
-
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -201,7 +207,7 @@ mouse_filter = 1
 [node name="TextureRect" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame"]
 layout_mode = 0
 offset_top = -435.0
-offset_right = 1019.0
+offset_right = 1043.0
 offset_bottom = 116.0
 texture = ExtResource("4_aah6i")
 expand_mode = 1
@@ -260,9 +266,9 @@ offset_bottom = -114.0
 
 [node name="TextureRect17" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 676.0
+offset_left = 683.0
 offset_top = 92.0
-offset_right = 879.0
+offset_right = 886.0
 offset_bottom = 136.0
 rotation = 6.28318
 texture = ExtResource("7_uqoya")
@@ -270,10 +276,10 @@ expand_mode = 1
 
 [node name="TextureRect11" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 591.0
-offset_top = 676.0
-offset_right = 791.0
-offset_bottom = 720.0
+offset_left = 589.0
+offset_top = 687.0
+offset_right = 789.0
+offset_bottom = 731.0
 texture = SubResource("AtlasTexture_mlwx5")
 expand_mode = 1
 
@@ -307,10 +313,10 @@ expand_mode = 1
 
 [node name="TextureRect5" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 403.0
-offset_top = 678.0
-offset_right = 603.0
-offset_bottom = 722.0
+offset_left = 401.0
+offset_top = 690.0
+offset_right = 601.0
+offset_bottom = 734.0
 texture = SubResource("AtlasTexture_hgkxh")
 expand_mode = 1
 
@@ -325,10 +331,10 @@ expand_mode = 1
 
 [node name="TextureRect6" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 37.0
-offset_top = 680.0
-offset_right = 237.0
-offset_bottom = 724.0
+offset_left = 39.0
+offset_top = 687.0
+offset_right = 239.0
+offset_bottom = 731.0
 texture = SubResource("AtlasTexture_hgkxh")
 expand_mode = 1
 
@@ -363,29 +369,39 @@ expand_mode = 1
 
 [node name="TextureRect20" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 985.0
-offset_top = 688.0
-offset_right = 1194.0
-offset_bottom = 732.0
+offset_left = 1006.0
+offset_top = 689.0
+offset_right = 1215.0
+offset_bottom = 733.0
+rotation = 4.71238
+texture = ExtResource("7_uqoya")
+expand_mode = 1
+
+[node name="TextureRect15" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
+layout_mode = 0
+offset_left = 1008.0
+offset_top = 340.0
+offset_right = 1211.0
+offset_bottom = 384.0
 rotation = 4.71238
 texture = ExtResource("7_uqoya")
 expand_mode = 1
 
 [node name="TextureRect7" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 222.0
-offset_top = 678.0
-offset_right = 422.0
-offset_bottom = 722.0
+offset_left = 220.0
+offset_top = 688.0
+offset_right = 420.0
+offset_bottom = 732.0
 texture = ExtResource("7_uqoya")
 expand_mode = 1
 
 [node name="TextureRect4" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = -35.0
-offset_top = 721.0
-offset_right = 68.0
-offset_bottom = 812.0
+offset_left = -29.0
+offset_top = 733.0
+offset_right = 74.0
+offset_bottom = 824.0
 rotation = -1.57079
 texture = SubResource("AtlasTexture_q2qws")
 expand_mode = 1
@@ -402,50 +418,40 @@ expand_mode = 1
 
 [node name="TextureRect19" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 968.0
-offset_top = 85.0
-offset_right = 1030.0
-offset_bottom = 315.0
+offset_left = 990.0
+offset_top = 75.0
+offset_right = 1052.0
+offset_bottom = 305.0
 rotation = 6.28318
 texture = SubResource("AtlasTexture_onsy8")
 expand_mode = 1
 
 [node name="TextureRect12" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 986.0
-offset_top = 479.0
-offset_right = 1186.0
-offset_bottom = 523.0
+offset_left = 1006.0
+offset_top = 508.0
+offset_right = 1206.0
+offset_bottom = 552.0
 rotation = 4.71238
 texture = SubResource("AtlasTexture_hgkxh")
 expand_mode = 1
 
-[node name="TextureRect15" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
-layout_mode = 0
-offset_left = 985.0
-offset_top = 619.0
-offset_right = 1188.0
-offset_bottom = 663.0
-rotation = 4.71238
-texture = ExtResource("7_uqoya")
-expand_mode = 1
-
 [node name="TextureRect14" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 1030.0
-offset_top = 723.0
-offset_right = 1133.0
-offset_bottom = 814.0
+offset_left = 1051.0
+offset_top = 737.0
+offset_right = 1154.0
+offset_bottom = 828.0
 rotation = 3.14159
 texture = SubResource("AtlasTexture_q2qws")
 expand_mode = 1
 
 [node name="TextureRect16" type="TextureRect" parent="VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Grid/Frame"]
 layout_mode = 0
-offset_left = 776.0
-offset_top = 680.0
-offset_right = 976.0
-offset_bottom = 724.0
+offset_left = 775.0
+offset_top = 689.0
+offset_right = 975.0
+offset_bottom = 733.0
 rotation = 6.28318
 texture = SubResource("AtlasTexture_hgkxh")
 expand_mode = 1
@@ -462,8 +468,21 @@ grow_vertical = 2
 script = ExtResource("2_2t2p0")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/HBoxContainer"]
-z_index = 2
+z_index = 5
 layout_mode = 2
+
+[node name="Spacer3" type="Control" parent="VBoxContainer/HBoxContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 7)
+layout_mode = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/Spacer3"]
+z_index = -6
+layout_mode = 0
+offset_left = 6.0
+offset_top = 4.0
+offset_right = 231.0
+offset_bottom = 121.0
+theme_override_styles/panel = ExtResource("3_6nt7r")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer"]
 layout_mode = 2
@@ -483,6 +502,9 @@ layout_mode = 2
 [node name="DayButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2"]
 layout_mode = 2
 text = "Start Day"
+
+[node name="Spacer" type="Control" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
@@ -539,6 +561,7 @@ layout_mode = 2
 
 [node name="RoomInventoryPanel" parent="VBoxContainer/HBoxContainer/VBoxContainer" instance=ExtResource("6_roominv")]
 layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_2ebxq")
 
 [node name="Spacer" type="Control" parent="VBoxContainer"]
 layout_mode = 2

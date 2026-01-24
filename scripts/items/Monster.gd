@@ -16,5 +16,3 @@ class_name MonsterItem
 
 # Size units for room capacity + spawn time scaling.
 @export var size: float = 1.0
-
-

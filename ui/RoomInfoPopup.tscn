@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://dkes3nonmu82s"]
+[gd_scene format=3 uid="uid://c8g0ip0c7yuck"]
 
 [node name="RoomInfoPopup" type="PanelContainer"]
 visible = false

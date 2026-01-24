@@ -872,6 +872,37 @@ func _find_adv_by_id(adv_id: int) -> Node2D:
 	return null
 
 
+func get_monsters_in_radius(center_world: Vector2, radius_px: float) -> Array:
+	var out: Array = []
+	if _monster_roster == null:
+		return out
+	# Brute-force: scan all rooms; MonsterRoster has helper to get all?
+	# We will iterate known rooms and aggregate monsters.
+	var rooms: Array = _dungeon_grid.get("rooms") as Array if _dungeon_grid != null else []
+	for r0 in rooms:
+		var r := r0 as Dictionary
+		var rid := int(r.get("id", 0))
+		if rid == 0:
+			continue
+		var monsters: Array = _monster_roster.call("get_monsters_in_room", rid)
+		for m0 in monsters:
+			var m := m0 as MonsterInstance
+			if m == null or not m.is_alive():
+				continue
+			var actor: Variant = m.actor
+			if actor == null or not is_instance_valid(actor):
+				continue
+			var a2 := actor as Node2D
+			if a2.global_position.distance_to(center_world) <= radius_px:
+				out.append(m)
+	return out
+
+
+func sync_monster_actor(m: MonsterInstance) -> void:
+	if _combat != null:
+		_combat.call("_sync_monster_actor", m)
+
+
 func get_party_member_ids(party_id: int) -> Array[int]:
 	var out: Array[int] = []
 	var pid := int(party_id)

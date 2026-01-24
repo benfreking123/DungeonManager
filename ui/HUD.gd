@@ -127,6 +127,15 @@ func _ready() -> void:
 		treasure_label.visible = false
 	_refresh_setup_warning()
 
+	# Subscribe to economy updates and paint initial power here (HUD owns its own updates).
+	if GameState != null and GameState.has_signal("economy_changed"):
+		GameState.economy_changed.connect(func():
+			if has_method("set_power"):
+				set_power(GameState.power_used, GameState.power_capacity)
+		)
+	if has_method("set_power"):
+		set_power(GameState.power_used, GameState.power_capacity)
+
 
 func _resolve_topbar_nodes() -> void:
 	# Support old and new layouts:

@@ -44,12 +44,10 @@ func _ready() -> void:
 	if town_view != null and dungeon_view != null:
 		simulation.call("set_views", town_view, dungeon_view)
 
-	GameState.economy_changed.connect(func():
-		hud.set_power(GameState.power_used, GameState.power_capacity)
-	)
+	# HUD now owns economy_changed subscription internally.
 
 	# Initial paint
-	hud.set_power(GameState.power_used, GameState.power_capacity)
+	# Initial power paint handled by HUD._ready()
 
 
 func _update_entrance_ui(town_view: Node, dungeon_view: Node) -> void:

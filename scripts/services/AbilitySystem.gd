@@ -155,16 +155,16 @@ func _execute_effect(adv_id: int, ab: Ability) -> void:
 			# TODO: route to combat target system
 			pass
 		"warrior_whirlwind":
-			pass
+			_whirlwind_fx(int(adv_id), float(ab.cast_time_s) + 0.25)
 		"warrior_reflect":
-			pass
+			_reflect_sparkle(int(adv_id))
 		# Mage
 		"mage_aoe_freeze":
-			pass
+			_mage_aoe_freeze(int(adv_id), int(ab.params.get("radius_px", 60)), float(ab.params.get("stun_s", 1.0)))
 		"mage_aoe_damage":
-			pass
+			_mage_aoe_damage(int(adv_id), int(ab.params.get("radius_px", 60)), int(ab.params.get("damage", 2)))
 		"mage_single_stun":
-			pass
+			_mage_single_stun(int(adv_id), float(ab.params.get("stun_s", 1.0)))
 		# Rogue
 		"rogue_teleport_to_entrance":
 			# TODO: move actor to entrance
@@ -223,6 +223,7 @@ func _priest_aoe_heal(adv_id: int, heal: int) -> void:
 		var hp := int(n.get("hp"))
 		var hp_max := int(n.get("hp_max"))
 		n.set("hp", mini(hp_max, hp + heal))
+		_heal_pulse(n)
 
 
 func _priest_single_heal(adv_id: int, heal: int) -> void:
@@ -247,6 +248,109 @@ func _priest_single_heal(adv_id: int, heal: int) -> void:
 		var thp := int(target.get("hp"))
 		var thp_max := int(target.get("hp_max"))
 		target.set("hp", mini(thp_max, thp + heal))
+		_heal_pulse(target)
+
+
+func _mage_aoe_damage(adv_id: int, radius_px: int, dmg: int) -> void:
+	var adv: Node2D = null
+	if _simulation.has_method("_find_adv_by_id"):
+		adv = _simulation.call("_find_adv_by_id", int(adv_id)) as Node2D
+	if adv == null or not is_instance_valid(adv):
+		return
+	var center := adv.global_position
+	var monsters: Array = []
+	if _simulation.has_method("get_monsters_in_radius"):
+		monsters = _simulation.call("get_monsters_in_radius", center, float(radius_px))
+	for m0 in monsters:
+		var m := m0 as MonsterInstance
+		if m == null or not m.is_alive():
+			continue
+		m.hp = maxi(0, int(m.hp) - int(dmg))
+		if _simulation.has_method("sync_monster_actor"):
+			_simulation.call("sync_monster_actor", m)
+
+
+func _mage_aoe_freeze(adv_id: int, radius_px: int, stun_s: float) -> void:
+	var adv: Node2D = null
+	if _simulation.has_method("_find_adv_by_id"):
+		adv = _simulation.call("_find_adv_by_id", int(adv_id)) as Node2D
+	if adv == null or not is_instance_valid(adv):
+		return
+	var center := adv.global_position
+	var monsters: Array = []
+	if _simulation.has_method("get_monsters_in_radius"):
+		monsters = _simulation.call("get_monsters_in_radius", center, float(radius_px))
+	for m0 in monsters:
+		var m := m0 as MonsterInstance
+		if m == null or not m.is_alive():
+			continue
+		# Pause their next attack window to simulate stun.
+		m.attack_timer = maxf(float(m.attack_timer), float(stun_s))
+
+
+func _mage_single_stun(adv_id: int, stun_s: float) -> void:
+	var adv: Node2D = null
+	if _simulation.has_method("_find_adv_by_id"):
+		adv = _simulation.call("_find_adv_by_id", int(adv_id)) as Node2D
+	if adv == null or not is_instance_valid(adv):
+		return
+	var center := adv.global_position
+	var monsters: Array = []
+	if _simulation.has_method("get_monsters_in_radius"):
+		monsters = _simulation.call("get_monsters_in_radius", center, 80.0)
+	var best: MonsterInstance = null
+	var best_d := 1e18
+	for m0 in monsters:
+		var m := m0 as MonsterInstance
+		if m == null or not m.is_alive():
+			continue
+		var actor: Node2D = m.actor as Node2D
+		if actor == null or not is_instance_valid(actor):
+			continue
+		var d := actor.global_position.distance_to(center)
+		if d < best_d:
+			best_d = d
+			best = m
+	if best != null:
+		best.attack_timer = maxf(float(best.attack_timer), float(stun_s))
+		var actor2: Node2D = best.actor as Node2D
+		if actor2 != null and is_instance_valid(actor2):
+			_stun_burst(actor2)
+
+
+func _stun_burst(target: Node2D) -> void:
+	var fx := preload("res://scripts/fx/StunBurst.gd").new()
+	target.add_child(fx)
+	fx.position = Vector2.ZERO
+
+
+func _heal_pulse(target: Node2D) -> void:
+	var fx := preload("res://scripts/fx/HealPulse.gd").new()
+	target.add_child(fx)
+	fx.position = Vector2.ZERO
+
+
+func _reflect_sparkle(adv_id: int) -> void:
+	var adv: Node2D = null
+	if _simulation.has_method("_find_adv_by_id"):
+		adv = _simulation.call("_find_adv_by_id", int(adv_id)) as Node2D
+	if adv == null or not is_instance_valid(adv):
+		return
+	var fx := preload("res://scripts/fx/ReflectSparkle.gd").new()
+	adv.add_child(fx)
+	fx.position = Vector2.ZERO
+
+
+func _whirlwind_fx(adv_id: int, duration_s: float) -> void:
+	var adv: Node2D = null
+	if _simulation.has_method("_find_adv_by_id"):
+		adv = _simulation.call("_find_adv_by_id", int(adv_id)) as Node2D
+	if adv == null or not is_instance_valid(adv):
+		return
+	var fx := preload("res://scripts/fx/WhirlwindCross.gd").new()
+	fx.duration_s = duration_s
+	adv.add_child(fx)
+	fx.position = Vector2.ZERO
 
 
 func _emit_anim(adv_id: int, _ab: Ability) -> void:
@@ -262,17 +366,21 @@ func _emit_anim(adv_id: int, _ab: Ability) -> void:
 	var ring_color := Color(1.0, 1.0, 0.6, 1.0) # default yellow
 	if _ab != null:
 		var id := String(_ab.ability_id)
-		if id.begins_with("priest_"):
-			ring_color = Color(0.6, 1.0, 0.6, 1.0) # green for heals
-		elif id.begins_with("mage_"):
-			ring_color = Color(0.6, 0.9, 1.0, 1.0) # blue-ish for magic
+		if id.begins_with("mage_"):
+			ring_color = Color(0.4, 0.7, 1.0, 1.0) # Blue
 		elif id.begins_with("warrior_"):
-			ring_color = Color(1.0, 0.7, 0.4, 1.0) # orange
+			ring_color = Color(1.0, 0.35, 0.35, 1.0) # Red
+		elif id.begins_with("priest_"):
+			ring_color = Color(1.0, 0.95, 0.45, 1.0) # Yellow
 		elif id.begins_with("rogue_"):
-			ring_color = Color(0.9, 0.8, 1.0, 1.0) # purple-ish
+			ring_color = Color(0.5, 1.0, 0.6, 1.0) # Green
 	var ring := preload("res://scripts/fx/AbilityRing.gd").new()
 	ring.color = ring_color
-	ring.duration_s = 0.35
+	# Tie size to params.radius_px when present (visual only; gameplay handled separately).
+	var visual_radius := int(_ab.params.get("radius_px", 36))
+	ring.end_radius = float(visual_radius)
+	ring.thickness_px = 4.0
+	ring.duration_s = 0.45
 	if is_instance_valid(adv):
 		adv.add_child(ring)
 		ring.position = Vector2.ZERO
@@ -283,7 +391,7 @@ func _emit_anim(adv_id: int, _ab: Ability) -> void:
 	tween.tween_property(adv, "scale", orig_scale * 1.15, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tween.tween_property(adv, "scale", orig_scale, 0.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	# Color pulse (yellowish)
-	tween.parallel().tween_property(adv, "modulate", Color(1.0, 1.0, 0.6, 1.0), 0.12)
+	tween.parallel().tween_property(adv, "modulate", ring_color, 0.12)
 	tween.tween_property(adv, "modulate", orig_mod, 0.12)
 
 

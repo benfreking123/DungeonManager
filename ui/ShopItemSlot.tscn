@@ -1,8 +1,10 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://pjytnswb372c"]
 
 [ext_resource type="Script" path="res://ui/ShopItemSlot.gd" id="1_slot"]
 
 [node name="ShopItemSlot" type="Control"]
+layout_mode = 3
+anchors_preset = 0
 mouse_filter = 1
 script = ExtResource("1_slot")
 
@@ -13,16 +15,23 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 2
+theme_override_constants/separation = 1
+alignment = 1
+
+[node name="Spacer2" type="Control" parent="VBox"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
 
 [node name="IconButton" type="TextureButton" parent="VBox"]
+custom_minimum_size = Vector2(64, 64)
 layout_mode = 2
-expand = true
-stretch_mode = 5
+size_flags_horizontal = 8
+size_flags_vertical = 8
 
-[node name="Cost" type="Label" parent="VBox"]
+[node name="Spacer" type="Control" parent="VBox"]
+custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
-horizontal_alignment = 1
-autowrap_mode = 0
-text = ""
 
+[node name="Cost" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 2

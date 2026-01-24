@@ -15,7 +15,14 @@ const SLIDE_DURATION := 0.32
 const SQUARE_GROUP_SIZE := 2
 const SQUARE_GROUP_STAGGER := 0.0275
 const SQUARE_SPEED := 0.82 # < 1.0 = faster
-const SHOP_SLOT_SCALE := 0.40
+const SHOP_SLOT_SCALE := 0.10
+# Fixed shop visuals (decoupled from square size)
+# Room glyphs remain modest; item icons are larger per request.
+const SHOP_ITEM_ICON_PX_ITEM := 64
+const ROOM_GLYPH_ICON_PX := 32
+# Ensure slots are large enough to hold a 64x64 icon, a 32px spacer, and a 48px price row.
+const SHOP_SLOT_SIZE_ITEM := Vector2(72, 150)
+const SHOP_SLOT_SIZE_ROOM := Vector2(40, 48)
 
 var _is_open: bool = false
 var _tween: Tween = null
@@ -394,13 +401,15 @@ func _reveal_item_for_square(sq: CanvasItem) -> void:
 	var inv: Transform2D = _items_root.get_global_transform().affine_inverse()
 	var local_center := inv * center
 	# Ensure a stable size so we can center reliably.
-	slot.custom_minimum_size = sq_rect.size * SHOP_SLOT_SCALE
-	slot.size = slot.custom_minimum_size
+	var kind_for_size := String(offer.get("kind", "item"))
+	var slot_size := SHOP_SLOT_SIZE_ROOM if kind_for_size == "room" else SHOP_SLOT_SIZE_ITEM
+	slot.custom_minimum_size = slot_size
+	slot.size = slot_size
 	slot.position = local_center - (slot.size * 0.5)
 
 	var icon := _offer_icon(offer)
-	var cost_txt := _offer_cost_text(offer)
-	slot.call("set_offer", offer, icon, cost_txt)
+	var cost_list := _offer_cost_list(offer)
+	slot.call("set_offer", offer, icon, cost_list)
 	slot.connect("hover_entered", Callable(self, "_on_slot_hover_entered"))
 	slot.connect("hover_exited", Callable(self, "_on_slot_hover_exited"))
 	slot.connect("purchase_pressed", Callable(self, "_on_slot_purchase_pressed"))
@@ -436,7 +445,30 @@ func _offer_icon(offer: Dictionary) -> Texture2D:
 		var rip := scene.find_child("RoomInventoryPanel", true, false) if scene != null else null
 		if rip != null:
 			return rip.call("_get_room_glyph_icon", room_kind) as Texture2D
+		# Safe fallback if the panel isn't available.
+		return _fallback_room_glyph_icon(room_kind)
 	return null
+
+
+func _offer_cost_list(offer: Dictionary) -> Array[Dictionary]:
+	var cost: Dictionary = offer.get("cost", {}) as Dictionary
+	if cost.is_empty():
+		return []
+	var out: Array[Dictionary] = []
+	for k in cost.keys():
+		var tid := String(k)
+		var amt := int(cost.get(k, 0))
+		if tid == "" or amt <= 0:
+			continue
+		var icon: Texture2D = null
+		var res: Resource = ItemDB.get_any_item(tid)
+		if res is TreasureItem:
+			icon = (res as TreasureItem).icon
+		out.append({
+			"icon": icon,
+			"amount": amt,
+		})
+	return out
 
 
 func _offer_cost_text(offer: Dictionary) -> String:
@@ -665,3 +697,73 @@ func _restore_squares_final() -> void:
 		ci.rotation = fin["rot"]
 		ci.scale = fin["scale"]
 		ci.modulate.a = fin["a"]
+
+
+# Minimal local glyph fallback for room icons (keeps shop visuals consistent with map)
+func _fallback_room_glyph_icon(kind: String) -> Texture2D:
+	var sz := int(ROOM_GLYPH_ICON_PX)
+	var img := Image.create(sz, sz, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var ink := Color(0.18, 0.13, 0.08, 0.95)
+
+	var center := Vector2(float(sz) * 0.5, float(sz) * 0.5)
+	var s := float(sz) * 0.35
+	var w := 2
+
+	# Tiny helpers
+	var plot := func(x: int, y: int, col: Color) -> void:
+		if x < 0 or y < 0 or x >= img.get_width() or y >= img.get_height():
+			return
+		img.set_pixel(x, y, col)
+	var disc := func(c: Vector2, r: int, col: Color) -> void:
+		var cx := int(round(c.x))
+		var cy := int(round(c.y))
+		var rr := r * r
+		for yy in range(-r, r + 1):
+			for xx in range(-r, r + 1):
+				if xx * xx + yy * yy <= rr:
+					plot.call(cx + xx, cy + yy, col)
+	var line := func(a: Vector2, b: Vector2, col: Color, width: int) -> void:
+		var dx := b.x - a.x
+		var dy := b.y - a.y
+		var steps: int = int(max(absf(dx), absf(dy)))
+		if steps <= 0:
+			disc.call(a, max(1, int(ceil(float(width) * 0.5))), col)
+			return
+		var r: int = max(1, int(ceil(float(width) * 0.5)))
+		for i in range(steps + 1):
+			var t := float(i) / float(steps)
+			var p := a.lerp(b, t)
+			disc.call(p, r, col)
+
+	match String(kind):
+		"entrance":
+			line.call(center + Vector2(0, -s), center + Vector2(0, s), ink, w)
+			line.call(center + Vector2(0, s), center + Vector2(-s * 0.6, s * 0.4), ink, w)
+			line.call(center + Vector2(0, s), center + Vector2(s * 0.6, s * 0.4), ink, w)
+		"boss":
+			line.call(center + Vector2(-s, s * 0.6), center + Vector2(-s * 0.6, -s * 0.4), ink, w)
+			line.call(center + Vector2(-s * 0.6, -s * 0.4), center + Vector2(0, s * 0.2), ink, w)
+			line.call(center + Vector2(0, s * 0.2), center + Vector2(s * 0.6, -s * 0.4), ink, w)
+			line.call(center + Vector2(s * 0.6, -s * 0.4), center + Vector2(s, s * 0.6), ink, w)
+			line.call(center + Vector2(-s, s * 0.6), center + Vector2(s, s * 0.6), ink, w)
+		"treasure":
+			# Chest: box + lid line
+			var a := center - Vector2(s, s * 0.6)
+			var b := a + Vector2(s * 2.0, 0)
+			var c := a + Vector2(s * 2.0, s * 1.2)
+			var d := a + Vector2(0, s * 1.2)
+			line.call(a, b, ink, w)
+			line.call(b, c, ink, w)
+			line.call(c, d, ink, w)
+			line.call(d, a, ink, w)
+			line.call(center + Vector2(-s, 0), center + Vector2(s, 0), ink, w)
+		"monster":
+			disc.call(center, int(round(s * 0.8)), ink)
+		"trap":
+			line.call(center + Vector2(-s, -s), center + Vector2(s, s), ink, w)
+			line.call(center + Vector2(-s, s), center + Vector2(s, -s), ink, w)
+		_:
+			disc.call(center, 2, ink)
+
+	return ImageTexture.create_from_image(img)
