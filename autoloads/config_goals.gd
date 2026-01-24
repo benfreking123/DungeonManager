@@ -415,4 +415,3 @@ func pick_dialogue_for_flee(rng: RandomNumberGenerator, goal_id_optional: String
 	if rng == null:
 		return String(FLEE_DIALOGUE[0])
 	return String(FLEE_DIALOGUE[rng.randi_range(0, FLEE_DIALOGUE.size() - 1)])
-

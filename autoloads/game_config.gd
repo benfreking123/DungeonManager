@@ -16,7 +16,7 @@ const TREASURE_ROOM_POWER_CAPACITY_PER_TREASURE: int = 1
 const BASE_POWER_CAPACITY: int = 20
 
 # Party/adventure scaling
-const MAX_PARTIES: int = 10
+const MAX_PARTIES: int = 5
 const MAX_PARTY_SIZE: int = 5
 
 # Soft cap includes micro-parties created by defections.
@@ -45,10 +45,11 @@ func PARTY_SCALING(day: int) -> float:
 
 # Party generation weights/knobs (favor size 4; expose variance controls)
 const PARTY_SIZE_WEIGHT_DEFAULTS := {
-	4: 12,
+	4: 7,
 	3: 4,
 	5: 3,
-	2: 1,
+	2: 2,
+	1: 1
 }
 const PARTY_STRENGTH_SIZE_EXP: float = 1.1
 const PARTY_STRENGTH_NOISE_PCT: float = 0.10

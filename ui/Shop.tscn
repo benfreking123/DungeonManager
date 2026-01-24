@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://cqgpn7xq2dyua"]
+[gd_scene load_steps=11 format=3 uid="uid://sj25ifeea7mc"]
 
 [ext_resource type="Script" path="res://ui/Shop.gd" id="1_shop_gd"]
 [ext_resource type="Texture2D" uid="uid://cba0hifpmn7hq" path="res://assets/Shop/ShopBackground.png" id="2_shop_bg"]
@@ -23,7 +23,8 @@ script = ExtResource("1_shop_gd")
 
 [node name="Panel" type="Control" parent="."]
 anchors_preset = 0
-offset_left = -800.0
+offset_left = -801.0
+offset_right = -1.0
 offset_bottom = 720.0
 mouse_filter = 1
 
@@ -56,13 +57,6 @@ anchors_preset = 0
 offset_left = -800.0
 offset_right = -760.0
 offset_bottom = 40.0
-
-[node name="Items" type="Control" parent="."]
-anchors_preset = 0
-offset_left = -800.0
-offset_right = -760.0
-offset_bottom = 40.0
-mouse_filter = 1
 
 [node name="BlackSquare" type="TextureRect" parent="Squares"]
 layout_mode = 1
@@ -191,3 +185,10 @@ mouse_filter = 2
 texture = ExtResource("10_adjul")
 expand_mode = 1
 stretch_mode = 5
+
+[node name="Items" type="Control" parent="."]
+anchors_preset = 0
+offset_left = -800.0
+offset_right = -760.0
+offset_bottom = 40.0
+mouse_filter = 1

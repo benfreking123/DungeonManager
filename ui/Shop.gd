@@ -15,6 +15,8 @@ const SLIDE_DURATION := 0.32
 const SQUARE_GROUP_SIZE := 2
 const SQUARE_GROUP_STAGGER := 0.0275
 const SQUARE_SPEED := 0.82 # < 1.0 = faster
+# Shift the background panel a bit left when open; keep squares/items in original spot.
+const OPEN_X_ADJUST := -64.0
 const SHOP_SLOT_SCALE := 0.10
 # Fixed shop visuals (decoupled from square size)
 # Room glyphs remain modest; item icons are larger per request.
@@ -138,7 +140,7 @@ func _slide(to_open: bool) -> void:
 
 func _target_x() -> float:
 	var vp_w := get_viewport_rect().size.x
-	return maxf(PANEL_MARGIN, vp_w - _panel.size.x - PANEL_MARGIN)
+	return maxf(PANEL_MARGIN, vp_w - _panel.size.x - PANEL_MARGIN + OPEN_X_ADJUST)
 
 
 func _offscreen_x() -> float:
@@ -166,11 +168,13 @@ func _snap_squares_to_panel() -> void:
 	# Keep squares aligned to the panel's final position, but do not animate with it.
 	# IMPORTANT: do NOT resize this container. The square TextureRects are anchored
 	# to fill their parent; resizing would stretch them and shift their offsets.
-	_squares_container.position = Vector2(_panel.position.x, _squares_container.position.y)
+	# Apply inverse offset so squares stay where they used to be relative to screen.
+	_squares_container.position = Vector2(_panel.position.x - OPEN_X_ADJUST, _squares_container.position.y)
 	if _items_root == null:
 		_items_root = get_node_or_null("Items") as Control
 	if _items_root != null:
-		_items_root.position = Vector2(_panel.position.x, _items_root.position.y)
+		# Items should track squares, not the background board.
+		_items_root.position = Vector2(_panel.position.x - OPEN_X_ADJUST, _items_root.position.y)
 
 
 func _cache_squares() -> void:
