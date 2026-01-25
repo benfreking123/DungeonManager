@@ -67,6 +67,8 @@ var _steal: TreasureStealService
 var _party_adv: PartyAdventureSystem
 var _bubble_service: DialogueBubbleService
 var _ability_system: AbilitySystem
+var _history: HistoryService
+var _dialogue_rules: Dictionary = {}
 
 # adv_instance_id -> last reached cell (for retargeting / resume)
 var _adv_last_cell: Dictionary = {}
@@ -129,6 +131,7 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_party_adv = preload("res://scripts/services/PartyAdventureSystem.gd").new()
 	_bubble_service = preload("res://scripts/services/DialogueBubbleService.gd").new()
 	_ability_system = preload("res://scripts/services/AbilitySystem.gd").new()
+	_history = preload("res://autoloads/HistoryService.gd").new()
 
 	# Loot system (separate file): spawns on-ground treasure drops and collects at day end.
 	_loot_system = preload("res://scripts/systems/LootDropSystem.gd").new()
@@ -195,6 +198,18 @@ func start_day() -> void:
 		var A_default := clampi(int(round(float(strength_s) / 3.0)), 4, 50)
 		gen = _party_gen.generate_parties(strength_s, cfg, goals_cfg, day_seed, A_default)
 		_log_party_generation(strength_s, gen, A_default, day_seed)
+		# History: attach profiles and inject scheduled returnees BEFORE initializing party/adventure system.
+		if _history != null:
+			var di2 := 1
+			if GameState != null and "day_index" in GameState:
+				di2 = int(GameState.get("day_index"))
+			# Apply history cap from config if present
+			if cfg != null and cfg.has_method("get"):
+				var cap := int(cfg.get("HISTORY_MAX_ENTRIES"))
+				if cap > 0:
+					_history.set_history_cap(cap)
+			_history.attach_profiles_for_new_members(gen, di2)
+			_history.inject_returns_into_generation(gen, di2, cfg)
 	_last_day_seed = int(gen.get("day_seed", day_seed))
 	if _party_adv != null:
 		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, _last_day_seed)
@@ -210,6 +225,9 @@ func start_day() -> void:
 		_loot_system.call("reset")
 	if _trap_system != null:
 		_trap_system.call("reset")
+	# History: mark day start.
+	if _history != null:
+		_history.record_day_change(di, "start")
 
 
 func end_day(reason: String = "success") -> void:
@@ -278,10 +296,83 @@ func _finish_end_day_cleanup() -> void:
 		GameState.set_phase(GameState.Phase.SHOP)
 	day_ended.emit()
 	_ending_day = false
+	# History: mark day end (phase depends on reason, but simply "end" here).
+	var di4 := 1
+	if GameState != null and "day_index" in GameState:
+		di4 = int(GameState.get("day_index"))
+	if _history != null:
+		_history.record_day_change(di4, "end")
+
+
+# === Dialogue rules (data-driven) ===
+func _ensure_dialogue_rules_loaded(cfg: Node) -> void:
+	if not _dialogue_rules.is_empty():
+		return
+	if cfg == null:
+		return
+	var path := ""
+	if cfg.has_method("get"):
+		path = String(cfg.get("DIALOGUE_CONFIG_PATH"))
+	if path == "":
+		return
+	if not ResourceLoader.exists(path):
+		return
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return
+	var txt: String = f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(txt)
+	if typeof(parsed) == TYPE_DICTIONARY:
+		_dialogue_rules = parsed as Dictionary
+
+
+func _pick_dialogue_line(event_id: String, tokens: Dictionary) -> String:
+	var r: Array = _dialogue_rules.get("rules", []) as Array
+	if r.is_empty():
+		return ""
+	var candidates: Array[Dictionary] = []
+	for r0 in r:
+		var d := r0 as Dictionary
+		var when := d.get("when", {}) as Dictionary
+		var ok := false
+		if when.has("*"):
+			ok = bool(when.get("*"))
+		elif String(when.get("event", "")) == String(event_id):
+			ok = true
+		if ok:
+			var vals: Array = d.get("values", []) as Array
+			if not vals.is_empty():
+				candidates.append(d)
+	if candidates.is_empty():
+		return ""
+	# Simple weighted pick
+	var total_w := 0
+	for c in candidates:
+		total_w += int((c as Dictionary).get("weight", 1))
+	if total_w <= 0:
+		total_w = candidates.size()
+	var pick := randi() % total_w
+	var acc := 0
+	for c2 in candidates:
+		var w := int((c2 as Dictionary).get("weight", 1))
+		acc += w
+		if pick < acc:
+			var vals2: Array = (c2 as Dictionary).get("values", []) as Array
+			if vals2.is_empty():
+				return ""
+			return String(vals2[int(randi()) % vals2.size()])
+	return ""
 
 
 func get_shop_seed() -> int:
 	return int(_shop_seed)
+
+
+func get_history_events() -> Array:
+	if _history == null:
+		return []
+	return _history.get_events({})
 
 
 func _process(delta: float) -> void:
@@ -414,6 +505,7 @@ func _begin_party_spawn(gen: Dictionary) -> void:
 				"class_id": String(md.get("class_id", "")),
 				"ability_id": String(md.get("ability_id", "")),
 				"ability_charges": int(md.get("ability_charges", 1)),
+				"profile_id": int(md.get("profile_id", 0)),
 				"idx_in_party": i,
 			})
 
@@ -483,6 +575,11 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 		_drain_party_bubble_events()
 	if _ability_system != null and ability_id != "":
 		_ability_system.register_adv_ability(adv, ability_id, ability_charges)
+	# History: map adv_instance to profile_id for subsequent event logging.
+	if _history != null:
+		var prof_id := int(entry.get("profile_id", 0))
+		if prof_id != 0:
+			_history.register_adv_profile_mapping(int(adv.get_instance_id()), prof_id)
 
 	adv.set_meta("collision_radius", COLLISION_RADIUS_ADV)
 	# Store the surface target in WorldCanvas-local space so camera transforms don't affect movement.
@@ -523,6 +620,14 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 	out["hp"] = int(adv.get("hp"))
 	out["hp_max"] = int(adv.get("hp_max"))
 	out["attack_damage"] = int(adv.get("attack_damage"))
+	# Identity fields (from member_def via PartyAdventureSystem)
+	if _party_adv != null and _party_adv.has_method("member_def_for_adv"):
+		var md: Dictionary = _party_adv.call("member_def_for_adv", int(adv_id)) as Dictionary
+		if not md.is_empty():
+			out["name"] = String(md.get("name", ""))
+			out["epithet"] = String(md.get("epithet", ""))
+			out["origin"] = String(md.get("origin", ""))
+			out["bio"] = String(md.get("bio", ""))
 	if _party_adv != null and _party_adv.has_method("get_adv_tooltip"):
 		var t: Dictionary = _party_adv.call("get_adv_tooltip", int(adv_id)) as Dictionary
 		for k in t.keys():
@@ -792,6 +897,11 @@ func _drain_party_bubble_events() -> void:
 			var adv := _find_adv_by_id(leader)
 			if adv != null:
 				_bubble_service.show_for_actor(adv, text, "party_intent:%d" % int(e.get("party_id", 0)))
+				if _history != null and _party_adv != null and _party_adv.has_method("member_def_for_adv"):
+					var md_hist: Dictionary = _party_adv.call("member_def_for_adv", leader) as Dictionary
+					var pid_hist := int(md_hist.get("profile_id", 0))
+					if pid_hist != 0:
+						_history.record_dialogue(pid_hist, text, "party", ["party_intent"])
 			else:
 				DbgLog.throttle(
 					"bubble_missing_leader:%d" % leader,
@@ -804,6 +914,11 @@ func _drain_party_bubble_events() -> void:
 			var adv2 := _find_adv_by_id(int(e.get("adv_id", 0)))
 			if adv2 != null:
 				_bubble_service.show_for_actor(adv2, text, "defect")
+				if _history != null and _party_adv != null and _party_adv.has_method("member_def_for_adv"):
+					var md_hist2: Dictionary = _party_adv.call("member_def_for_adv", int(e.get("adv_id", 0))) as Dictionary
+					var pid_hist2 := int(md_hist2.get("profile_id", 0))
+					if pid_hist2 != 0:
+						_history.record_dialogue(pid_hist2, text, "party", ["defect"])
 			else:
 				DbgLog.throttle(
 					"bubble_missing_defect:%d" % int(e.get("adv_id", 0)),
@@ -816,6 +931,11 @@ func _drain_party_bubble_events() -> void:
 			var adv3 := _find_adv_by_id(int(e.get("adv_id", 0)))
 			if adv3 != null:
 				_bubble_service.show_for_actor(adv3, text, "flee")
+				if _history != null and _party_adv != null and _party_adv.has_method("member_def_for_adv"):
+					var md_hist3: Dictionary = _party_adv.call("member_def_for_adv", int(e.get("adv_id", 0))) as Dictionary
+					var pid_hist3 := int(md_hist3.get("profile_id", 0))
+					if pid_hist3 != 0:
+						_history.record_dialogue(pid_hist3, text, "party", ["flee"])
 			else:
 				DbgLog.throttle(
 					"bubble_missing_flee:%d" % int(e.get("adv_id", 0)),
@@ -965,6 +1085,18 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 				var stolen: Array = steal_evt.get("stolen", [])
 				if not stolen.is_empty():
 					DbgLog.info("Theft room_id=%d party=%d stolen=%d" % [room_id, party_id, stolen.size()], "theft")
+					# Log loot pickup to History (attribute to one party member)
+					if _history != null:
+						var rep_adv_id := 0
+						for a_pick in _adventurers:
+							if is_instance_valid(a_pick) and int(a_pick.get("party_id")) == party_id:
+								rep_adv_id = int(a_pick.get_instance_id())
+								break
+						if rep_adv_id != 0 and _party_adv != null and _party_adv.has_method("member_def_for_adv"):
+							var md_pick: Dictionary = _party_adv.call("member_def_for_adv", rep_adv_id) as Dictionary
+							var pid_pick := int(md_pick.get("profile_id", 0))
+							if pid_pick != 0:
+								_history.record_loot(pid_pick, stolen, 0, "room:%d" % room_id)
 					# Ability trigger: notify LootGathered for the whole party.
 					if _ability_system != null:
 						var ids2: Array[int] = []
@@ -987,6 +1119,18 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 			if _ability_system != null:
 				_ability_system.on_flee(aid_exit)
 			_party_adv.on_adv_exited(aid_exit)
+			# History: record exit reason and possibly schedule return.
+			if _history != null:
+				var took_any_damage := false
+				var hp_now := int(adv.get("hp"))
+				var hp_max := int(adv.get("hp_max"))
+				if hp_max > 0 and hp_now < hp_max:
+					took_any_damage = true
+				var reason := "flee" if took_any_damage else "exit"
+				var di3 := 1
+				if GameState != null and "day_index" in GameState:
+					di3 = int(GameState.get("day_index"))
+				_history.record_adv_exit(aid_exit, reason, di3)
 			_remove_adv_from_tracking(aid_exit)
 			adv.queue_free()
 			return

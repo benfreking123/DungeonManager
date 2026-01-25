@@ -1013,3 +1013,12 @@ func _remove_adv_from_party(adv_id: int) -> void:
 		if st != null:
 			st.member_ids = _to_int_array(arr)
 			st.leader_adv_id = int(st.member_ids[0]) if not st.member_ids.is_empty() else 0
+
+
+# History/tooltip helpers
+func member_def_for_adv(adv_id: int) -> Dictionary:
+	var aid := int(adv_id)
+	var mid := int(_adv_to_member_id.get(aid, 0))
+	if mid == 0:
+		return {}
+	return _member_defs.get(mid, {}) as Dictionary

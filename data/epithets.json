@@ -1,0 +1,20 @@
+{
+  "rules": [
+    { "weight": 3, "match": { "class_id": "warrior" }, "values": ["the Brave", "Ironheart", "Oathbound", "the Stalwart", "Stonefist", "Bladekeeper"] },
+    { "weight": 3, "match": { "class_id": "mage" }, "values": ["Spellweaver", "Coldbright", "Stormcaller", "Runesworn", "the Luminous"] },
+    { "weight": 3, "match": { "class_id": "priest" }, "values": ["Lightbearer", "Vowkeeper", "the Devout", "Dawnhand", "Merciful"] },
+    { "weight": 3, "match": { "class_id": "rogue" }, "values": ["Quickstep", "Shadowhand", "Lockwhisper", "Nightfoot", "the Wary"] },
+
+    { "weight": 2, "match": { "fled": true }, "values": ["the Wary", "the Unlucky", "Backtracker", "Scar-sure"] },
+    { "weight": 2, "match": { "returnee": true }, "values": ["Revenant", "Twice-bold", "Redawned"] },
+
+    { "weight": 1, "match": { "*": true }, "values": ["Stoneborn", "Swiftwind", "Grimsmile", "Truegrip", "Brightstride", "Ashmarked"] }
+  ]
+}
+{
+  "rules": [
+    { "weight": 3, "match": { "class_id": "warrior" }, "values": ["the Brave", "the Cautious", "Ironheart"] },
+    { "weight": 2, "match": { "fled": true }, "values": ["the Wary", "the Unlucky"] },
+    { "weight": 1, "match": { "*": true }, "values": ["Quickstep", "Shadowhand", "the Stalwart"] }
+  ]
+}

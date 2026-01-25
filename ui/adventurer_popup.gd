@@ -68,11 +68,27 @@ func _refresh() -> void:
 	var hp_max := int(data.get("hp_max", 0))
 	var dmg := int(data.get("attack_damage", 0))
 	var moral_lbl := String(data.get("morality_label", ""))
+	var name := String(data.get("name", ""))
+	var epithet := String(data.get("epithet", ""))
+	var origin := String(data.get("origin", ""))
+	var bio := String(data.get("bio", ""))
 
-	_title.text = "%s" % (class_id if class_id != "" else "Adventurer")
-	_line1.text = "Party %d" % party_id if party_id != 0 else ""
+	# Title prefers identity if present, else class.
+	if name != "":
+		_title.text = name + ((" " + epithet) if epithet != "" else "")
+	else:
+		_title.text = "%s" % (class_id if class_id != "" else "Adventurer")
+	# Line 1: class and origin, or party fallback.
+	if class_id != "" and origin != "":
+		_line1.text = "%s from %s" % [class_id, origin]
+	elif party_id != 0:
+		_line1.text = "Party %d" % party_id
 	_line2.text = "HP %d/%d   DMG %d" % [hp, hp_max, dmg]
-	_line3.text = "Morality: %s" % moral_lbl if moral_lbl != "" else ""
+	# Line 3: show bio/background if present; else fall back to morality.
+	if bio != "":
+		_line3.text = bio
+	elif moral_lbl != "":
+		_line3.text = "Morality: %s" % moral_lbl
 
 	var goals: Array = data.get("top_goals", []) as Array
 	if goals.is_empty():

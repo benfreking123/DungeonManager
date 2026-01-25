@@ -90,3 +90,17 @@ const TREASURE_ID_BY_CLASS := {
 func treasure_id_for_class(class_id: String) -> String:
 	# Base treasure never drops right now. Unknown/empty class ids drop nothing.
 	return String(TREASURE_ID_BY_CLASS.get(class_id, ""))
+
+
+# === History/Identity configuration ===
+# Days after a flee that a returnee will be scheduled for by default.
+const RETURN_DAYS: int = 2
+# Default return buffs applied to scheduled returnees (merged additively).
+const RETURN_BUFFS := { "hp_bonus": 2 }
+# Data directories/files (res:// maps to project root).
+const NAME_CONFIG_DIR: String = "res://data/names/"
+const BIO_TEMPLATES_PATH: String = "res://data/bio_templates.json"
+const EPITHETS_PATH: String = "res://data/epithets.json"
+const DIALOGUE_CONFIG_PATH: String = "res://data/dialogue_rules.json"
+# Max in-memory history entries (session-only).
+const HISTORY_MAX_ENTRIES: int = 500

@@ -1,0 +1,15 @@
+{
+  "cultures": {
+    "common": {
+      "male": ["Alaric", "Borin", "Garin", "Cedric", "Darin", "Harlan", "Lucan", "Marek", "Oren", "Theron"],
+      "female": ["Eira", "Lysa", "Mira", "Talia", "Kara", "Nadia", "Rhea", "Sylvi", "Vera", "Yara"],
+      "unisex": ["Rowan", "Ash", "Kier", "Vale", "Kestrel", "Arin", "Sable", "Riven", "Quill", "Storm"],
+      "surnames": ["Stonehand", "Northwind", "Quickstep", "Ironheart", "Ashdown", "Briar", "Greyford", "Westvale", "Stormfell", "Shadowmere"]
+    }
+  },
+  "syllables": {
+    "prefix": ["El", "An", "Ka"],
+    "mid": ["ri", "va", "dor"],
+    "suffix": ["an", "iel", "os"]
+  }
+}

@@ -503,6 +503,10 @@ layout_mode = 2
 layout_mode = 2
 text = "Start Day"
 
+[node name="HistoryButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2"]
+layout_mode = 2
+text = "History (H)"
+
 [node name="Spacer" type="Control" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 

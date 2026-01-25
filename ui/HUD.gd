@@ -36,6 +36,8 @@ var _popup_layer: CanvasLayer = null
 var _shop: Control = null
 var _shop_layer: CanvasLayer = null
 var _room_inventory_panel: Control = null
+var _history_panel: PanelContainer = null
+var _history_button: Button = null
 
 # Cache original mouse_filters for temporary shop interaction gating.
 var _topbar_mouse_filter: Control.MouseFilter = Control.MOUSE_FILTER_STOP
@@ -71,8 +73,10 @@ func _ready() -> void:
 	_resolve_dungeon_view()
 	_resolve_room_popup()
 	_resolve_adventurer_popup()
+	_resolve_history_panel()
 	_connect_room_popup()
 	_connect_adventurer_popup()
+	_connect_history_button()
 	_connect_placement_hint()
 	_resolve_shop()
 	_resolve_room_inventory_panel()
@@ -86,6 +90,8 @@ func _ready() -> void:
 		day_button.pressed.connect(_on_action_pressed)
 	if shop_button != null:
 		shop_button.pressed.connect(_on_shop_pressed)
+	if _history_button != null:
+		_history_button.pressed.connect(_on_history_pressed)
 	_simulation.day_ended.connect(_on_day_ended)
 	if _simulation.has_signal("boss_killed"):
 		_simulation.connect("boss_killed", Callable(self, "_on_boss_killed"))
@@ -176,6 +182,8 @@ func _resolve_topbar_nodes() -> void:
 		if day_button == null:
 			# Legacy layout
 			day_button = get_node_or_null("TopBar/HBox/DayButton") as Button
+	# History button (optional)
+	_history_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2/HistoryButton") as Button
 	if speed_1x == null:
 		# New HUD layout (right-side speed row)
 		speed_1x = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2/Speed1x") as Button
@@ -569,6 +577,28 @@ func _resolve_adventurer_popup() -> void:
 		_adventurer_popup = inst
 
 
+func _resolve_history_panel() -> void:
+	if _popup_layer == null:
+		_popup_layer = get_node_or_null("PopupLayer") as CanvasLayer
+		if _popup_layer == null:
+			_popup_layer = CanvasLayer.new()
+			_popup_layer.name = "PopupLayer"
+			_popup_layer.layer = 100
+			add_child(_popup_layer)
+	_history_panel = get_node_or_null("TownHistoryPanel") as PanelContainer
+	if _history_panel == null:
+		var scene: PackedScene = load("res://ui/TownHistoryPanel.tscn")
+		if scene == null:
+			DbgLog.warn("Failed to load TownHistoryPanel.tscn", "ui")
+			return
+		var inst := scene.instantiate() as PanelContainer
+		_popup_layer.add_child(inst)
+		inst.name = "TownHistoryPanel"
+		inst.z_as_relative = false
+		inst.z_index = 4096
+		_history_panel = inst
+
+
 func _connect_room_popup() -> void:
 	if _dungeon_view == null or _room_popup == null:
 		return
@@ -581,6 +611,11 @@ func _connect_adventurer_popup() -> void:
 		return
 	if _simulation.has_signal("adventurer_right_clicked"):
 		_simulation.connect("adventurer_right_clicked", Callable(self, "_on_adventurer_right_clicked"))
+
+
+func _connect_history_button() -> void:
+	if _history_button != null:
+		_history_button.pressed.connect(_on_history_pressed)
 
 
 func _on_room_clicked(room_id: int, screen_pos: Vector2) -> void:
@@ -803,6 +838,14 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# Toggle History panel with H key
+	if event is InputEventKey:
+		var k2 := event as InputEventKey
+		if k2.pressed and k2.keycode == KEY_H:
+			_on_history_pressed()
+			get_viewport().set_input_as_handled()
+			return
+
 
 func _unhandled_input(_event: InputEvent) -> void:
 	# (no-op) kept for future unhandled-only behaviors.
@@ -867,6 +910,17 @@ func _on_boss_killed() -> void:
 	_simulation.call_deferred("end_day", "loss")
 	if _game_over != null:
 		_game_over.visible = true
+
+
+func _on_history_pressed() -> void:
+	if _history_panel == null:
+		_resolve_history_panel()
+	if _history_panel == null:
+		return
+	if _history_panel.has_method("toggle"):
+		_history_panel.call("toggle")
+	else:
+		_history_panel.visible = not _history_panel.visible
 
 
 func _restart_game() -> void:

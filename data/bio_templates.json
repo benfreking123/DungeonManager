@@ -1,0 +1,44 @@
+[
+  { "weight": 3, "template": "A veteran {class_id} from {origin} who once fled a dragon.", "when": { "fled": true } },
+  { "weight": 2, "template": "An ambitious {class_id} famed for {kills} monster kills.", "when": { "kills": 5 } },
+  { "weight": 2, "template": "Returned to the dungeon after a narrow escape.", "when": { "returnee": true } },
+  { "weight": 2, "template": "A {class_id} from {origin} who keeps maps of every room entered.", "when": { "*": true } },
+  { "weight": 2, "template": "A stoic {class_id} from {origin} who speaks little and strikes fast.", "when": { "*": true } },
+  { "weight": 2, "template": "A curious {class_id} from {origin} always poking at traps and levers.", "when": { "*": true } },
+  { "weight": 2, "template": "Once a caravan guard in {origin}, now a dungeon delver by choice.", "when": { "*": true } },
+  { "weight": 2, "template": "A soft‑spoken {class_id} from {origin} with a sharp eye for treasure.", "when": { "*": true } },
+  { "weight": 2, "template": "A superstitious {class_id} from {origin} who counts steps between rooms.", "when": { "*": true } },
+  { "weight": 2, "template": "A methodical {class_id} from {origin} who notes every monster type.", "when": { "*": true } },
+
+  { "weight": 2, "template": "A hardened warrior from {origin} who never backs down.", "when": { "class_id": "warrior" } },
+  { "weight": 2, "template": "A sword-for-hire from {origin}, loyal to gold and comrades.", "when": { "class_id": "warrior" } },
+  { "weight": 2, "template": "A scholar of ice and flame, trained in {origin}'s arcane halls.", "when": { "class_id": "mage" } },
+  { "weight": 2, "template": "A prodigy mage from {origin}, fascinated by dungeon anomalies.", "when": { "class_id": "mage" } },
+  { "weight": 2, "template": "A devoted healer from {origin} who vows to bring everyone home.", "when": { "class_id": "priest" } },
+  { "weight": 2, "template": "A pilgrim from {origin} whose faith hardens in the dark.", "when": { "class_id": "priest" } },
+  { "weight": 2, "template": "A nimble rogue from {origin} who trusts shadows more than words.", "when": { "class_id": "rogue" } },
+  { "weight": 2, "template": "A locksmith from {origin} who calls traps 'puzzles with teeth.'", "when": { "class_id": "rogue" } },
+
+  { "weight": 1, "template": "A weary {class_id} from {origin} who lost friends in the depths.", "when": { "*": true } },
+  { "weight": 1, "template": "A hopeful {class_id} from {origin} dreaming of a life after riches.", "when": { "*": true } },
+  { "weight": 1, "template": "A pragmatic {class_id} from {origin} who keeps count of coin and wounds.", "when": { "*": true } },
+  { "weight": 1, "template": "A restless {class_id} from {origin} always first through doorways.", "when": { "*": true } },
+  { "weight": 1, "template": "A meticulous {class_id} from {origin} who sharpens blades between rooms.", "when": { "*": true } },
+  { "weight": 1, "template": "A cheerful {class_id} from {origin} who whistles to keep fear away.", "when": { "*": true } },
+  { "weight": 1, "template": "A brooding {class_id} from {origin} who speaks of old debts and older scars.", "when": { "*": true } },
+  { "weight": 1, "template": "A cautious {class_id} from {origin} who taps every tile before stepping.", "when": { "*": true } },
+  { "weight": 1, "template": "A bold {class_id} from {origin} who believes luck is a skill.", "when": { "*": true } },
+  { "weight": 1, "template": "A wandering {class_id} from {origin} guided by rumors of buried halls.", "when": { "*": true } },
+
+  { "weight": 1, "template": "Left {origin} chasing a story; found a dungeon that answers back.", "when": { "*": true } },
+  { "weight": 1, "template": "Says the dungeon changes nightly; keeps a different map each day.", "when": { "*": true } },
+  { "weight": 1, "template": "Keeps a tally of monsters felled and friends saved—both matter.", "when": { "*": true } },
+  { "weight": 1, "template": "Carries a lucky coin from {origin}; swears it warms near treasure.", "when": { "*": true } },
+  { "weight": 1, "template": "Swore to retire after one more haul. It’s always one more haul.", "when": { "*": true } }
+]
+[
+  { "weight": 3, "template": "A veteran {class_id} from {origin} who once fled a dragon.", "when": { "fled": true } },
+  { "weight": 2, "template": "An ambitious {class_id} famed for {kills} monster kills.", "when": { "kills_min": 5 } },
+  { "weight": 1, "template": "A former caravan guard from {origin} chasing fortune." },
+  { "weight": 2, "template": "Returned to the dungeon after a narrow escape.", "when": { "returnee": true } }
+]

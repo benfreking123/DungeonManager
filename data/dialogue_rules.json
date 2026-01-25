@@ -1,0 +1,17 @@
+{
+  "rules": [
+    { "when": { "event": "return_spawn", "returnee": true }, "weight": 3, "values": ["I'm back for revenge.", "This time, I won't run.", "The dungeon owes me blood."], "tags": ["returnee","spawn"] },
+    { "when": { "event": "flee_exit", "fled": true }, "weight": 2, "values": ["Not today.", "Live to fight another day."], "tags": ["flee","exit"] },
+    { "when": { "event": "boss_sighted" }, "weight": 2, "values": ["There you are.", "Face me!"], "tags": ["boss","combat"] },
+    { "when": { "event": "party_intent", "intent": "explore" }, "weight": 2, "values": ["Let's explore the dungeon.", "Keep your eyes open.", "Scout ahead—quietly."] , "tags": ["party_intent","explore"] },
+    { "when": { "event": "party_intent", "intent": "loot" }, "weight": 2, "values": ["I smell treasure nearby.", "Let's grab what we can.", "Shiny things first."], "tags": ["party_intent","loot"] },
+    { "when": { "event": "party_intent", "intent": "boss" }, "weight": 2, "values": ["Straight to the boss.", "I want to kill the boss.", "No detours—boss now."], "tags": ["party_intent","boss"] },
+    { "when": { "event": "defect" }, "weight": 2, "values": ["I'm done following.", "You're going the wrong way.", "I'll take my chances alone."], "tags": ["defect"] },
+    { "when": { "*": true }, "weight": 1, "values": ["Let's move.", "Eyes open.", "Keep moving.", "Stay sharp.", "Quiet now."], "tags": ["generic"] }
+  ]
+}
+{
+  "returnee": [
+    { "weight": 2, "when": { "*": true }, "values": ["I'm back for revenge.", "That boss owes me a scar.", "Round two."] }
+  ]
+}
