@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://ui/RoomInventoryPanel.gd" id="1_7rpiq"]
 [ext_resource type="StyleBox" uid="uid://c7ba4tn1pq3ji" path="res://assets/StyleBoxes/TabButtonNormal.tres" id="2_ntnd8"]
-[ext_resource type="StyleBox" path="res://assets/StyleBoxes/TabButtonPressed.tres" id="3_tab_pressed"]
+[ext_resource type="StyleBox" uid="uid://bieahxsyma2t8" path="res://assets/StyleBoxes/TabButtonPressed.tres" id="3_tab_pressed"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nej53"]
 content_margin_left = 2.0

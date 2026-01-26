@@ -36,9 +36,3 @@
   { "weight": 1, "template": "Carries a lucky coin from {origin}; swears it warms near treasure.", "when": { "*": true } },
   { "weight": 1, "template": "Swore to retire after one more haul. It’s always one more haul.", "when": { "*": true } }
 ]
-[
-  { "weight": 3, "template": "A veteran {class_id} from {origin} who once fled a dragon.", "when": { "fled": true } },
-  { "weight": 2, "template": "An ambitious {class_id} famed for {kills} monster kills.", "when": { "kills_min": 5 } },
-  { "weight": 1, "template": "A former caravan guard from {origin} chasing fortune." },
-  { "weight": 2, "template": "Returned to the dungeon after a narrow escape.", "when": { "returnee": true } }
-]

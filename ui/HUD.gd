@@ -30,6 +30,7 @@ var _world_canvas: Control = null
 var _dungeon_view: Node = null
 var _frame_paper_base: TextureRect = null
 var _town_texture: TextureRect = null
+var _town_view: Control = null
 var _room_popup: PanelContainer = null
 var _adventurer_popup: PanelContainer = null
 var _popup_layer: CanvasLayer = null
@@ -66,6 +67,7 @@ func _ready() -> void:
 	_resolve_setup_warning()
 	_resolve_setup_warning_popup()
 	_resolve_world_nodes()
+	_resolve_town_view()
 	_apply_paper_theme()
 	_layout_paper_fx()
 	resized.connect(_layout_paper_fx)
@@ -77,6 +79,7 @@ func _ready() -> void:
 	_connect_room_popup()
 	_connect_adventurer_popup()
 	_connect_history_button()
+	_connect_town_view()
 	_connect_placement_hint()
 	_resolve_shop()
 	_resolve_room_inventory_panel()
@@ -90,8 +93,6 @@ func _ready() -> void:
 		day_button.pressed.connect(_on_action_pressed)
 	if shop_button != null:
 		shop_button.pressed.connect(_on_shop_pressed)
-	if _history_button != null:
-		_history_button.pressed.connect(_on_history_pressed)
 	_simulation.day_ended.connect(_on_day_ended)
 	if _simulation.has_signal("boss_killed"):
 		_simulation.connect("boss_killed", Callable(self, "_on_boss_killed"))
@@ -184,6 +185,8 @@ func _resolve_topbar_nodes() -> void:
 			day_button = get_node_or_null("TopBar/HBox/DayButton") as Button
 	# History button (optional)
 	_history_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2/HistoryButton") as Button
+	if _history_button == null:
+		_history_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer3/HistoryButton") as Button
 	if speed_1x == null:
 		# New HUD layout (right-side speed row)
 		speed_1x = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer2/Speed1x") as Button
@@ -494,11 +497,11 @@ func _maybe_open_shop_for_phase(new_phase: int) -> void:
 	# Pause time while shopping.
 	GameState.set_speed(0.0)
 	# Deterministic seeded offers per night.
-	var seed := 0
+	var shop_seed := 0
 	if _simulation != null and _simulation.has_method("get_shop_seed"):
-		seed = int(_simulation.call("get_shop_seed"))
+		shop_seed = int(_simulation.call("get_shop_seed"))
 	if _shop.has_method("open_with_seed"):
-		_shop.call("open_with_seed", seed)
+		_shop.call("open_with_seed", shop_seed)
 	else:
 		_shop.call("open")
 
@@ -616,6 +619,30 @@ func _connect_adventurer_popup() -> void:
 func _connect_history_button() -> void:
 	if _history_button != null:
 		_history_button.pressed.connect(_on_history_pressed)
+
+
+func _resolve_town_view() -> void:
+	var paths := [
+		"VBoxContainer/HBoxContainer/DungeonFrame/FrameLayer/Dungeon/WorldFrame/WorldCanvas/Town/TownView",
+		"Body/DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView",
+		"DungeonFrame/Dungeon/WorldFrame/WorldCanvas/Town/TownView",
+	]
+	_town_view = null
+	for p in paths:
+		var n := get_node_or_null(p) as Control
+		if n != null:
+			_town_view = n
+			return
+
+
+func _connect_town_view() -> void:
+	if _town_view == null:
+		return
+	if not _town_view.has_signal("town_icon_clicked"):
+		return
+	var cb := Callable(self, "_on_history_pressed")
+	if not _town_view.is_connected("town_icon_clicked", cb):
+		_town_view.connect("town_icon_clicked", cb)
 
 
 func _on_room_clicked(room_id: int, screen_pos: Vector2) -> void:
@@ -745,12 +772,12 @@ func _input(event: InputEvent) -> void:
 	var mouse_global: Vector2 = get_viewport().get_mouse_position()
 	var over_world: bool = _world_frame.get_global_rect().has_point(mouse_global)
 
-	# DAY-only: right-click an adventurer to open its tooltip.
+	# Right-click an adventurer to open its tooltip.
 	# We do this at the HUD level because Control mouse capture can prevent Area2D input events.
 	if event is InputEventMouseButton:
 		var mb_adv := event as InputEventMouseButton
 		if mb_adv.button_index == MOUSE_BUTTON_RIGHT and mb_adv.pressed:
-			if GameState != null and GameState.phase == GameState.Phase.DAY and over_world and _simulation != null:
+			if GameState != null and (GameState.phase == GameState.Phase.DAY or GameState.phase == GameState.Phase.BUILD) and over_world and _simulation != null:
 				if _simulation.has_method("find_adventurer_at_screen_pos"):
 					var adv_id := int(_simulation.call("find_adventurer_at_screen_pos", mouse_global, 16.0))
 					if adv_id != 0:

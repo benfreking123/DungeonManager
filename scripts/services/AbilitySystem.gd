@@ -24,6 +24,18 @@ func setup(simulation: Node, grid: Node, day_seed: int) -> void:
 	_state_by_adv.clear()
 
 
+func get_ability_def(ability_id: String) -> Ability:
+	# Read-only helper for UI/tooltips.
+	if _abilities_by_id.is_empty():
+		_load_abilities()
+	return _abilities_by_id.get(String(ability_id), null) as Ability
+
+
+func get_adv_ability_state(adv_id: int) -> Dictionary:
+	# Read-only helper for UI/tooltips.
+	return _state_by_adv.get(int(adv_id), {}) as Dictionary
+
+
 func register_adv_ability(adv: Node2D, ability_id: String, charges_per_day: int) -> void:
 	if adv == null or not is_instance_valid(adv):
 		return

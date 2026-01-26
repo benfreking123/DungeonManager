@@ -55,6 +55,12 @@ var _names_data: Dictionary = {}
 var _bio_templates: Array = []
 var _epithet_rules: Dictionary = {}
 
+func _looks_like_generic_fallback_bio(bio: String) -> bool:
+	bio = String(bio).strip_edges()
+	# Our hard-coded fallback is: "A %s seeking fortune." % class_id
+	# If templates failed to load previously, profiles may have cached this placeholder forever.
+	return bio.begins_with("A ") and bio.ends_with(" seeking fortune.")
+
 func reset_session(history_cap: int = 500) -> void:
 	_profiles_by_id.clear()
 	_next_profile_id = 1
@@ -203,16 +209,12 @@ func attach_profiles_for_new_members(gen: Dictionary, day: int) -> void:
 		md["epithet"] = String(p.get("epithet", ""))
 		md["origin"] = String(p.get("origin", ""))
 		var bio_str: String = String(p.get("bio", ""))
-		# If bio looks empty or fallback, attempt a regenerate one time now that origin/name are present.
+		# If bio looks empty or placeholder fallback, regenerate now that we know class+origin.
 		var class_id := String(md.get("class_id", "adventurer"))
-		var fallback_str := "A %s seeking fortune." % class_id
-		if bio_str == "" or bio_str == fallback_str:
+		if bio_str == "" or _looks_like_generic_fallback_bio(bio_str):
 			_load_bios() # ensure latest
-			var md_tokens := {
-				"class_id": class_id,
-				"origin": String(p.get("origin", "unknown")),
-			}
-			var regen := _generate_bio(md_tokens, false)
+			var md_tokens := { "class_id": class_id, "origin": String(p.get("origin", "unknown")) }
+			var regen := _generate_bio(md_tokens, bool(md.get("returnee", false)))
 			if regen != "":
 				bio_str = regen
 				# Store back into profile for future days
@@ -228,6 +230,40 @@ func attach_profiles_for_new_members(gen: Dictionary, day: int) -> void:
 		mdefs[mid] = md
 	gen["member_defs"] = mdefs
 	_record_event({ "day": int(day), "type": TYPE_DAY_CHANGE, "payload": { "phase": "start" } })
+
+
+func attach_profiles_for_new_members_preview(gen: Dictionary) -> void:
+	# Like `attach_profiles_for_new_members`, but does NOT record day-change history.
+	# Used for BUILD-phase preview so tooltips can show names/bios before the day starts.
+	_ensure_config_loaded()
+	_member_to_profile_id.clear()
+	var mdefs: Dictionary = gen.get("member_defs", {}) as Dictionary
+	for k in mdefs.keys():
+		var mid := int(k)
+		var md := mdefs.get(k, {}) as Dictionary
+		var pid := get_or_create_profile(md)
+		_member_to_profile_id[mid] = pid
+		var p: Dictionary = _profiles_by_id.get(pid, {}) as Dictionary
+		md["profile_id"] = pid
+		md["name"] = String(p.get("name", ""))
+		md["epithet"] = String(p.get("epithet", ""))
+		md["origin"] = String(p.get("origin", ""))
+		var bio_str: String = String(p.get("bio", ""))
+		# If bio looks empty or placeholder fallback, regenerate now that we know class+origin.
+		var class_id := String(md.get("class_id", "adventurer"))
+		if bio_str == "" or _looks_like_generic_fallback_bio(bio_str):
+			_load_bios() # ensure latest
+			var md_tokens := { "class_id": class_id, "origin": String(p.get("origin", "unknown")) }
+			var regen := _generate_bio(md_tokens, bool(md.get("returnee", false)))
+			if regen != "":
+				bio_str = regen
+				# Store back into profile for future days
+				var prof := _profiles_by_id[pid] as Dictionary
+				prof["bio"] = bio_str
+				_profiles_by_id[pid] = prof
+		md["bio"] = bio_str
+		mdefs[mid] = md
+	gen["member_defs"] = mdefs
 
 
 func record_adv_exit(adv_id: int, reason: String, day: int) -> void:
@@ -298,8 +334,16 @@ func inject_returns_into_generation(gen: Dictionary, day: int, cfg: Object) -> v
 			"name": String(prof.get("name", "")),
 			"epithet": String(prof.get("epithet", "")),
 			"origin": String(prof.get("origin", "")),
-			"bio": String(prof.get("bio", "")),
+			"bio": "",
 		}
+		var bio_str := String(prof.get("bio", ""))
+		if bio_str == "" or _looks_like_generic_fallback_bio(bio_str):
+			var regen := _generate_bio({ "class_id": String(md.get("class_id")), "origin": String(md.get("origin", "unknown")) }, true)
+			if regen != "":
+				bio_str = regen
+				prof["bio"] = bio_str
+				_profiles_by_id[pid] = prof
+		md["bio"] = bio_str
 		md = apply_returnee_buffs(md, r.get("buffPlan", {}) as Dictionary)
 		var mid := next_member_id
 		next_member_id += 1
@@ -516,10 +560,10 @@ func _generate_name_and_epithet(member_def: Dictionary) -> Dictionary:
 
 
 func _generate_bio(member_def: Dictionary, returnee: bool) -> String:
-	var class_id := String(member_def.get("class_id", "adventurer"))
+	var class_id := str(member_def.get("class_id", "adventurer"))
 	var tokens := {
 		"class_id": class_id,
-		"origin": String(member_def.get("origin", "unknown")),
+		"origin": str(member_def.get("origin", "unknown")),
 		"fled": false,
 		"returnee": bool(returnee),
 		"kills": 0,
@@ -549,11 +593,11 @@ func _generate_bio(member_def: Dictionary, returnee: bool) -> String:
 			for d3 in pool:
 				acc += int((d3 as Dictionary).get("weight", 1))
 				if pick < acc:
-					templ = String((d3 as Dictionary).get("template", ""))
+					templ = str((d3 as Dictionary).get("template", ""))
 					break
 			for k in tokens.keys():
-				var key := String(k)
-				templ = templ.replace("{%s}" % key, String(tokens[key]))
+				var key := str(k)
+				templ = templ.replace("{%s}" % key, str(tokens.get(key, "")))
 			if templ != "":
 				if Engine.has_singleton("DbgLog"):
 					DbgLog.throttle(
@@ -579,7 +623,7 @@ func _tokens_match(tokens: Dictionary, cond: Dictionary) -> bool:
 	if cond.is_empty():
 		return true
 	for k in cond.keys():
-		var kk := String(k)
+		var kk := str(k)
 		if kk == "*":
 			return true
 		var want: Variant = cond[k]
@@ -591,7 +635,10 @@ func _tokens_match(tokens: Dictionary, cond: Dictionary) -> bool:
 			if int(have) < int(want):
 				return false
 		else:
-			if String(have) != String(want):
+			# Some tokens may be missing; avoid casting null via String(...)
+			if have == null:
+				return false
+			if str(have) != str(want):
 				return false
 	return true
 

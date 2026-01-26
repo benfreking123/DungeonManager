@@ -83,6 +83,7 @@ var _party_spawn_index: int = 0
 var _party_spawn_ctx: Dictionary = {}
 
 var _adv_scene: PackedScene = preload("res://scenes/Adventurer.tscn")
+var _surface_preview: SurfacePreviewSystem = null
 
 var _loot_system: RefCounted
 var _trap_system: RefCounted
@@ -93,6 +94,7 @@ var _monster_roster: RefCounted
 var _last_day_seed: int = 0
 var _shop_seed: int = 0
 var _end_day_reason: String = "success" # "success" or "loss"
+var _phase_hooked: bool = false
 
 
 func set_views(town_view: Control, dungeon_view: Control) -> void:
@@ -146,6 +148,63 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	if not boss_killed.is_connected(cb):
 		boss_killed.connect(cb)
 
+	# Build-phase preview system (owned by Simulation).
+	if _surface_preview == null:
+		_surface_preview = preload("res://scripts/systems/SurfacePreviewSystem.gd").new() as SurfacePreviewSystem
+	_surface_preview.setup(self, _town_view, _dungeon_view, _world_canvas, _adv_scene, _item_db)
+	_hook_phase_changed()
+	# Defer one frame so TownView has a valid size/global rect for spawn placement.
+	call_deferred("_maybe_prepare_next_day_preview")
+
+
+func _hook_phase_changed() -> void:
+	if _phase_hooked:
+		return
+	if GameState == null or not GameState.has_signal("phase_changed"):
+		return
+	var cb := Callable(self, "_on_phase_changed")
+	if not GameState.phase_changed.is_connected(cb):
+		GameState.phase_changed.connect(cb)
+	_phase_hooked = true
+
+
+func _on_phase_changed(new_phase: int) -> void:
+	if GameState == null:
+		return
+	if int(new_phase) == int(GameState.Phase.BUILD):
+		# Defer so UI/layout settles before we compute town spawn positions.
+		call_deferred("_maybe_prepare_next_day_preview")
+	elif int(new_phase) == int(GameState.Phase.SHOP) or int(new_phase) == int(GameState.Phase.RESULTS):
+		# Never show preview outside BUILD; also ensures stale preview doesn't linger.
+		if _surface_preview != null:
+			_surface_preview.clear()
+
+
+func _maybe_prepare_next_day_preview() -> void:
+	# Only meaningful when we can also display the town surface.
+	if GameState == null or int(GameState.phase) != int(GameState.Phase.BUILD):
+		return
+	if _town_view == null or _dungeon_view == null:
+		return
+	# On first scene load, Control sizes can be 0 for one frame; defer until stable.
+	if _town_view is Control:
+		var sz := (_town_view as Control).size
+		if sz.x < 10.0 or sz.y < 10.0:
+			call_deferred("_maybe_prepare_next_day_preview")
+			return
+	var di := int(GameState.get("day_index")) if ("day_index" in GameState) else 1
+	if di <= 0:
+		di = 1
+	var cfg := get_node_or_null("/root/game_config")
+	var goals_cfg := get_node_or_null("/root/config_goals")
+	if goals_cfg == null:
+		goals_cfg = preload("res://autoloads/config_goals.gd").new()
+	if _surface_preview != null:
+		_surface_preview.maybe_prepare_for_build(di, _strength_service, _party_gen, cfg, goals_cfg, _history)
+		# If the service couldn't prepare yet (layout not ready), retry next frame.
+		if _surface_preview.cached_gen_day_index() != di or _surface_preview.cached_gen().is_empty():
+			call_deferred("_maybe_prepare_next_day_preview")
+
 
 func start_day() -> void:
 	if _active:
@@ -162,6 +221,15 @@ func start_day() -> void:
 		if boss_room.is_empty():
 			DbgLog.log("Start day blocked: missing boss room", "game_state")
 			return
+
+	# If we have a cached generation for this day from BUILD preview, prefer it.
+	# (We still generate on-demand if preview didn't run for any reason.)
+	var day_idx0 := 1
+	if GameState != null and "day_index" in GameState:
+		day_idx0 = int(GameState.get("day_index"))
+	var use_cached_gen := false
+	if _surface_preview != null:
+		use_cached_gen = (_surface_preview.cached_gen_day_index() == int(day_idx0) and not _surface_preview.cached_gen().is_empty())
 	_active = true
 	GameState.set_phase(GameState.Phase.DAY)
 	day_started.emit()
@@ -192,24 +260,25 @@ func start_day() -> void:
 		if _strength_service.has_method("compute_strength_s_for_day"):
 			strength_s = int(_strength_service.call("compute_strength_s_for_day", day_idx, cfg))
 	var day_seed := int(Time.get_ticks_usec()) ^ (strength_s * 1103515245)
-	var gen := {}
-	if _party_gen != null:
+	var gen := (_surface_preview.cached_gen() if _surface_preview != null else {}) if use_cached_gen else {}
+	if gen.is_empty() and _party_gen != null:
 		# Determine A (adventurers to spawn today). Default from S if not provided elsewhere.
 		var A_default := clampi(int(round(float(strength_s) / 3.0)), 4, 50)
 		gen = _party_gen.generate_parties(strength_s, cfg, goals_cfg, day_seed, A_default)
 		_log_party_generation(strength_s, gen, A_default, day_seed)
-		# History: attach profiles and inject scheduled returnees BEFORE initializing party/adventure system.
-		if _history != null:
-			var di2 := 1
-			if GameState != null and "day_index" in GameState:
-				di2 = int(GameState.get("day_index"))
-			# Apply history cap from config if present
-			if cfg != null and cfg.has_method("get"):
-				var cap := int(cfg.get("HISTORY_MAX_ENTRIES"))
-				if cap > 0:
-					_history.set_history_cap(cap)
-			_history.attach_profiles_for_new_members(gen, di2)
-			_history.inject_returns_into_generation(gen, di2, cfg)
+
+	# History: attach profiles and inject scheduled returnees BEFORE initializing party/adventure system.
+	if _history != null:
+		var di2 := 1
+		if GameState != null and "day_index" in GameState:
+			di2 = int(GameState.get("day_index"))
+		# Apply history cap from config if present
+		if cfg != null and cfg.has_method("get"):
+			var cap := int(cfg.get("HISTORY_MAX_ENTRIES"))
+			if cap > 0:
+				_history.set_history_cap(cap)
+		_history.attach_profiles_for_new_members(gen, di2)
+		_history.inject_returns_into_generation(gen, di2, cfg)
 	_last_day_seed = int(gen.get("day_seed", day_seed))
 	if _party_adv != null:
 		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, _last_day_seed)
@@ -220,7 +289,11 @@ func start_day() -> void:
 	if GameState != null and "day_index" in GameState:
 		di = int(GameState.get("day_index"))
 	DbgLog.info("Day start: Day=%d StrengthS=%d seed=%d" % [di, strength_s, _last_day_seed], "game_state")
-	_begin_party_spawn(gen)
+	# If preview adventurers were spawned during BUILD, reuse them; otherwise spawn normally.
+	if _surface_preview != null and _surface_preview.has_preview_actors():
+		_begin_party_spawn_from_surface_preview(gen)
+	else:
+		_begin_party_spawn(gen)
 	if _loot_system != null:
 		_loot_system.call("reset")
 	if _trap_system != null:
@@ -377,6 +450,8 @@ func get_history_events() -> Array:
 
 func _process(delta: float) -> void:
 	if not _active:
+		if _surface_preview != null and GameState != null and int(GameState.phase) == int(GameState.Phase.BUILD):
+			_surface_preview.tick(delta, float(GameState.get("speed")) if ("speed" in GameState) else 1.0)
 		return
 	var dt: float = delta * GameState.speed
 
@@ -514,6 +589,93 @@ func _begin_party_spawn(gen: Dictionary) -> void:
 	_party_spawn_index = 0
 
 
+func _begin_party_spawn_from_surface_preview(gen: Dictionary) -> void:
+	# Reuse BUILD preview actors via SurfacePreviewSystem, and enqueue any missing members for normal spawn.
+	if _surface_preview == null or _dungeon_grid == null or _town_view == null or _dungeon_view == null:
+		_begin_party_spawn(gen)
+		return
+	var plan: Dictionary = _surface_preview.consume_reuse_plan(gen, _dungeon_grid, _path_service, _party_ai, _party_adv)
+	var start_cell: Vector2i = plan.get("start_cell", Vector2i.ZERO) as Vector2i
+	var spawn_world: Vector2 = plan.get("spawn_world", Vector2.ZERO) as Vector2
+	var entrance_world: Vector2 = plan.get("entrance_world", Vector2.ZERO) as Vector2
+	var paths_by_party_id: Dictionary = plan.get("paths_by_party_id", {}) as Dictionary
+	var spawn_queue: Array = plan.get("spawn_queue", []) as Array
+	var reused: Array = plan.get("reused", []) as Array
+
+	if start_cell == Vector2i.ZERO and (spawn_queue.is_empty() and reused.is_empty()):
+		_begin_party_spawn(gen)
+		return
+
+	_party_spawn_ctx = {
+		"spawn_world": spawn_world,
+		"entrance_world": entrance_world,
+		"start_cell": start_cell,
+		"paths_by_party_id": paths_by_party_id,
+	}
+	_spawn_queue.clear()
+	for e0 in spawn_queue:
+		_spawn_queue.append(e0 as Dictionary)
+	_party_spawn_timer = 0.0
+	_party_spawn_index = 0
+
+	for e1 in reused:
+		_activate_reused_preview_adv(e1 as Dictionary, entrance_world, paths_by_party_id)
+
+
+func _activate_reused_preview_adv(entry: Dictionary, entrance_world: Vector2, paths_by_party_id: Dictionary) -> void:
+	if entry.is_empty():
+		return
+	var adv := entry.get("adv", null) as Node2D
+	if adv == null or not is_instance_valid(adv):
+		return
+	var mid := int(entry.get("member_id", 0))
+	var pid := int(entry.get("party_id", 0))
+	var md: Dictionary = entry.get("member_def", {}) as Dictionary
+
+	# Register with party/adventure system now that gen is initialized (applies stat mods and party metadata).
+	if _party_adv != null:
+		_party_adv.register_adventurer(adv, mid)
+		_drain_party_bubble_events()
+	# Abilities (if any)
+	var ability_id := String(md.get("ability_id", ""))
+	if _ability_system != null and ability_id != "":
+		_ability_system.register_adv_ability(adv, ability_id, int(md.get("ability_charges", 1)))
+	# History: map adv_instance to profile_id for subsequent event logging.
+	if _history != null:
+		var prof_id := int(md.get("profile_id", 0))
+		if prof_id != 0:
+			_history.register_adv_profile_mapping(int(adv.get_instance_id()), prof_id)
+
+	# Switch from preview hold to normal surface->dungeon flow.
+	if adv.has_method("set_surface_hold"):
+		adv.call("set_surface_hold", false)
+	adv.set_meta("collision_radius", COLLISION_RADIUS_ADV)
+	adv.set("party_id", pid)
+
+	# Targets: move to entrance, then follow party path.
+	if _world_canvas != null:
+		var inv_wc2: Transform2D = _world_canvas.get_global_transform().affine_inverse()
+		adv.call("set_surface_target_local", inv_wc2 * entrance_world, SURFACE_SPEED)
+	else:
+		adv.call("set_surface_target", entrance_world, SURFACE_SPEED)
+	var path2: Array[Vector2i] = paths_by_party_id.get(pid, []) as Array[Vector2i]
+	adv.call("set_dungeon_targets", _dungeon_view, path2, DUNGEON_SPEED)
+
+	# Wire day runtime callbacks/signals (same as normal spawn).
+	adv.call("set_on_reach_goal", Callable(self, "_on_adventurer_finished").bind(adv))
+	adv.connect("cell_reached", Callable(self, "_on_adventurer_cell_reached").bind(adv))
+	if adv.has_signal("damaged"):
+		adv.connect("damaged", Callable(self, "_on_adventurer_damaged").bind(int(adv.get_instance_id())))
+	if adv.has_signal("died"):
+		adv.connect("died", Callable(self, "_on_adventurer_died").bind(int(adv.get_instance_id())))
+	if adv.has_signal("right_clicked"):
+		adv.connect("right_clicked", Callable(self, "_on_adventurer_right_clicked"))
+
+	_adventurers.append(adv)
+	_track_adv(adv)
+	_adv_was_in_combat[int(adv.get_instance_id())] = false
+
+
 func _tick_party_spawn(dt: float) -> void:
 	if _spawn_queue.is_empty():
 		return
@@ -613,6 +775,10 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 	# Convenience for UI: merge actor runtime stats with PartyAdventureSystem tooltip fields.
 	var out: Dictionary = {}
 	var adv := _find_adv_by_id(int(adv_id))
+	# BUILD preview: adventurers live in SurfacePreviewSystem, not `_adventurers`.
+	var is_build := (GameState != null and int(GameState.phase) == int(GameState.Phase.BUILD))
+	if adv == null and is_build and _surface_preview != null:
+		adv = _surface_preview.preview_actor_by_adv_id(int(adv_id))
 	if adv == null:
 		return {}
 	out["class_id"] = String(adv.get("class_id"))
@@ -620,24 +786,147 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 	out["hp"] = int(adv.get("hp"))
 	out["hp_max"] = int(adv.get("hp_max"))
 	out["attack_damage"] = int(adv.get("attack_damage"))
-	# Identity fields (from member_def via PartyAdventureSystem)
-	if _party_adv != null and _party_adv.has_method("member_def_for_adv"):
-		var md: Dictionary = _party_adv.call("member_def_for_adv", int(adv_id)) as Dictionary
-		if not md.is_empty():
-			out["name"] = String(md.get("name", ""))
-			out["epithet"] = String(md.get("epithet", ""))
-			out["origin"] = String(md.get("origin", ""))
-			out["bio"] = String(md.get("bio", ""))
-	if _party_adv != null and _party_adv.has_method("get_adv_tooltip"):
-		var t: Dictionary = _party_adv.call("get_adv_tooltip", int(adv_id)) as Dictionary
+
+	# BUILD preview: derive tooltip fields from cached generation.
+	if is_build and _surface_preview != null:
+		var goals_cfg := get_node_or_null("/root/config_goals")
+		var t: Dictionary = _surface_preview.get_preview_tooltip_fields(int(adv_id), goals_cfg) as Dictionary
 		for k in t.keys():
 			out[k] = t.get(k)
+	else:
+		# Identity fields (from member_def via PartyAdventureSystem)
+		if _party_adv != null and _party_adv.has_method("member_def_for_adv"):
+			var md: Dictionary = _party_adv.call("member_def_for_adv", int(adv_id)) as Dictionary
+			if not md.is_empty():
+				out["name"] = String(md.get("name", ""))
+				out["epithet"] = String(md.get("epithet", ""))
+				out["origin"] = String(md.get("origin", ""))
+				out["bio"] = String(md.get("bio", ""))
+				# Day-only: include per-day charges from member_def (if present).
+				out["ability_charges"] = int(md.get("ability_charges", 0))
+		if _party_adv != null and _party_adv.has_method("get_adv_tooltip"):
+			var t2: Dictionary = _party_adv.call("get_adv_tooltip", int(adv_id)) as Dictionary
+			for k2 in t2.keys():
+				out[k2] = t2.get(k2)
+
+	# Party size (optional, used by UI)
+	if int(out.get("party_size", 0)) <= 0:
+		var pid := int(out.get("party_id", 0))
+		if pid != 0 and not is_build:
+			var ids := get_party_member_ids(pid)
+			out["party_size"] = (ids.size() if ids != null else 0)
+
+	# Traits: add player-friendly strings
+	var traits: Array = out.get("traits", []) as Array
+	if not traits.is_empty():
+		out["traits_pretty"] = _traits_pretty_lines(traits)
+
+	# Ability: add player-friendly details
+	var ability_id := String(out.get("ability_id", ""))
+	if ability_id != "":
+		var charges_per_day := int(out.get("ability_charges", 0))
+		var charges_left := -1
+		var trigger_name := ""
+		var cooldown_s := 0.0
+		var cast_time_s := 0.0
+		var summary := ""
+
+		var ab: Ability = null
+		if _ability_system != null and _ability_system.has_method("get_ability_def"):
+			ab = _ability_system.call("get_ability_def", ability_id) as Ability
+		if ab != null:
+			trigger_name = String(ab.trigger_name)
+			cooldown_s = float(ab.cooldown_s)
+			cast_time_s = float(ab.cast_time_s)
+			if charges_per_day <= 0:
+				charges_per_day = int(ab.charges_per_day)
+			summary = _ability_summary(ab)
+
+		if _ability_system != null and _ability_system.has_method("get_adv_ability_state"):
+			var st: Dictionary = _ability_system.call("get_adv_ability_state", int(adv_id)) as Dictionary
+			if not st.is_empty():
+				charges_left = int(st.get("charges_left", -1))
+
+		out["ability"] = {
+			"id": ability_id,
+			"name": _title_case_id(ability_id),
+			"trigger": trigger_name,
+			"cooldown_s": cooldown_s,
+			"cast_time_s": cast_time_s,
+			"charges_per_day": charges_per_day,
+			"charges_left": charges_left,
+			"summary": summary,
+		}
 	return out
+
+
+func _traits_pretty_lines(traits: Array) -> Array[String]:
+	var out: Array[String] = []
+	var traits_cfg: Node = load("res://autoloads/traits_config.gd").new()
+	for t0 in traits:
+		var tid := String(t0)
+		if tid == "":
+			continue
+		var d: Dictionary = traits_cfg.get_trait_def(tid) if traits_cfg != null else {}
+		var label := String(d.get("label", tid))
+		var mods: Dictionary = d.get("mods", {}) as Dictionary
+		var parts: Array[String] = []
+		var flat: Dictionary = mods.get("flat", {}) as Dictionary
+		for k in flat.keys():
+			var delta := int(flat.get(k, 0))
+			if delta == 0:
+				continue
+			parts.append("%s %+d" % [String(k), delta])
+		var pct: Dictionary = mods.get("pct", {}) as Dictionary
+		for k2 in pct.keys():
+			var delta2 := int(pct.get(k2, 0))
+			if delta2 == 0:
+				continue
+			parts.append("%s %+d%%" % [String(k2), delta2])
+		out.append(label if parts.is_empty() else ("%s (%s)" % [label, ", ".join(parts)]))
+	return out
+
+
+func _ability_summary(ab: Ability) -> String:
+	if ab == null:
+		return ""
+	var p: Dictionary = ab.params as Dictionary
+	# Common, friendly summaries based on params.
+	if p.has("heal"):
+		return "Heals %d" % int(p.get("heal", 0))
+	if p.has("damage"):
+		var dmg := int(p.get("damage", 0))
+		var r := int(p.get("radius_px", 0))
+		return ("Deals %d in %dpx" % [dmg, r]) if r > 0 else ("Deals %d" % dmg)
+	if p.has("stun_s"):
+		var s := float(p.get("stun_s", 0.0))
+		var r2 := int(p.get("radius_px", 0))
+		return ("Stuns %.1fs in %dpx" % [s, r2]) if r2 > 0 else ("Stuns %.1fs" % s)
+	return ""
+
+
+func _title_case_id(id: String) -> String:
+	var s := String(id).strip_edges()
+	if s == "":
+		return ""
+	s = s.replace("_", " ")
+	var parts := s.split(" ", false)
+	var out_parts: Array[String] = []
+	for p in parts:
+		if p == "":
+			continue
+		out_parts.append(p.substr(0, 1).to_upper() + p.substr(1))
+	return " ".join(out_parts)
 
 
 func find_adventurer_at_screen_pos(screen_pos: Vector2, radius_px: float = 16.0) -> int:
 	# Robust hit-test for UI-driven clicks (avoids Control mouse capture blocking Area2D input).
 	# `screen_pos` is viewport mouse position (same space as CanvasItem global_position).
+	# BUILD: preview actors live in SurfacePreviewSystem.
+	if GameState != null and int(GameState.phase) == int(GameState.Phase.BUILD) and _surface_preview != null:
+		var pid := _surface_preview.find_preview_adventurer_at_screen_pos(screen_pos, radius_px)
+		if pid != 0:
+			return int(pid)
 	var best_id := 0
 	var best_d2 := 0.0
 	var r := maxf(0.0, float(radius_px))
@@ -645,7 +934,7 @@ func find_adventurer_at_screen_pos(screen_pos: Vector2, radius_px: float = 16.0)
 	for a in _adventurers:
 		if a == null or not is_instance_valid(a):
 			continue
-		var d2 := a.global_position.distance_squared_to(screen_pos)
+		var d2: float = a.global_position.distance_squared_to(screen_pos)
 		if d2 <= r2 and (best_id == 0 or d2 < best_d2):
 			best_id = int(a.get_instance_id())
 			best_d2 = d2

@@ -5,6 +5,10 @@ extends PanelContainer
 @onready var _line1: Label = $VBox/Body/Line1
 @onready var _line2: Label = $VBox/Body/Line2
 @onready var _line3: Label = $VBox/Body/Line3
+@onready var _party: Label = $VBox/Body/VBoxContainer/HBoxContainer/Party
+@onready var _morality: Label = $VBox/Body/VBoxContainer/HBoxContainer/Morality
+@onready var _traits: RichTextLabel = $VBox/Body/VBoxContainer/HBoxContainer2/Traits
+@onready var _abilities: RichTextLabel = $VBox/Body/VBoxContainer/HBoxContainer2/Abilities
 @onready var _goals: RichTextLabel = $VBox/Body/Goals
 
 var _adv_id: int = 0
@@ -50,6 +54,14 @@ func _refresh() -> void:
 	_line1.text = ""
 	_line2.text = ""
 	_line3.text = ""
+	if _party != null:
+		_party.text = ""
+	if _morality != null:
+		_morality.text = ""
+	if _traits != null:
+		_traits.text = ""
+	if _abilities != null:
+		_abilities.text = ""
 	_goals.text = ""
 
 	if _simulation == null or not _simulation.has_method("get_adv_tooltip_data"):
@@ -64,6 +76,7 @@ func _refresh() -> void:
 	# Player-friendly lines.
 	var class_id := String(data.get("class_id", ""))
 	var party_id := int(data.get("party_id", 0))
+	var party_size := int(data.get("party_size", 0))
 	var hp := int(data.get("hp", 0))
 	var hp_max := int(data.get("hp_max", 0))
 	var dmg := int(data.get("attack_damage", 0))
@@ -90,15 +103,64 @@ func _refresh() -> void:
 	elif moral_lbl != "":
 		_line3.text = "Morality: %s" % moral_lbl
 
+	# Expanded fields (Party/Morality/Traits/Ability)
+	if _party != null and party_id != 0:
+		_party.text = ("Party %d (%d)" % [party_id, party_size]) if party_size > 0 else ("Party %d" % party_id)
+	if _morality != null and moral_lbl != "":
+		_morality.text = "Morality: %s" % moral_lbl
+
+	if _traits != null:
+		var tpretty: Array = data.get("traits_pretty", []) as Array
+		var tids: Array = data.get("traits", []) as Array
+		var lines_t: Array[String] = []
+		if not tpretty.is_empty():
+			for x in tpretty:
+				var s := String(x)
+				if s != "":
+					lines_t.append("• %s" % s)
+		elif not tids.is_empty():
+			for x2 in tids:
+				var s2 := String(x2)
+				if s2 != "":
+					lines_t.append("• %s" % s2)
+		_traits.text = "[b]Traits[/b]\n" + ("\n".join(lines_t) if not lines_t.is_empty() else "—")
+
+	if _abilities != null:
+		var ab: Dictionary = data.get("ability", {}) as Dictionary
+		if ab.is_empty():
+			_abilities.text = "[b]Ability[/b]\n—"
+		else:
+			var ab_name := String(ab.get("name", String(ab.get("id", ""))))
+			var trigger := String(ab.get("trigger", ""))
+			var cd := float(ab.get("cooldown_s", 0.0))
+			var cast := float(ab.get("cast_time_s", 0.0))
+			var per_day := int(ab.get("charges_per_day", 0))
+			var left := int(ab.get("charges_left", -1))
+			var summary := String(ab.get("summary", ""))
+			var lines_a: Array[String] = []
+			if ab_name != "":
+				lines_a.append("• %s" % ab_name)
+			if trigger != "":
+				lines_a.append("• Trigger: %s" % trigger)
+			if cd != 0.0:
+				lines_a.append("• Cooldown: %s" % str(cd))
+			if cast > 0.0:
+				lines_a.append("• Cast: %s" % str(cast))
+			if per_day > 0:
+				lines_a.append("• Charges: %d/day" % per_day)
+			if left >= 0:
+				lines_a.append("• Remaining: %d" % left)
+			if summary != "":
+				lines_a.append("• %s" % summary)
+			_abilities.text = "[b]Ability[/b]\n" + ("\n".join(lines_a) if not lines_a.is_empty() else "—")
+
 	var goals: Array = data.get("top_goals", []) as Array
-	if goals.is_empty():
-		return
 	var lines: Array[String] = []
 	for g in goals:
 		var s := String(g)
 		if s != "":
 			lines.append("• %s" % s)
-	_goals.text = "[b]Goals[/b]\n" + "\n".join(lines)
+	_goals.text = "[b]Goals[/b]\n" + ("\n".join(lines) if not lines.is_empty() else "—")
 
 
 func _place_near_screen_pos(screen_pos: Vector2) -> void:

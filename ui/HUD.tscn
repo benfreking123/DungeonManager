@@ -10,8 +10,8 @@
 [ext_resource type="Texture2D" uid="uid://cbqqhnpreh5x0" path="res://assets/RockFrame.tres" id="7_uqoya"]
 [ext_resource type="Shader" path="res://ui/shaders/vignette.gdshader" id="8_vignette"]
 [ext_resource type="Texture2D" uid="uid://clia71e760qmr" path="res://assets/simple-old-paper-1.jpg" id="9_old_paper"]
-[ext_resource type="PackedScene" path="res://ui/SetupWarningPopup.tscn" id="10_setup_popup"]
-[ext_resource type="PackedScene" path="res://ui/DaytimeIndicator.tscn" id="10_ultn7"]
+[ext_resource type="PackedScene" uid="uid://edd24i7ldah4" path="res://ui/SetupWarningPopup.tscn" id="10_setup_popup"]
+[ext_resource type="PackedScene" uid="uid://c3j0codad11to" path="res://ui/DaytimeIndicator.tscn" id="10_ultn7"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
 shader = ExtResource("8_vignette")
@@ -86,9 +86,9 @@ content_margin_top = 0.0
 content_margin_right = 8.0
 content_margin_bottom = 8.0
 bg_color = Color(0.88, 0.81, 0.68, 0.96)
-border_width_left = 5
-border_width_right = 9
-border_width_bottom = 8
+border_width_left = 1
+border_width_right = 1
+border_width_bottom = 1
 border_color = Color(0.18, 0.13, 0.08, 0.48)
 corner_radius_top_left = 6
 corner_radius_top_right = 6
@@ -480,8 +480,8 @@ z_index = -6
 layout_mode = 0
 offset_left = 6.0
 offset_top = 4.0
-offset_right = 231.0
-offset_bottom = 121.0
+offset_right = 232.0
+offset_bottom = 137.0
 theme_override_styles/panel = ExtResource("3_6nt7r")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer"]
@@ -501,11 +501,7 @@ layout_mode = 2
 
 [node name="DayButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2"]
 layout_mode = 2
-text = "Start Day"
-
-[node name="HistoryButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2"]
-layout_mode = 2
-text = "History (H)"
+text = "Start"
 
 [node name="Spacer" type="Control" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
@@ -555,10 +551,18 @@ layout_mode = 2
 toggle_mode = true
 text = "4x"
 
-[node name="DayLabel" type="Label" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+[node name="HBoxContainer3" type="HBoxContainer" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="DayLabel" type="Label" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer3"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.976471, 0.94902, 0.878431, 1)
 text = "Day: 1"
+
+[node name="HistoryButton" type="Button" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer3"]
+visible = false
+layout_mode = 2
+text = "(H)"
 
 [node name="Panel" type="Panel" parent="VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2

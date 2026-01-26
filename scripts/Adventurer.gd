@@ -14,6 +14,8 @@ var phase: int = Phase.SURFACE
 
 var _surface_target_local: Vector2 # stored in parent-local space (camera-independent)
 var _surface_speed: float = 200.0
+# BUILD-phase preview: keep adventurers on the surface even when reaching targets.
+var _surface_hold: bool = false
 
 var _dungeon_view: Control
 var _path: Array[Vector2i] = []
@@ -56,6 +58,11 @@ func set_surface_target_local(target_local: Vector2, speed: float) -> void:
 	_surface_speed = speed
 
 
+func set_surface_hold(enabled: bool) -> void:
+	# When true, SURFACE phase never auto-transitions into DUNGEON on reaching the target.
+	_surface_hold = bool(enabled)
+
+
 func set_dungeon_targets(dungeon_view: Control, path: Array[Vector2i], speed: float) -> void:
 	_dungeon_view = dungeon_view
 	_path = path
@@ -93,7 +100,7 @@ func tick(dt: float) -> void:
 			if in_combat:
 				return
 			_move_toward_local(_surface_target_local, _surface_speed, dt)
-			if position.distance_to(_surface_target_local) <= 2.0:
+			if (not _surface_hold) and position.distance_to(_surface_target_local) <= 2.0:
 				phase = Phase.DUNGEON
 		Phase.DUNGEON:
 			if in_combat:

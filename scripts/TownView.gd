@@ -16,6 +16,9 @@ var _dungeon_view: Node = null
 # Theme keys live in `ui/DungeonManagerTheme.tres` under `TownView/...`.
 const THEME_TYPE := "TownView"
 
+# Emitted when the user clicks the town icon itself.
+signal town_icon_clicked()
+
 # Back-compat fallback (if dungeon view not set yet)
 var entrance_world_pos: Vector2 = Vector2.ZERO
 var entrance_cap_world_rect: Rect2 = Rect2()
@@ -47,15 +50,16 @@ func _town_icon_rect_local() -> Rect2:
 
 
 func _ready() -> void:
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	queue_redraw()
 
 
-func _tcol(name: String, fallback: Color) -> Color:
-	return get_theme_color(name, THEME_TYPE) if has_theme_color(name, THEME_TYPE) else fallback
+func _tcol(key: String, fallback: Color) -> Color:
+	return get_theme_color(key, THEME_TYPE) if has_theme_color(key, THEME_TYPE) else fallback
 
 
-func _tconst(name: String, fallback: int) -> int:
-	return get_theme_constant(name, THEME_TYPE) if has_theme_constant(name, THEME_TYPE) else fallback
+func _tconst(key: String, fallback: int) -> int:
+	return get_theme_constant(key, THEME_TYPE) if has_theme_constant(key, THEME_TYPE) else fallback
 
 
 func set_dungeon_view(dungeon_view: Node) -> void:
@@ -115,3 +119,14 @@ func _draw() -> void:
 		# Door mark in the middle
 		var mid := local_rect.position + local_rect.size * 0.5
 		draw_line(mid + Vector2(0, -10), mid + Vector2(0, 10), line, 2.0)
+
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			var p_local := get_local_mouse_position()
+			var r := _town_icon_rect_local()
+			if r != Rect2() and r.has_point(p_local):
+				town_icon_clicked.emit()
+				accept_event()
