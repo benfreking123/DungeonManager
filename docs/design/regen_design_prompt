@@ -1,0 +1,20 @@
+1. Game Pillars + Non-Goals (1 page)
+What the game must feel like (3–7 bullets)
+What you’re explicitly not building (important)
+
+2. Gameplay Loop Map (1 page)
+A diagram or bullet chain like:
+Meta → Select run → Load level → Combat loop → Rewards → Upgrade → Next node → Run end
+Include inputs/outputs at each step (what data changes)
+
+3. State Model (the money doc)
+Define every state the game can be in (not scenes; actual states):
+Boot, MainMenu, RunMap, Combat, Pause, Shop, GameOver, etc.
+Define allowed transitions (a simple state machine table)
+4. Data Contracts
+“What is a Player? Spell? Enemy? Item? LevelNode?”
+These are schemas: fields, types, invariants, and who owns them
+
+
+Goal:
+Make a markdown file for each of the pillars.
