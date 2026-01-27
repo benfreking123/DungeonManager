@@ -13,6 +13,8 @@ var counts: Dictionary = {
 	"hall_t_left": 1,
 	"monster": 1,
 	"trap": 1,
+	"trap_2x1": 1,
+	"trap_3x2": 1,
 	"boss": 1,
 	"treasure": 1,
 }
@@ -48,6 +50,8 @@ func reset_all() -> void:
 		"hall_t_left": 1,
 		"monster": 1,
 		"trap": 1,
+		"trap_2x1": 1,
+		"trap_3x2": 1,
 		"boss": 1,
 		"treasure": 1,
 	}

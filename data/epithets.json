@@ -11,10 +11,3 @@
     { "weight": 1, "match": { "*": true }, "values": ["Stoneborn", "Swiftwind", "Grimsmile", "Truegrip", "Brightstride", "Ashmarked"] }
   ]
 }
-{
-  "rules": [
-    { "weight": 3, "match": { "class_id": "warrior" }, "values": ["the Brave", "the Cautious", "Ironheart"] },
-    { "weight": 2, "match": { "fled": true }, "values": ["the Wary", "the Unlucky"] },
-    { "weight": 1, "match": { "*": true }, "values": ["Quickstep", "Shadowhand", "the Stalwart"] }
-  ]
-}

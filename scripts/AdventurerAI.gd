@@ -52,24 +52,33 @@ func pick_goal_cell_weighted(dungeon_grid: Node, from_cell: Vector2i) -> Vector2
 	for r in rooms:
 		var d := r as Dictionary
 		var kind: String = String(d.get("kind", ""))
+		var rid: int = int(d.get("id", 0))
 		var pos: Vector2i = d.get("pos", Vector2i.ZERO)
 		var size: Vector2i = d.get("size", Vector2i.ONE)
 		var center := Vector2i(pos.x + int(size.x / 2), pos.y + int(size.y / 2))
+		var hazard_pen := _hazard_weight_penalty(rid, kind)
 		if kind == "boss":
 			# Prefer center, but include top-left as a reachability fallback (required-path validation uses pos).
-			candidates.append({ "cell": center, "w": 2 })
-			candidates.append({ "cell": pos, "w": 2 })
+			candidates.append({ "cell": center, "w": 2 + hazard_pen })
+			candidates.append({ "cell": pos, "w": 2 + hazard_pen })
 		elif kind == "treasure":
-			candidates.append({ "cell": center, "w": 1 })
-			candidates.append({ "cell": pos, "w": 1 })
+			candidates.append({ "cell": center, "w": 1 + hazard_pen })
+			candidates.append({ "cell": pos, "w": 1 + hazard_pen })
 		elif kind == "monster":
-			candidates.append({ "cell": center, "w": -1 })
-			candidates.append({ "cell": pos, "w": -1 })
+			candidates.append({ "cell": center, "w": -1 + hazard_pen })
+			candidates.append({ "cell": pos, "w": -1 + hazard_pen })
+		elif kind == "trap":
+			# Trap rooms are now treated as hazards once remembered.
+			candidates.append({ "cell": center, "w": 0 + hazard_pen })
+			candidates.append({ "cell": pos, "w": 0 + hazard_pen })
 
 	# Explore fallback: any occupied cell at weight 0
 	var occ: Array[Vector2i] = _list_occupied_cells(dungeon_grid)
 	for c in occ:
-		candidates.append({ "cell": c, "w": 0 })
+		var room: Dictionary = dungeon_grid.call("get_room_at", c) as Dictionary
+		var kind2 := String(room.get("kind", ""))
+		var rid2 := int(room.get("id", 0))
+		candidates.append({ "cell": c, "w": 0 + _hazard_weight_penalty(rid2, kind2) })
 
 	var best_w := -999
 	var best_cells: Array[Vector2i] = []
@@ -95,6 +104,27 @@ func pick_goal_cell_weighted(dungeon_grid: Node, from_cell: Vector2i) -> Vector2
 	var idx := rng.randi_range(0, best_cells.size() - 1)
 	current_goal = best_cells[idx]
 	return current_goal
+
+
+func _hazard_weight_penalty(room_id: int, room_kind: String) -> int:
+	# Soft avoidance: if a hazard room is remembered, apply a negative weight penalty.
+	if room_id == 0:
+		return 0
+	if not Engine.has_singleton("Simulation") or Simulation == null:
+		return 0
+	if not Simulation.has_method("is_room_hazard_remembered"):
+		return 0
+	if not bool(Simulation.call("is_room_hazard_remembered", int(room_id))):
+		return 0
+	match String(room_kind):
+		"trap":
+			# Keep this mild so parties don't "give up" on exploring.
+			return -1
+		"monster":
+			# Monster rooms are already base-weighted negative; only nudge further.
+			return -1
+		_:
+			return 0
 
 
 func _list_occupied_cells(dungeon_grid: Node) -> Array[Vector2i]:

@@ -6,7 +6,31 @@ class_name TrapItem
 @export var icon: Texture2D
 
 @export var proc_chance: float = 1.0
-@export var damage: int = 1
-@export var hits_all: bool = false
+
+# Cooldown in seconds after a successful proc.
+@export var cooldown_s: float = 0.0
+
+# Optional integration hook (reserved for future trigger/event systems).
+@export var trigger_id: String = ""
+
+# Charges per day. -1 means unlimited.
+@export var trigger_amount: int = -1
+
+# Effect type (string enum). Examples:
+# - "damage_single"
+# - "damage_all"
+# - "teleport_random_room"
+# - "web_pause"
+# - "rearm_buff"
+@export var effect: String = "damage_single"
+
+# Primary numeric magnitude for the effect (meaning depends on effect).
+# - damage_*: damage amount
+# - web_pause: pause duration in seconds
+# - rearm_buff: buff duration in seconds
+@export var value: int = 1
+
+# If true, trap starts ready (no initial cooldown). If false, starts on cooldown.
+@export var start_ready: bool = true
 
 

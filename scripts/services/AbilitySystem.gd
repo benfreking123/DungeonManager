@@ -182,9 +182,20 @@ func _execute_effect(adv_id: int, ab: Ability) -> void:
 			# TODO: move actor to entrance
 			pass
 		"rogue_notice_trap":
-			pass
+			if _simulation != null and _simulation.has_method("get_adv_current_room_id"):
+				var rid := int(_simulation.call("get_adv_current_room_id", int(adv_id)))
+				if rid != 0 and _simulation.has_method("remember_hazard_room"):
+					_simulation.call("remember_hazard_room", rid, "trap")
 		"rogue_disarm_trap":
-			pass
+			if _simulation != null and _simulation.has_method("get_adv_current_room_id"):
+				var rid2 := int(_simulation.call("get_adv_current_room_id", int(adv_id)))
+				if rid2 != 0:
+					# Also count as "remembered hazard".
+					if _simulation.has_method("remember_hazard_room"):
+						_simulation.call("remember_hazard_room", rid2, "trap")
+					# Disable traps for the rest of the day.
+					if _simulation.has_method("disarm_trap_room"):
+						_simulation.call("disarm_trap_room", rid2)
 		# Priest
 		"priest_aoe_heal":
 			_priest_aoe_heal(int(adv_id), int(ab.params.get("heal", 3)))

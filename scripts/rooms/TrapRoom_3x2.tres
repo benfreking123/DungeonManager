@@ -4,10 +4,10 @@
 
 [resource]
 script = ExtResource("1_roomtype")
-id = "trap"
-label = "Trap (2x2)"
-size = Vector2i(2, 2)
-power_cost = 2
+id = "trap_3x2"
+label = "Trap (3x2)"
+size = Vector2i(3, 2)
+power_cost = 3
 kind = "trap"
-max_slots = 1
+max_slots = 2
 

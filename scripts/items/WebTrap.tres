@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="TrapItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/Trap.gd" id="1_webtrap"]
+
+[resource]
+script = ExtResource("1_webtrap")
+id = "web_trap"
+display_name = "Web Trap"
+proc_chance = 1.0
+cooldown_s = 10.0
+trigger_id = ""
+trigger_amount = -1
+effect = "web_pause"
+value = 1
+start_ready = true
+

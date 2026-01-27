@@ -75,6 +75,10 @@ var _adv_last_cell: Dictionary = {}
 # adv_instance_id -> was_in_combat last tick
 var _adv_was_in_combat: Dictionary = {}
 
+# Global shared hazard memory:
+# room_id -> { "kind": String, "t_s": float }
+var _remembered_hazards: Dictionary = {}
+
 # Spawn queue (spawn members one by one in town)
 # Each entry: { member_id:int, party_id:int, class_id:String, idx_in_party:int }
 var _spawn_queue: Array[Dictionary] = []
@@ -141,7 +145,7 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 
 	# Trap system: handles trap room entry effects.
 	_trap_system = preload("res://scripts/systems/TrapSystem.gd").new()
-	_trap_system.call("setup", _item_db)
+	_trap_system.call("setup", _item_db, self)
 
 	# Wire boss killed event into party logic once.
 	var cb := Callable(self, "_on_boss_killed")
@@ -245,6 +249,9 @@ func start_day() -> void:
 		_dungeon_grid.call("ensure_room_defaults")
 		if _fog != null:
 			_fog.reset_for_new_day()
+		# Trap system needs initialized per-day state (cooldowns/charges/disarms).
+		if _trap_system != null:
+			_trap_system.call("reset_for_new_day", _dungeon_grid)
 		_init_room_spawners()
 		_spawn_boss()
 	# Generate parties/members for the day (Strength-scaled).
@@ -297,7 +304,8 @@ func start_day() -> void:
 	if _loot_system != null:
 		_loot_system.call("reset")
 	if _trap_system != null:
-		_trap_system.call("reset")
+		# Ensure trap per-day state is initialized (cooldowns/charges/disarms).
+		_trap_system.call("reset_for_new_day", _dungeon_grid)
 	# History: mark day start.
 	if _history != null:
 		_history.record_day_change(di, "start")
@@ -1354,20 +1362,45 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 	var kind: String = String(room.get("kind", ""))
 	# Only fire room-entry effects when we actually enter a new room.
 	if entered_new_room:
+		# Global shared memory: once a hazard room is encountered, everyone remembers it.
+		if kind == "trap" or kind == "monster":
+			remember_hazard_room(room_id, kind)
+		# For trap rooms, we want abilities (Notice/Disarm) to be able to run before trap procs.
 		if kind == "trap" or kind == "boss":
+			if _ability_system != null:
+				_ability_system.on_enter_room(int(adv.get_instance_id()), kind)
 			if _trap_system != null:
 				_trap_system.call("on_room_enter", room, adv, _adventurers, _adv_last_room)
-		if kind == "monster" or kind == "boss":
-			if _combat != null:
+			# Combat still joins on boss rooms.
+			if kind == "boss" and _combat != null:
 				_combat.call("join_room", room, adv)
-		if _ability_system != null:
-			_ability_system.on_enter_room(int(adv.get_instance_id()), kind)
+		else:
+			# Preserve existing ordering for non-trap rooms.
+			if kind == "monster":
+				if _combat != null:
+					_combat.call("join_room", room, adv)
+			if _ability_system != null:
+				_ability_system.on_enter_room(int(adv.get_instance_id()), kind)
 
 	# Fog of war + stealing are room-entry events.
 	var party_id: int = int(adv.get("party_id"))
 	if entered_new_room:
 		if _fog != null:
-			_fog.reveal_on_enter(room_id)
+			var revealed: Array[int] = _fog.reveal_on_enter(room_id)
+			# Trap rooms should not be "known" until they've been triggered once (or revealed via a mechanism
+			# like NoticeTrap which records hazard memory).
+			# This prevents adjacent reveals from spoiling trap rooms and keeps AI exploration honest.
+			for rid0 in revealed:
+				var rid := int(rid0)
+				if rid == 0:
+					continue
+				var rdict: Dictionary = _dungeon_grid.call("get_room_by_id", rid) as Dictionary if _dungeon_grid != null else {}
+				if String(rdict.get("kind", "")) != "trap":
+					continue
+				# If this trap room has NOT been discovered, re-conceal it.
+				if not is_room_hazard_remembered(rid):
+					if _fog.has_method("set_room_known"):
+						_fog.set_room_known(rid, false)
 		if _party_adv != null:
 			var steal_evt: Dictionary = _party_adv.on_party_enter_room(party_id, room)
 			if not steal_evt.is_empty() and DbgLog.is_enabled("theft"):
@@ -1503,6 +1536,102 @@ func _room_center_cell(room: Dictionary, fallback: Vector2i) -> Vector2i:
 	var pos: Vector2i = room.get("pos", fallback)
 	var size: Vector2i = room.get("size", Vector2i.ONE)
 	return Vector2i(pos.x + int(size.x / 2), pos.y + int(size.y / 2))
+
+
+func teleport_adv_to_random_room(adv_id: int, from_room_id: int = 0) -> void:
+	# Used by trap effects. Teleports an adventurer to a random non-boss room.
+	if not _active or _dungeon_grid == null:
+		return
+	var adv: Node2D = _find_adv_by_id(int(adv_id))
+	if adv == null or not is_instance_valid(adv):
+		return
+	if bool(adv.get("in_combat")):
+		return
+	var rooms: Array = _dungeon_grid.get("rooms") as Array
+	if rooms.is_empty():
+		return
+	var candidates: Array[Dictionary] = []
+	var from_id := int(from_room_id)
+	for r0 in rooms:
+		var r := r0 as Dictionary
+		if r.is_empty():
+			continue
+		var rid := int(r.get("id", 0))
+		if rid == 0:
+			continue
+		if rid == from_id:
+			continue
+		var kind := String(r.get("kind", ""))
+		if kind == "boss":
+			continue
+		candidates.append(r)
+	if candidates.is_empty():
+		return
+
+	var idx := int(randi() % candidates.size())
+	var target_room: Dictionary = candidates[idx]
+	var target_room_id := int(target_room.get("id", 0))
+	if target_room_id == 0:
+		return
+	var target_cell := _room_center_cell(target_room, Vector2i.ZERO)
+
+	# Update tracking so retargeting uses correct start.
+	var key := int(adv.get_instance_id())
+	_adv_last_room[key] = target_room_id
+	_adv_last_cell[key] = target_cell
+
+	# Move the node to the target cell.
+	if _dungeon_view != null and _dungeon_view.has_method("cell_center_world"):
+		var world_pos := _dungeon_view.call("cell_center_world", target_cell) as Vector2
+		var parent := adv.get_parent()
+		if parent != null and (parent is CanvasItem):
+			var inv: Transform2D = (parent as CanvasItem).get_global_transform().affine_inverse()
+			adv.position = inv * world_pos
+		else:
+			adv.global_position = world_pos
+
+	# Clear any current path; then retarget party from the new location.
+	if adv.has_method("set_path"):
+		adv.call("set_path", [])
+	var pid := int(adv.get("party_id"))
+	_retarget_party(pid, target_cell)
+
+
+func is_trap_slot_ready(room_id: int, slot_idx: int, item_id: String) -> bool:
+	if _trap_system == null:
+		return false
+	return bool(_trap_system.call("is_slot_ready", int(room_id), int(slot_idx), String(item_id)))
+
+
+func get_adv_current_room_id(adv_id: int) -> int:
+	# Public helper for AbilitySystem and other services.
+	return int(_adv_last_room.get(int(adv_id), 0))
+
+
+func remember_hazard_room(room_id: int, kind: String) -> void:
+	var rid := int(room_id)
+	if rid == 0:
+		return
+	var k := String(kind)
+	if k == "":
+		return
+	_remembered_hazards[rid] = { "kind": k, "t_s": float(Time.get_ticks_msec()) / 1000.0 }
+
+
+func is_room_hazard_remembered(room_id: int) -> bool:
+	return _remembered_hazards.has(int(room_id))
+
+
+func remembered_hazard_kind(room_id: int) -> String:
+	var d: Dictionary = _remembered_hazards.get(int(room_id), {}) as Dictionary
+	return String(d.get("kind", ""))
+
+
+func disarm_trap_room(room_id: int) -> void:
+	# Public helper for AbilitySystem.
+	if _trap_system == null:
+		return
+	_trap_system.call("disarm_room", int(room_id))
 
 
 func _make_spawner(room_id: int, monster_item_id: String, capacity: int, cooldown_per_size: float, minions_only: bool = false) -> Dictionary:

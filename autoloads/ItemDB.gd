@@ -15,6 +15,9 @@ func _ready() -> void:
 	# Traps
 	traps["spike_trap"] = load("res://scripts/items/SpikeTrap.tres")
 	traps["floor_pit"] = load("res://scripts/items/FloorPit.tres")
+	traps["teleport_trap"] = load("res://scripts/items/TeleportTrap.tres")
+	traps["web_trap"] = load("res://scripts/items/WebTrap.tres")
+	traps["rearm_trap"] = load("res://scripts/items/RearmTrap.tres")
 
 	# Monsters
 	_load_monsters()

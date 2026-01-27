@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="TrapItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/Trap.gd" id="1_teleporttrap"]
+
+[resource]
+script = ExtResource("1_teleporttrap")
+id = "teleport_trap"
+display_name = "Teleport Trap"
+proc_chance = 1.0
+cooldown_s = 10.0
+trigger_id = ""
+trigger_amount = -1
+effect = "teleport_random_room"
+value = 0
+start_ready = true
+

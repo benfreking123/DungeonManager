@@ -7,6 +7,10 @@ script = ExtResource("1_0u8m6")
 id = "floor_pit"
 display_name = "Floor Pit"
 proc_chance = 1.0
-damage = 3
-hits_all = true
+cooldown_s = 10.0
+trigger_id = ""
+trigger_amount = -1
+effect = "damage_all"
+value = 3
+start_ready = true
 

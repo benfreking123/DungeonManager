@@ -73,6 +73,20 @@ func is_room_known(room_id: int) -> bool:
 	return bool(_known_by_room_id.get(int(room_id), false))
 
 
+func set_room_known(room_id: int, known: bool) -> void:
+	# Public override for systems that want to conceal/reveal specific rooms.
+	# Keeps both the internal map and DungeonGrid room dict in sync.
+	var rid := int(room_id)
+	if rid == 0:
+		return
+	known = bool(known)
+	if bool(_known_by_room_id.get(rid, false)) == known:
+		return
+	_known_by_room_id[rid] = known
+	_set_room_known_flag(rid, known)
+	_version += 1
+
+
 func known_room_ids() -> Array[int]:
 	var out: Array[int] = []
 	for k in _known_by_room_id.keys():

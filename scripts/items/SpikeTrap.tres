@@ -7,6 +7,10 @@ script = ExtResource("1_x1n7k")
 id = "spike_trap"
 display_name = "Spike Trap"
 proc_chance = 1.0
-damage = 5
-hits_all = false
+cooldown_s = 10.0
+trigger_id = ""
+trigger_amount = -1
+effect = "damage_single"
+value = 5
+start_ready = true
 
