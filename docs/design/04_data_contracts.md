@@ -187,6 +187,7 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
   - `attack_damage: int`
   - `attack_interval: float`
   - `range: float`
+  - Stats: `intelligence:int`, `strength:int`, `agility:int`
 
 ### Ability (`Ability`)
 - **Owner**: `scripts/resources/Ability.gd` (resources under `res://assets/abilities/*.tres`)
@@ -222,6 +223,7 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
   - `goal_params: Dictionary` (goal_id -> Dictionary)
   - `stolen_inv_cap: int`
   - `stat_mods: Dictionary` (currently `hp_bonus:int`, `dmg_bonus:int`)
+  - `base_stats: Dictionary` (currently `intelligence:int`, `strength:int`, `agility:int`)
   - `traits: Array[String]`
   - `ability_id: String`
   - `ability_charges: int`
@@ -236,6 +238,7 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
 - **Schema (key runtime fields)**:
   - Identity: `class_id:String`, `party_id:int`
   - Combat: `hp:int`, `hp_max:int`, `attack_damage:int`, `attack_interval:float`, `range:float`, `armor:int`
+  - Stats: `intelligence:int`, `strength:int`, `agility:int`
   - Flow: `phase:int` (`SURFACE|DUNGEON|DONE`), `in_combat:bool`, `combat_room_id:int`
 - **Signals**: `died(world_pos, class_id)`, `damaged(amount)`, `cell_reached(cell)`, `right_clicked(adv_id, screen_pos)`
 
@@ -281,6 +284,7 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
 - **Owner**: `autoloads/Simulation.gd` (UI reads via `get_adv_tooltip_data(adv_id)`)
 - **Returned dictionary (UI-facing)** includes (when available):
   - Combat stats: `class_id`, `party_id`, `party_size`, `hp`, `hp_max`, `attack_damage`
+  - Stats: `intelligence`, `strength`, `agility`
   - Identity: `name`, `epithet`, `origin`, `bio`
   - Behavior: `morality_label`, `top_goals`, `traits`, `traits_pretty`
   - Ability (nested): `ability.{id,name,trigger,cooldown_s,cast_time_s,charges_per_day,charges_left,summary}`

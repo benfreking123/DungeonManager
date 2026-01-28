@@ -164,3 +164,25 @@ First-pass attribution:
 - `autoloads/Simulation.gd` forwards to `PartyAdventureSystem.on_monster_room_cleared(...)`
 - `PartyAdventureSystem` increments `AdventurerBrain.monsters_killed`
 
+## Intelligence and pathing mistakes (noise)
+
+Adventurers are not perfectly optimal when choosing where to go next. When selecting goals (especially **exploration frontiers** and **loot rooms**), the system uses an **epsilon-greedy** choice:
+
+- With probability \(1 - \\epsilon\): pick the best (shortest) goal cell.
+- With probability \\(\\epsilon\\): pick a *non-best* goal cell (a “mistake”), biased toward near-misses rather than huge detours.
+
+### What Intelligence does
+
+Higher **Intelligence (INT)** reduces \\(\\epsilon\\). The party-level goal uses **party-average INT**; per-adventurer “soft defy” goals use that adventurer’s own INT.
+
+### Where it lives
+
+- Goal selection: `scripts/services/PartyAdventureSystem.gd`\n  - `_explore_goal_cell*` / `_loot_goal_cell*`\n  - `_epsilon_for_intelligence()` and `_pick_cell_epsilon_greedy()`
+
+### Tunables
+
+Configured in `autoloads/game_config.gd`:
+- `ADV_STAT_MIN/MAX/DEFAULT`, `ADV_STAT_ROLL_DELTA`
+- `ADV_PATH_MISTAKE_CHANCE_BASE` (low INT mistake chance)
+- `ADV_PATH_MISTAKE_MIN_CHANCE` (high INT floor)
+

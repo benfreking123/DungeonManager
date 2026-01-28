@@ -13,3 +13,9 @@ class_name AdventurerClass
 
 # Pixel/world distance required to hit a target in combat.
 @export var range: float = 40.0
+
+# Internal stats (used for behavior tuning; may influence combat later).
+# Scale is configured in `game_config` (default narrow range around 10).
+@export var intelligence: int = 10
+@export var strength: int = 10
+@export var agility: int = 10

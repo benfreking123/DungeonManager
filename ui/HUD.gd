@@ -207,9 +207,8 @@ func _resolve_topbar_nodes() -> void:
 func _refresh_day_label() -> void:
 	if day_label == null or GameState == null:
 		return
-	var di := 1
-	if "day_index" in GameState:
-		di = int(GameState.get("day_index"))
+	# NOTE: `GameState` is an autoload Object; `"day_index" in GameState` does NOT work reliably.
+	var di := int(GameState.day_index)
 	day_label.text = "Day: %d" % di
 
 

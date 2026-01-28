@@ -25,6 +25,21 @@ const SOFT_PARTY_CAP: int = 15
 # Stolen treasure inventory per adventurer (member) defaults.
 const STOLEN_INV_CAP_DEFAULT: int = 2
 
+# === Adventurer stats + behavior knobs ===
+# Base stat scale (kept narrow so traits matter). Default “normal” is 10.
+const ADV_STAT_MIN: int = 8
+const ADV_STAT_MAX: int = 12
+const ADV_STAT_DEFAULT: int = 10
+# Small per-day jitter applied around class baselines when generating members.
+# (rolled stat = clamp(class_base + rng[-delta..+delta], MIN..MAX))
+const ADV_STAT_ROLL_DELTA: int = 1
+
+# Path decision “mistake” (epsilon-greedy) settings.
+# Higher Intelligence reduces this chance.
+const ADV_PATH_MISTAKE_CHANCE_BASE: float = 0.25
+# Floor so even geniuses can very rarely err (set to 0 for perfect play at high INT).
+const ADV_PATH_MISTAKE_MIN_CHANCE: float = 0.01
+
 # Strength scaling (day-based):
 # Strength is now computed from day number rather than treasure totals.
 const STRENGTH_DAY_BASE: int = 3

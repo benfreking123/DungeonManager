@@ -2,6 +2,48 @@ extends RefCounted
 class_name PartyGenerator
 
 const DEFAULT_CLASSES := ["warrior", "mage", "priest", "rogue"]
+const CLASS_RES_PATH := {
+	"warrior": "res://scripts/classes/Warrior.tres",
+	"rogue": "res://scripts/classes/Rogue.tres",
+	"mage": "res://scripts/classes/Mage.tres",
+	"priest": "res://scripts/classes/Priest.tres",
+}
+
+
+func _clamp_stat(v: int, cfg: Node) -> int:
+	var min_s := 8
+	var max_s := 12
+	if cfg != null and cfg.has_method("get"):
+		min_s = int(cfg.get("ADV_STAT_MIN"))
+		max_s = int(cfg.get("ADV_STAT_MAX"))
+	if min_s > max_s:
+		var tmp := min_s
+		min_s = max_s
+		max_s = tmp
+	return clampi(int(v), min_s, max_s)
+
+
+func _roll_base_stats(rng: RandomNumberGenerator, cfg: Node, class_id: String) -> Dictionary:
+	var base := { "intelligence": 10, "strength": 10, "agility": 10 }
+	var path := String(CLASS_RES_PATH.get(String(class_id), ""))
+	if path != "":
+		var res := load(path)
+		var c := res as AdventurerClass
+		if c != null:
+			base["intelligence"] = int(c.intelligence)
+			base["strength"] = int(c.strength)
+			base["agility"] = int(c.agility)
+
+	var delta := 1
+	if cfg != null and cfg.has_method("get"):
+		delta = int(cfg.get("ADV_STAT_ROLL_DELTA"))
+	delta = maxi(0, delta)
+
+	return {
+		"intelligence": _clamp_stat(int(base["intelligence"]) + (rng.randi_range(-delta, delta) if delta > 0 else 0), cfg),
+		"strength": _clamp_stat(int(base["strength"]) + (rng.randi_range(-delta, delta) if delta > 0 else 0), cfg),
+		"agility": _clamp_stat(int(base["agility"]) + (rng.randi_range(-delta, delta) if delta > 0 else 0), cfg),
+	}
 
 
 func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int, adventurers_count: int = 0) -> Dictionary:
@@ -124,6 +166,7 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 						goal_params[gid2] = goals_cfg.call("roll_goal_params", rng, gid2)
 
 			var stat_mods := _roll_stat_mods(rng)
+			var base_stats := _roll_base_stats(rng, cfg, String(ci))
 			# Roll 0–2 traits by weight.
 			var traits: Array[String] = []
 			if traits_cfg != null:
@@ -168,6 +211,7 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 				"goal_params": goal_params,
 				"stolen_inv_cap": stolen_cap,
 				"stat_mods": stat_mods,
+				"base_stats": base_stats,
 				"traits": traits,
 				"ability_id": ability_id,
 				"ability_charges": ability_charges,

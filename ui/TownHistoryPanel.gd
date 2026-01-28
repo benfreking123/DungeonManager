@@ -42,9 +42,8 @@ func _refresh() -> void:
 		return
 	_list.clear()
 	var sim := get_node_or_null("/root/Simulation")
-	var di := 1
-	if GameState != null and "day_index" in GameState:
-		di = int(GameState.get("day_index"))
+	# NOTE: `GameState` is an autoload Object; `"day_index" in GameState` does NOT work reliably.
+	var di := int(GameState.day_index) if GameState != null else 1
 	var events: Array = []
 	if sim != null and sim.has_method("get_history_events"):
 		events = sim.call("get_history_events") as Array

@@ -8,7 +8,7 @@ class_name SurfacePreviewSystem
 # - Reuse the preview actors when Start Day is pressed (so no duplicates)
 
 const PREVIEW_SURFACE_SPEED := 22.0
-const PREVIEW_WANDER_X_RANGE_PX := 140.0
+const PREVIEW_WANDER_X_RANGE_PX := 220.0
 const PREVIEW_WANDER_INTERVAL_MIN := 0.65
 const PREVIEW_WANDER_INTERVAL_MAX := 1.75
 
@@ -222,6 +222,13 @@ func get_preview_tooltip_fields(adv_id: int, goals_cfg: Object) -> Dictionary:
 	out["traits"] = md.get("traits", [])
 	out["ability_id"] = String(md.get("ability_id", ""))
 	out["ability_charges"] = int(md.get("ability_charges", 1))
+
+	# Stats: pull from cached generation so BUILD preview matches DAY tooltip.
+	var bs: Dictionary = md.get("base_stats", {}) as Dictionary
+	if not bs.is_empty():
+		out["intelligence"] = int(bs.get("intelligence", 0))
+		out["strength"] = int(bs.get("strength", 0))
+		out["agility"] = int(bs.get("agility", 0))
 	# Party size (optional, for UI)
 	var pid := int(md.get("party_id", int(adv.get("party_id"))))
 	if pid != 0:

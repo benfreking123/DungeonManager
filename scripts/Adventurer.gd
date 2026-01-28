@@ -37,6 +37,11 @@ var attack_interval: float = 1.0
 var range: float = 40.0
 var armor: int = 0
 
+# Internal stats (behavior tuning; combat hooks later).
+var intelligence: int = 10
+var strength: int = 10
+var agility: int = 10
+
 var in_combat: bool = false
 var combat_room_id: int = 0
 var party_id: int = 0
@@ -95,6 +100,9 @@ func apply_class(c: AdventurerClass) -> void:
 	attack_damage = c.attack_damage
 	attack_interval = c.attack_interval
 	range = c.range
+	intelligence = int(c.intelligence)
+	strength = int(c.strength)
+	agility = int(c.agility)
 	queue_redraw()
 
 

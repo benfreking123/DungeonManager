@@ -650,6 +650,7 @@ func _schedule_return_with_default(profile_id: int, fled_day: int) -> void:
 	schedule_return(int(profile_id), int(fled_day) + 2, buff)
 
 func _guess_current_day() -> int:
-	if GameState != null and "day_index" in GameState:
-		return int(GameState.get("day_index"))
+	# NOTE: `GameState` is an autoload Object; `"day_index" in GameState` does NOT work reliably.
+	if GameState != null:
+		return int(GameState.day_index)
 	return 0

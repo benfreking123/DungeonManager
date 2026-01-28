@@ -196,7 +196,9 @@ func _maybe_prepare_next_day_preview() -> void:
 		if sz.x < 10.0 or sz.y < 10.0:
 			call_deferred("_maybe_prepare_next_day_preview")
 			return
-	var di := int(GameState.get("day_index")) if ("day_index" in GameState) else 1
+	# NOTE: `GameState` is an autoload Object; `"day_index" in GameState` does NOT work reliably.
+	# Access the property directly so day progression works.
+	var di := int(GameState.day_index)
 	if di <= 0:
 		di = 1
 	var cfg := get_node_or_null("/root/game_config")
@@ -228,9 +230,7 @@ func start_day() -> void:
 
 	# If we have a cached generation for this day from BUILD preview, prefer it.
 	# (We still generate on-demand if preview didn't run for any reason.)
-	var day_idx0 := 1
-	if GameState != null and "day_index" in GameState:
-		day_idx0 = int(GameState.get("day_index"))
+	var day_idx0 := int(GameState.day_index) if GameState != null else 1
 	var use_cached_gen := false
 	if _surface_preview != null:
 		use_cached_gen = (_surface_preview.cached_gen_day_index() == int(day_idx0) and not _surface_preview.cached_gen().is_empty())
@@ -261,9 +261,7 @@ func start_day() -> void:
 		goals_cfg = preload("res://autoloads/config_goals.gd").new()
 	var strength_s := 0
 	if _strength_service != null:
-		var day_idx := 1
-		if GameState != null and "day_index" in GameState:
-			day_idx = int(GameState.get("day_index"))
+		var day_idx := int(GameState.day_index) if GameState != null else 1
 		if _strength_service.has_method("compute_strength_s_for_day"):
 			strength_s = int(_strength_service.call("compute_strength_s_for_day", day_idx, cfg))
 	var day_seed := int(Time.get_ticks_usec()) ^ (strength_s * 1103515245)
@@ -276,9 +274,7 @@ func start_day() -> void:
 
 	# History: attach profiles and inject scheduled returnees BEFORE initializing party/adventure system.
 	if _history != null:
-		var di2 := 1
-		if GameState != null and "day_index" in GameState:
-			di2 = int(GameState.get("day_index"))
+		var di2 := int(GameState.day_index) if GameState != null else 1
 		# Apply history cap from config if present
 		if cfg != null and cfg.has_method("get"):
 			var cap := int(cfg.get("HISTORY_MAX_ENTRIES"))
@@ -292,9 +288,7 @@ func start_day() -> void:
 		_party_adv.init_from_generated(gen)
 	if _ability_system != null:
 		_ability_system.setup(self, _dungeon_grid, _last_day_seed)
-	var di := 1
-	if GameState != null and "day_index" in GameState:
-		di = int(GameState.get("day_index"))
+	var di := int(GameState.day_index) if GameState != null else 1
 	DbgLog.info("Day start: Day=%d StrengthS=%d seed=%d" % [di, strength_s, _last_day_seed], "game_state")
 	# If preview adventurers were spawned during BUILD, reuse them; otherwise spawn normally.
 	if _surface_preview != null and _surface_preview.has_preview_actors():
@@ -378,9 +372,7 @@ func _finish_end_day_cleanup() -> void:
 	day_ended.emit()
 	_ending_day = false
 	# History: mark day end (phase depends on reason, but simply "end" here).
-	var di4 := 1
-	if GameState != null and "day_index" in GameState:
-		di4 = int(GameState.get("day_index"))
+	var di4 := int(GameState.day_index) if GameState != null else 1
 	if _history != null:
 		_history.record_day_change(di4, "end")
 
@@ -459,7 +451,8 @@ func get_history_events() -> Array:
 func _process(delta: float) -> void:
 	if not _active:
 		if _surface_preview != null and GameState != null and int(GameState.phase) == int(GameState.Phase.BUILD):
-			_surface_preview.tick(delta, float(GameState.get("speed")) if ("speed" in GameState) else 1.0)
+			# NOTE: `GameState` is an autoload Object; `"speed" in GameState` does NOT work reliably.
+			_surface_preview.tick(delta, float(GameState.speed))
 		return
 	var dt: float = delta * GameState.speed
 
@@ -794,6 +787,13 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 	out["hp"] = int(adv.get("hp"))
 	out["hp_max"] = int(adv.get("hp_max"))
 	out["attack_damage"] = int(adv.get("attack_damage"))
+	# New internal stats (shown in tooltip).
+	var v_int: Variant = adv.get("intelligence")
+	var v_str: Variant = adv.get("strength")
+	var v_agi: Variant = adv.get("agility")
+	out["intelligence"] = int(v_int) if typeof(v_int) == TYPE_INT else 0
+	out["strength"] = int(v_str) if typeof(v_str) == TYPE_INT else 0
+	out["agility"] = int(v_agi) if typeof(v_agi) == TYPE_INT else 0
 
 	# BUILD preview: derive tooltip fields from cached generation.
 	if is_build and _surface_preview != null:
@@ -1162,7 +1162,7 @@ func _retarget_party(party_id: int, from_cell: Vector2i) -> void:
 			if cur_cell == Vector2i(-1, -1):
 				cur_cell = base_cell
 			var eff_intent := _party_adv.effective_intent_for_adv(aid, party_intent)
-			var goal := party_goal if eff_intent == party_intent else _party_adv.goal_cell_for_intent(eff_intent, cur_cell)
+			var goal := party_goal if eff_intent == party_intent else _party_adv.goal_cell_for_adv_intent(aid, eff_intent, cur_cell)
 			var p: Array[Vector2i] = _path_service.path(cur_cell, goal, true)
 			a.call("set_path", p)
 		_drain_party_bubble_events()
@@ -1449,9 +1449,7 @@ func _on_adventurer_cell_reached(cell: Vector2i, adv: Node2D) -> void:
 				if hp_max > 0 and hp_now < hp_max:
 					took_any_damage = true
 				var reason := "flee" if took_any_damage else "exit"
-				var di3 := 1
-				if GameState != null and "day_index" in GameState:
-					di3 = int(GameState.get("day_index"))
+				var di3 := int(GameState.day_index) if GameState != null else 1
 				_history.record_adv_exit(aid_exit, reason, di3)
 			_remove_adv_from_tracking(aid_exit)
 			adv.queue_free()

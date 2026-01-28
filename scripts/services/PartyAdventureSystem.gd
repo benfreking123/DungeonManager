@@ -215,6 +215,16 @@ func register_adventurer(adv: Node2D, member_id: int) -> void:
 
 	adv.set("party_id", pid)
 
+	# Apply rolled base stats (defaults already exist on the actor via class).
+	var base_stats: Dictionary = md.get("base_stats", {}) as Dictionary
+	if not base_stats.is_empty():
+		if _has_property(adv, "intelligence"):
+			adv.set("intelligence", int(base_stats.get("intelligence", int(adv.get("intelligence")))))
+		if _has_property(adv, "strength"):
+			adv.set("strength", int(base_stats.get("strength", int(adv.get("strength")))))
+		if _has_property(adv, "agility"):
+			adv.set("agility", int(base_stats.get("agility", int(adv.get("agility")))))
+
 	# Apply rolled stat mods on top of class base stats.
 	var mods: Dictionary = md.get("stat_mods", {}) as Dictionary
 	var hp_bonus := int(mods.get("hp_bonus", 0))
@@ -385,14 +395,14 @@ func party_goal_cell(party_id: int, from_cell: Vector2i) -> Vector2i:
 	if pid == 0:
 		return from_cell
 	var intent := decide_party_intent(pid)
-	var goal := _intent_goal_cell(intent, from_cell)
+	var goal := _intent_goal_cell(pid, intent, from_cell)
 	_set_party_intent_and_goal(pid, intent, goal)
 	_maybe_defect(pid, from_cell, intent)
 	return goal
 
 
-func goal_cell_for_intent(intent: String, from_cell: Vector2i) -> Vector2i:
-	return _intent_goal_cell(String(intent), from_cell)
+func goal_cell_for_adv_intent(adv_id: int, intent: String, from_cell: Vector2i) -> Vector2i:
+	return _intent_goal_cell_for_adv(int(adv_id), String(intent), from_cell)
 
 
 func party_id_for_adv(adv_id: int) -> int:
@@ -794,16 +804,88 @@ func decision_dialogue_for_adv(adv_id: int, effective_intent: String) -> String:
 	return ""
 
 
-func _intent_goal_cell(intent: String, from_cell: Vector2i) -> Vector2i:
+func _intent_goal_cell(party_id: int, intent: String, from_cell: Vector2i) -> Vector2i:
 	match String(intent):
 		INTENT_BOSS:
 			return _boss_goal_cell(from_cell)
 		INTENT_LOOT:
-			return _loot_goal_cell(from_cell)
+			return _loot_goal_cell(int(party_id), from_cell)
 		INTENT_EXIT:
 			return _entrance_goal_cell(from_cell)
 		_:
-			return _explore_goal_cell(from_cell)
+			return _explore_goal_cell(int(party_id), from_cell)
+
+
+func _intent_goal_cell_for_adv(adv_id: int, intent: String, from_cell: Vector2i) -> Vector2i:
+	# Like _intent_goal_cell, but uses the adventurer's own Intelligence for noise.
+	match String(intent):
+		INTENT_BOSS:
+			return _boss_goal_cell(from_cell)
+		INTENT_LOOT:
+			return _loot_goal_cell_for_int(_adv_intelligence(adv_id), from_cell)
+		INTENT_EXIT:
+			return _entrance_goal_cell(from_cell)
+		_:
+			return _explore_goal_cell_for_int(_adv_intelligence(adv_id), from_cell)
+
+
+func _adv_intelligence(adv_id: int) -> int:
+	var mid := int(_adv_to_member_id.get(int(adv_id), 0))
+	if mid == 0:
+		return int(_cfg.get("ADV_STAT_DEFAULT")) if _cfg != null else 10
+	var md: Dictionary = _member_defs.get(mid, {}) as Dictionary
+	var bs: Dictionary = md.get("base_stats", {}) as Dictionary
+	var v := int(bs.get("intelligence", int(_cfg.get("ADV_STAT_DEFAULT")) if _cfg != null else 10))
+	return _clamp_stat(v)
+
+
+func _party_avg_intelligence(party_id: int) -> int:
+	var pid := int(party_id)
+	var members: Array = _party_members.get(pid, []) as Array
+	if members.is_empty():
+		return int(_cfg.get("ADV_STAT_DEFAULT")) if _cfg != null else 10
+	var sum := 0
+	var n := 0
+	for aid0 in members:
+		var aid := int(aid0)
+		var mid := int(_adv_to_member_id.get(aid, 0))
+		if mid == 0:
+			continue
+		var md: Dictionary = _member_defs.get(mid, {}) as Dictionary
+		var bs: Dictionary = md.get("base_stats", {}) as Dictionary
+		sum += _clamp_stat(int(bs.get("intelligence", int(_cfg.get("ADV_STAT_DEFAULT")) if _cfg != null else 10)))
+		n += 1
+	if n <= 0:
+		return int(_cfg.get("ADV_STAT_DEFAULT")) if _cfg != null else 10
+	return _clamp_stat(int(round(float(sum) / float(n))))
+
+
+func _clamp_stat(v: int) -> int:
+	var min_s := int(_cfg.get("ADV_STAT_MIN")) if _cfg != null else 8
+	var max_s := int(_cfg.get("ADV_STAT_MAX")) if _cfg != null else 12
+	if min_s > max_s:
+		var tmp := min_s
+		min_s = max_s
+		max_s = tmp
+	return clampi(int(v), min_s, max_s)
+
+
+func _epsilon_for_intelligence(intelligence: int) -> float:
+	var min_s := int(_cfg.get("ADV_STAT_MIN")) if _cfg != null else 8
+	var max_s := int(_cfg.get("ADV_STAT_MAX")) if _cfg != null else 12
+	var base := float(_cfg.get("ADV_PATH_MISTAKE_CHANCE_BASE")) if _cfg != null else 0.25
+	var floor := float(_cfg.get("ADV_PATH_MISTAKE_MIN_CHANCE")) if _cfg != null else 0.01
+	base = clampf(base, 0.0, 1.0)
+	floor = clampf(floor, 0.0, 1.0)
+	if base < floor:
+		var tmp := base
+		base = floor
+		floor = tmp
+
+	var denom := float(maxi(1, max_s - min_s))
+	var t := clampf((float(intelligence) - float(min_s)) / denom, 0.0, 1.0)
+	# t=0 (low INT) => epsilon ~ base, t=1 (high INT) => epsilon ~ floor
+	return clampf(base * (1.0 - t), floor, base)
 
 
 func _boss_goal_cell(fallback: Vector2i) -> Vector2i:
@@ -818,11 +900,14 @@ func _boss_goal_cell(fallback: Vector2i) -> Vector2i:
 	return _room_center_cell(boss_room, fallback)
 
 
-func _loot_goal_cell(fallback: Vector2i) -> Vector2i:
+func _loot_goal_cell(party_id: int, fallback: Vector2i) -> Vector2i:
+	return _loot_goal_cell_for_int(_party_avg_intelligence(int(party_id)), fallback)
+
+
+func _loot_goal_cell_for_int(intelligence: int, fallback: Vector2i) -> Vector2i:
 	if _grid == null:
 		return fallback
-	var best_cell := Vector2i(-1, -1)
-	var best_len := 1e18
+	var candidates: Array[Dictionary] = []
 	var rooms: Array = _grid.get("rooms") as Array
 	for r0 in rooms:
 		var r := r0 as Dictionary
@@ -837,13 +922,16 @@ func _loot_goal_cell(fallback: Vector2i) -> Vector2i:
 		var p: Array[Vector2i] = _grid.call("find_path", fallback, c) as Array[Vector2i]
 		if p.is_empty():
 			continue
-		if p.size() < best_len:
-			best_len = p.size()
-			best_cell = c
-	return fallback if best_cell == Vector2i(-1, -1) else best_cell
+		candidates.append({ "cell": c, "len": int(p.size()) })
+
+	return _pick_cell_epsilon_greedy(candidates, intelligence, fallback)
 
 
-func _explore_goal_cell(fallback: Vector2i) -> Vector2i:
+func _explore_goal_cell(party_id: int, fallback: Vector2i) -> Vector2i:
+	return _explore_goal_cell_for_int(_party_avg_intelligence(int(party_id)), fallback)
+
+
+func _explore_goal_cell_for_int(intelligence: int, fallback: Vector2i) -> Vector2i:
 	# Target an unknown room adjacent to any known room (frontier).
 	if _grid == null or _fog == null:
 		return fallback
@@ -863,24 +951,70 @@ func _explore_goal_cell(fallback: Vector2i) -> Vector2i:
 				unknown_candidates.append(r)
 				break
 
-	var best_cell := Vector2i(-1, -1)
-	var best_len := 1e18
+	var candidates: Array[Dictionary] = []
 	for r2 in unknown_candidates:
 		var c := _room_center_cell(r2, fallback)
 		var p: Array[Vector2i] = _grid.call("find_path", fallback, c) as Array[Vector2i]
 		if p.is_empty():
 			continue
-		if p.size() < best_len:
-			best_len = p.size()
-			best_cell = c
-	if best_cell != Vector2i(-1, -1):
-		return best_cell
+		candidates.append({ "cell": c, "len": int(p.size()) })
+	var chosen := _pick_cell_epsilon_greedy(candidates, intelligence, Vector2i(-1, -1))
+	if chosen != Vector2i(-1, -1):
+		return chosen
 
 	# If nothing unknown adjacent remains, fall back to boss if known, else exit.
 	var boss := _boss_goal_cell(Vector2i(-1, -1))
 	if boss != Vector2i(-1, -1):
 		return boss
 	return _entrance_goal_cell(fallback)
+
+
+func _pick_cell_epsilon_greedy(candidates: Array[Dictionary], intelligence: int, fallback: Vector2i) -> Vector2i:
+	if candidates.is_empty():
+		return fallback
+	var eps := _epsilon_for_intelligence(intelligence)
+	# Find best (min len) set.
+	var best_len := 999999999
+	for d0 in candidates:
+		best_len = mini(best_len, int((d0 as Dictionary).get("len", 999999999)))
+	var best_cells: Array[Vector2i] = []
+	var worse: Array[Dictionary] = []
+	for d1 in candidates:
+		var d := d1 as Dictionary
+		var l := int(d.get("len", 999999999))
+		var cell: Vector2i = d.get("cell", Vector2i(-1, -1))
+		if cell == Vector2i(-1, -1):
+			continue
+		if l <= best_len:
+			best_cells.append(cell)
+		else:
+			# Store delta for weighting.
+			worse.append({ "cell": cell, "delta": maxi(1, l - best_len) })
+	if best_cells.is_empty() and worse.is_empty():
+		return fallback
+
+	# Epsilon-greedy: sometimes pick a non-best candidate (“mistake”).
+	if not worse.is_empty() and _rng != null and _rng.randf() < eps:
+		# Prefer near-misses over huge mistakes: weight = 1/delta.
+		var total := 0.0
+		for w0 in worse:
+			var dd := float(int((w0 as Dictionary).get("delta", 1)))
+			total += 1.0 / maxf(1.0, dd)
+		var roll := _rng.randf() * total
+		var acc := 0.0
+		for w1 in worse:
+			var cell2: Vector2i = (w1 as Dictionary).get("cell", Vector2i(-1, -1))
+			var dd2 := float(int((w1 as Dictionary).get("delta", 1)))
+			acc += 1.0 / maxf(1.0, dd2)
+			if roll <= acc:
+				return cell2
+		return (worse[0] as Dictionary).get("cell", fallback)
+
+	# Otherwise pick among best cells.
+	if not best_cells.is_empty():
+		return best_cells[_rng.randi_range(0, best_cells.size() - 1)]
+	# No best set (shouldn't happen), pick from worse.
+	return (worse[_rng.randi_range(0, worse.size() - 1)] as Dictionary).get("cell", fallback)
 
 
 func _entrance_goal_cell(fallback: Vector2i) -> Vector2i:

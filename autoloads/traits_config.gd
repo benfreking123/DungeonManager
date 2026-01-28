@@ -50,6 +50,30 @@ const TRAITS := {
 		"s_delta": -2,
 		"w": 5,
 	},
+	"+1_intelligence": {
+		"label": "+1 Intelligence",
+		"mods": { "flat": { "intelligence": 1 }, "pct": {} },
+		"s_delta": 1,
+		"w": 7,
+	},
+	"+1_strength": {
+		"label": "+1 Strength",
+		"mods": { "flat": { "strength": 1 }, "pct": {} },
+		"s_delta": 1,
+		"w": 7,
+	},
+	"+1_agility": {
+		"label": "+1 Agility",
+		"mods": { "flat": { "agility": 1 }, "pct": {} },
+		"s_delta": 1,
+		"w": 7,
+	},
+	"+1_all_stats": {
+		"label": "+1 All Stats",
+		"mods": { "flat": { "intelligence": 1, "strength": 1, "agility": 1 }, "pct": {} },
+		"s_delta": 3,
+		"w": 3,
+	},
 }
 
 

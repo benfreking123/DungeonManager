@@ -14,3 +14,6 @@ hp_max = 12
 attack_damage = 1
 attack_interval = 1.0
 range = 40.0
+intelligence = 9
+strength = 11
+agility = 10

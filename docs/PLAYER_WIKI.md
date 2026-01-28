@@ -67,3 +67,12 @@ Adventurers come in classes; classes affect stats/behavior.
 - **`mage`**: Mage
 - **`priest`**: Priest
 
+## Adventurer stats
+Adventurers also have internal stats. You can view these by right-clicking an adventurer (tooltip).
+
+- **Intelligence (INT)**: Reduces navigation/decision “mistakes” when choosing where to go next. Higher INT = fewer wrong turns.
+- **Strength (STR)**: Placeholder for future combat/interaction scaling.
+- **Agility (AGI)**: Placeholder for future speed/dodge/pathing finesse.
+
+Stats can be modified by **traits** (e.g. `+1 Intelligence`, `+1 All Stats`).
+

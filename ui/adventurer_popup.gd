@@ -3,7 +3,7 @@ extends PanelContainer
 @onready var _title: Label = $VBox/Top/Title
 @onready var _close: Button = $VBox/Top/Close
 @onready var _line1: Label = $VBox/Body/Line1
-@onready var _line2: Label = $VBox/Body/Line2
+@onready var _line2: RichTextLabel = $VBox/Body/Line2
 @onready var _line3: Label = $VBox/Body/Line3
 @onready var _party: Label = $VBox/Body/VBoxContainer/HBoxContainer/Party
 @onready var _morality: Label = $VBox/Body/VBoxContainer/HBoxContainer/Morality
@@ -80,6 +80,9 @@ func _refresh() -> void:
 	var hp := int(data.get("hp", 0))
 	var hp_max := int(data.get("hp_max", 0))
 	var dmg := int(data.get("attack_damage", 0))
+	var str0 := int(data.get("strength", 0))
+	var agi0 := int(data.get("agility", 0))
+	var int0 := int(data.get("intelligence", 0))
 	var moral_lbl := String(data.get("morality_label", ""))
 	var name := String(data.get("name", ""))
 	var epithet := String(data.get("epithet", ""))
@@ -96,7 +99,12 @@ func _refresh() -> void:
 		_line1.text = "%s from %s" % [class_id, origin]
 	elif party_id != 0:
 		_line1.text = "Party %d" % party_id
-	_line2.text = "HP %d/%d   DMG %d" % [hp, hp_max, dmg]
+	if _line2 != null:
+		# Color-coded stats: STR red, AGI green, INT blue.
+		# Keep HP/DMG uncolored for readability.
+		var s_hp := "HP %d/%d   DMG %d" % [hp, hp_max, dmg]
+		var s_stats := "  [color=#e74c3c]STR %d[/color]  [color=#2ecc71]AGI %d[/color]  [color=#3498db]INT %d[/color]" % [str0, agi0, int0]
+		_line2.text = s_hp + s_stats
 	# Line 3: show bio/background if present; else fall back to morality.
 	if bio != "":
 		_line3.text = bio
