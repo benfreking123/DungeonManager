@@ -26,7 +26,19 @@ This file is a quick “what exists” index for everything meaningful to the pl
 - **Build inventory (alternate/older room count tracking)**: `res://autoloads/BuildInventory.gd`
   - Keys are **RoomType ids**; not all room kinds are tracked by default
 - **UI that renders inventories**: `res://ui/RoomInventoryPanel.gd` (tabs: Rooms/Monsters/Traps/Boss/Treasure)
-- **Update rule**: Adjust starting counts in the `counts` dictionaries in the autoload `.gd` files.
+- **Starting inventory profiles**:
+  - Config files:
+    - Base: `res://config/start_inventory/base.json`
+    - Test overlay: `res://config/start_inventory/test.json`
+  - Toggle profile in editor: Project Settings → `game/start_inventory_profile` (`base` or `test`)
+  - Merge rules:
+    - Scalars (e.g. `gold`): overlay overrides
+    - `items`: merged by `id`, quantities are summed
+    - `rooms`: merged by `id`, quantities are summed
+  - Loader/merge: `res://autoloads/StartInventoryService.gd`
+  - Runtime application:
+    - `res://autoloads/PlayerInventory.gd` builds item counts from merged config on startup and restart
+    - `res://autoloads/RoomInventory.gd` builds room-piece counts from merged config on startup and restart
 
 ## Dungeon layout (grid + slots)
 - **Dungeon grid state**: `res://autoloads/DungeonGrid.gd`

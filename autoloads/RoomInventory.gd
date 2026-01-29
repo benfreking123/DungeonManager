@@ -5,19 +5,7 @@ signal inventory_changed()
 # Room-piece inventory (for build phase).
 # Keys are RoomDB type ids: hall, monster, trap, boss, treasure
 
-var counts: Dictionary = {
-	"hall": 2,
-	"stairs": 2,
-	"corridor": 2,
-	"hall_plus": 1,
-	"hall_t_left": 1,
-	"monster": 1,
-	"trap": 1,
-	"trap_2x1": 1,
-	"trap_3x2": 1,
-	"boss": 1,
-	"treasure": 1,
-}
+var counts: Dictionary = {}
 
 
 func get_count(id: String) -> int:
@@ -41,20 +29,20 @@ func refund(id: String, amount: int = 1) -> void:
 	inventory_changed.emit()
 
 
-func reset_all() -> void:
-	counts = {
-		"hall": 2,
-		"stairs": 2,
-		"corridor": 2,
-		"hall_plus": 1,
-		"hall_t_left": 1,
-		"monster": 1,
-		"trap": 1,
-		"trap_2x1": 1,
-		"trap_3x2": 1,
-		"boss": 1,
-		"treasure": 1,
-	}
+func _ready() -> void:
+	# Defer rebuild so other autoloads/UI are ready before we emit.
+	call_deferred("_rebuild_from_config")
+
+
+func _rebuild_from_config() -> void:
+	var rooms := StartInventoryService.get_merged_rooms()
+	counts = StartInventoryService.to_room_counts(rooms)
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug("RoomInventory: built room counts from config ids=%s" % str(counts.keys()), "inventory")
 	inventory_changed.emit()
+
+
+func reset_all() -> void:
+	_rebuild_from_config()
 
 

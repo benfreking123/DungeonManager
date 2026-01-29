@@ -3,27 +3,7 @@ extends Node
 signal inventory_changed()
 
 # Counts by item id.
-var counts: Dictionary = {
-	"spike_trap": 1,
-	"floor_pit": 1,
-	"zombie": 1,
-	"skeleton": 1,
-	"ogre": 1,
-	"slime": 1,
-	# Boss upgrades
-	"armor": 1,
-	"attack_speed": 1,
-	"damage": 1,
-	"double_strike": 1,
-	"glop": 1,
-	"health": 1,
-	"reflect": 1,
-	"treasure_base": 1,
-	"treasure_mage": 1,
-	"treasure_priest": 1,
-	"treasure_rogue": 1,
-	"treasure_warrior": 1,
-}
+var counts: Dictionary = {}
 
 
 func get_count(item_id: String) -> int:
@@ -51,28 +31,31 @@ func refund(item_id: String, amount: int = 1) -> void:
 	inventory_changed.emit()
 
 
-func reset_all() -> void:
-	counts = {
-		"spike_trap": 1,
-		"floor_pit": 1,
-		"zombie": 1,
-		"skeleton": 1,
-		"ogre": 1,
-		"slime": 1,
-		# Boss upgrades
-		"armor": 1,
-		"attack_speed": 1,
-		"damage": 1,
-		"double_strike": 1,
-		"glop": 1,
-		"health": 1,
-		"reflect": 1,
-		"treasure_base": 1,
-		"treasure_mage": 1,
-		"treasure_priest": 1,
-		"treasure_rogue": 1,
-		"treasure_warrior": 1,
-	}
+func _ready() -> void:
+	# Defer rebuild so other autoloads/UI are ready before we emit.
+	call_deferred("_rebuild_from_config")
+
+
+func _rebuild_from_config() -> void:
+	# Build the start inventory from merged config via StartInventoryService.
+	var items := StartInventoryService.get_merged_items()
+	counts = StartInventoryService.to_item_counts(items)
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug("PlayerInventory: built counts from config ids=%s" % str(counts.keys()), "inventory")
 	inventory_changed.emit()
 
+
+func reset_all() -> void:
+	_rebuild_from_config()
+
+
+func list_owned_ids() -> Array:
+	var ids: Array = []
+	for k in counts.keys():
+		var id := String(k)
+		if id == "":
+			continue
+		if int(counts.get(id, 0)) > 0:
+			ids.append(id)
+	return ids
 

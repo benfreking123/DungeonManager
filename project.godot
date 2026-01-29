@@ -17,13 +17,15 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+DbgLog="*res://autoloads/DbgLog.gd"
+ConfigService="*res://autoloads/ConfigService.gd"
+StartInventoryService="*res://autoloads/StartInventoryService.gd"
+ItemDB="*res://autoloads/ItemDB.gd"
+RoomDB="*res://autoloads/RoomDB.gd"
 GameState="*res://autoloads/GameState.gd"
 DungeonGrid="*res://autoloads/DungeonGrid.gd"
-RoomDB="*res://autoloads/RoomDB.gd"
 Simulation="*res://autoloads/Simulation.gd"
 PlayerInventory="*res://autoloads/PlayerInventory.gd"
-DbgLog="*res://autoloads/DbgLog.gd"
-ItemDB="*res://autoloads/ItemDB.gd"
 RoomInventory="*res://autoloads/RoomInventory.gd"
 game_config="*res://autoloads/game_config.gd"
 config_goals="*res://autoloads/config_goals.gd"

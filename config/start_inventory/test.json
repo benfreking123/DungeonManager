@@ -1,0 +1,41 @@
+{
+  "gold": 0,
+  "items": [
+    { "id": "spike_trap", "quantity": 1 },
+    { "id": "floor_pit", "quantity": 1 },
+    { "id": "teleport_trap", "quantity": 1 },
+    { "id": "web_trap", "quantity": 1 },
+    { "id": "rearm_trap", "quantity": 1 },
+    { "id": "zombie", "quantity": 1 },
+    { "id": "skeleton", "quantity": 1 },
+    { "id": "ogre", "quantity": 1 },
+    { "id": "slime", "quantity": 1 },
+    { "id": "boss", "quantity": 1 },
+    { "id": "armor", "quantity": 1 },
+    { "id": "attack_speed", "quantity": 1 },
+    { "id": "damage", "quantity": 1 },
+    { "id": "double_strike", "quantity": 1 },
+    { "id": "glop", "quantity": 1 },
+    { "id": "health", "quantity": 1 },
+    { "id": "reflect", "quantity": 1 },
+    { "id": "treasure_base", "quantity": 1 },
+    { "id": "treasure_mage", "quantity": 1 },
+    { "id": "treasure_priest", "quantity": 1 },
+    { "id": "treasure_rogue", "quantity": 1 },
+    { "id": "treasure_warrior", "quantity": 1 }
+  ],
+  "rooms": [
+    { "id": "hall", "quantity": 2 },
+    { "id": "stairs", "quantity": 2 },
+    { "id": "corridor", "quantity": 2 },
+    { "id": "hall_plus", "quantity": 1 },
+    { "id": "hall_t_left", "quantity": 1 },
+    { "id": "monster", "quantity": 1 },
+    { "id": "trap", "quantity": 1 },
+    { "id": "trap_2x1", "quantity": 1 },
+    { "id": "trap_3x2", "quantity": 1 },
+    { "id": "boss", "quantity": 1 },
+    { "id": "treasure", "quantity": 1 }
+  ]
+}
+

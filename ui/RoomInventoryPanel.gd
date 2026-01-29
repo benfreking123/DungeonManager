@@ -32,6 +32,11 @@ func _ready() -> void:
 	_refresh()
 	RoomInventory.inventory_changed.connect(_refresh)
 	PlayerInventory.inventory_changed.connect(_refresh)
+	# Refresh when ItemDB finishes loading resources.
+	if has_node("/root/ItemDB"):
+		var db := get_node("/root/ItemDB")
+		if db.has_signal("db_ready"):
+			db.connect("db_ready", Callable(self, "_refresh"))
 	_setup_tabs()
 
 
@@ -175,7 +180,15 @@ func _refresh() -> void:
 		return
 
 	_refresh_rooms()
-	_refresh_items()
+	_refresh_items_from_owned()
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug("RoomInventoryPanel: grids rooms=%d monsters=%d traps=%d boss=%d treasure=%d" % [
+			_room_grid.get_child_count(),
+			_monster_grid.get_child_count(),
+			_trap_grid.get_child_count(),
+			_boss_grid.get_child_count(),
+			_treasure_grid.get_child_count()
+		], "inventory")
 
 
 func _clear_children(parent: Node) -> void:
@@ -194,6 +207,8 @@ func _refresh_rooms() -> void:
 		if type_id == "entrance":
 			continue
 		var count: int = RoomInventory.get_count(type_id)
+		if count <= 0:
+			continue
 		var label: String = t.get("label", type_id)
 		var kind: String = String(t.get("kind", type_id))
 		var icon := _get_room_glyph_icon(kind)
@@ -202,28 +217,38 @@ func _refresh_rooms() -> void:
 		btn.call("set_room", type_id, label, count, icon)
 
 
-func _refresh_items() -> void:
-	_refresh_item_group(_monster_grid, ItemDB.monsters)
-	_refresh_item_group(_trap_grid, ItemDB.traps)
-	_refresh_item_group(_treasure_grid, ItemDB.treasures)
-	_refresh_boss()
+func _refresh_items_from_owned() -> void:
+	# Build lists from what the player actually owns, then route by kind.
+	var owned: Array = PlayerInventory.list_owned_ids()
+	owned.sort()
+	for item_id in owned:
+		var id := String(item_id)
+		var kind := ItemDB.get_item_kind(id)
+		var res: Resource = ItemDB.get_any_item(id)
+		var display_name := _resource_display_name(res, id)
+		var icon := _resource_icon(res, id)
+		var count: int = PlayerInventory.get_count(id)
+		if count <= 0:
+			continue
+		var btn := _item_btn_scene.instantiate()
+		match kind:
+			"monster":
+				if id == "boss":
+					_boss_grid.add_child(btn)
+				else:
+					_monster_grid.add_child(btn)
+			"trap":
+				_trap_grid.add_child(btn)
+			"treasure":
+				_treasure_grid.add_child(btn)
+			"boss_upgrade":
+				_boss_grid.add_child(btn)
+			_:
+				# Unknown kind: default to treasure grid for visibility.
+				_treasure_grid.add_child(btn)
+		btn.call("set_item", id, display_name, icon, count)
 
 
-func _refresh_boss() -> void:
-	# Boss is intentionally excluded from Monster tab; show it here instead.
-	var item_id := "boss"
-	var res: Resource = ItemDB.get_any_item(item_id)
-	if res == null:
-		return
-	var count: int = PlayerInventory.get_count(item_id)
-	var display_name := _resource_display_name(res, item_id)
-	var icon := _resource_icon(res, item_id)
-	var btn := _item_btn_scene.instantiate()
-	_boss_grid.add_child(btn)
-	btn.call("set_item", item_id, display_name, icon, count)
-
-	# Boss upgrades also live in the Boss tab.
-	_refresh_item_group(_boss_grid, ItemDB.boss_upgrades)
 
 
 func _refresh_item_group(target_grid: Container, dict: Dictionary) -> void:
@@ -245,6 +270,8 @@ func _refresh_item_group(target_grid: Container, dict: Dictionary) -> void:
 			continue
 		var res: Resource = ItemDB.get_any_item(item_id)
 		var count: int = PlayerInventory.get_count(item_id)
+		if count <= 0:
+			continue
 		var display_name := _resource_display_name(res, item_id)
 		var icon := _resource_icon(res, item_id)
 

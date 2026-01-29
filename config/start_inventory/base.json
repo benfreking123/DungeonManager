@@ -1,0 +1,21 @@
+{
+  "gold": 0,
+  "items": [
+    { "id": "spike_trap", "quantity": 1 },
+    { "id": "zombie", "quantity": 1 },
+    { "id": "treasure_base", "quantity": 1 },
+    { "id": "treasure_mage", "quantity": 1 },
+    { "id": "treasure_priest", "quantity": 1 },
+    { "id": "treasure_rogue", "quantity": 1 },
+    { "id": "treasure_warrior", "quantity": 1 }
+  ],
+  "rooms": [
+    { "id": "stairs", "quantity": 2 },
+    { "id": "corridor", "quantity": 2 },
+    { "id": "monster", "quantity": 1 },
+    { "id": "trap_2x1", "quantity": 1 },
+    { "id": "boss", "quantity": 1 },
+    { "id": "treasure", "quantity": 1 }
+  ]
+}
+

@@ -1,5 +1,7 @@
 extends Node
 
+signal db_ready()
+
 # Central registry for item resources (.tres).
 
 var traps: Dictionary = {}
@@ -37,6 +39,12 @@ func _ready() -> void:
 
 	# Boss upgrades
 	_load_boss_upgrades()
+
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug("ItemDB: ready traps=%d monsters=%d treasures=%d boss_upgrades=%d" % [
+			traps.size(), monsters.size(), treasures.size(), boss_upgrades.size()
+		], "inventory")
+	db_ready.emit()
 
 
 func _load_monsters() -> void:
