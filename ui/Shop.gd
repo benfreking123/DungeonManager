@@ -542,6 +542,8 @@ func _on_slot_purchase_pressed(slot: Control, offer: Dictionary, _screen_pos: Ve
 		return
 	_spend_cost(offer)
 	_grant_offer(offer)
+	# Ensure the inventory UI reflects the change immediately.
+	_refresh_inventory_panel_now()
 	_fly_offer_icon(slot, offer)
 	# Remove the purchased slot immediately.
 	slot.queue_free()
@@ -681,6 +683,16 @@ func _inventory_target_global_pos(offer: Dictionary) -> Vector2:
 	if item_kind == "boss_upgrade":
 		return rip.call("get_collect_target_global_pos", "boss") as Vector2
 	return rip.call("get_collect_target_global_pos", "treasure") as Vector2
+
+
+func _refresh_inventory_panel_now() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var rip := scene.find_child("RoomInventoryPanel", true, false)
+	if rip != null and rip.has_method("_refresh"):
+		# Defer to avoid layout thrash during purchase animations.
+		rip.call_deferred("_refresh")
 
 
 func _stop_squares_anim() -> void:

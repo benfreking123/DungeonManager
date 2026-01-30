@@ -892,6 +892,9 @@ func _traits_pretty_lines(traits: Array) -> Array[String]:
 				continue
 			parts.append("%s %+d%%" % [String(k2), delta2])
 		out.append(label if parts.is_empty() else ("%s (%s)" % [label, ", ".join(parts)]))
+	# Explicitly free temporary traits config Node to avoid leak warnings in headless CI.
+	if traits_cfg != null:
+		traits_cfg.free()
 	return out
 
 

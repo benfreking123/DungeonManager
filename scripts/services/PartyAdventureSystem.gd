@@ -287,6 +287,9 @@ func register_adventurer(adv: Node2D, member_id: int) -> void:
 				adv.set(sk2, cur_val2 + delta)
 				if sk2 == "hp_max":
 					adv.set("hp", int(adv.get("hp_max")))
+		# Explicitly free temporary traits config Node to avoid leak warnings in headless CI.
+		if traits_cfg != null:
+			traits_cfg.free()
 
 	# Brain
 	var brain := AdventurerBrain.new()

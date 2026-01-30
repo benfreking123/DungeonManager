@@ -234,6 +234,10 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 
 		party_defs.append({ "party_id": pid, "member_ids": member_ids })
 
+	# Explicitly free temporary traits config Node to avoid leak warnings in headless CI.
+	if traits_cfg != null:
+		traits_cfg.free()
+
 	return {
 		"day_seed": int(day_seed),
 		"party_defs": party_defs,

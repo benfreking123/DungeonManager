@@ -3,6 +3,7 @@ extends Node
 signal phase_changed(new_phase: int)
 signal speed_changed(new_speed: float)
 signal economy_changed()
+signal day_changed(new_day: int)
 
 enum Phase { BUILD, DAY, SHOP, RESULTS }
 
@@ -103,3 +104,4 @@ func reset_all() -> void:
 
 func advance_day() -> void:
 	day_index = maxi(1, int(day_index) + 1)
+	day_changed.emit(int(day_index))

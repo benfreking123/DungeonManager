@@ -68,11 +68,13 @@ func _ready() -> void:
 	_resolve_setup_warning_popup()
 	_resolve_world_nodes()
 	_resolve_town_view()
+	_maybe_set_sim_views()
 	_apply_paper_theme()
 	_layout_paper_fx()
 	resized.connect(_layout_paper_fx)
 	resized.connect(_apply_world_transform)
 	_resolve_dungeon_view()
+	_maybe_set_sim_views()
 	_resolve_room_popup()
 	_resolve_adventurer_popup()
 	_resolve_history_panel()
@@ -120,6 +122,11 @@ func _ready() -> void:
 			_refresh_action_button()
 			_refresh_day_label()
 			_maybe_open_shop_for_phase(int(_new_phase))
+		)
+	# Keep day label in sync with explicit day changes.
+	if GameState != null and GameState.has_signal("day_changed"):
+		GameState.day_changed.connect(func(_new_day: int) -> void:
+			_refresh_day_label()
 		)
 	# Ensure action button matches initial phase/speed immediately.
 	_refresh_action_button()
@@ -174,12 +181,21 @@ func _resolve_topbar_nodes() -> void:
 			power_label = get_node_or_null("TopBar/HBox/PowerLabel") as Label
 	if day_label == null:
 		day_label = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/DayLabel") as Label
+		if day_label == null:
+			# Newer right-side layout variant
+			day_label = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer3/DayLabel") as Label
+		if day_label == null:
+			# Legacy layout fallback
+			day_label = get_node_or_null("TopBar/HBox/DayLabel") as Label
 	if day_button == null:
 		# New HUD layout (right-side column)
 		day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer2/DayButton") as Button
 		if day_button == null:
 			# Older new layout variant
 			day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/DayButton") as Button
+		if day_button == null:
+			# Newer right-side layout variant
+			day_button = get_node_or_null("VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer3/DayButton") as Button
 		if day_button == null:
 			# Legacy layout
 			day_button = get_node_or_null("TopBar/HBox/DayButton") as Button
@@ -415,10 +431,16 @@ func _resolve_shop() -> void:
 		# Godot clamps CanvasItem z_index; keep within valid range.
 		inst.z_index = 4096
 		_shop = inst
+	# Always ensure signals are connected (even if Shop node already existed in the scene).
+	if _shop != null:
 		if _shop.has_signal("shop_opened"):
-			_shop.connect("shop_opened", Callable(self, "_on_shop_opened"))
+			var cb_open := Callable(self, "_on_shop_opened")
+			if not _shop.is_connected("shop_opened", cb_open):
+				_shop.connect("shop_opened", cb_open)
 		if _shop.has_signal("shop_closed"):
-			_shop.connect("shop_closed", Callable(self, "_on_shop_closed"))
+			var cb_close := Callable(self, "_on_shop_closed")
+			if not _shop.is_connected("shop_closed", cb_close):
+				_shop.connect("shop_closed", cb_close)
 
 
 func _resolve_room_inventory_panel() -> void:
@@ -451,6 +473,9 @@ func _on_shop_closed() -> void:
 		if GameState.has_method("advance_day"):
 			GameState.advance_day()
 		_refresh_day_label()
+		# Restore non-zero speed so BUILD preview/wander resumes.
+		var restore_speed := _last_nonzero_speed if _last_nonzero_speed > 0.0 else 1.0
+		GameState.set_speed(restore_speed)
 		GameState.set_phase(GameState.Phase.BUILD)
 
 
@@ -537,7 +562,16 @@ func _resolve_dungeon_view() -> void:
 		var n := get_node_or_null(p)
 		if n != null:
 			_dungeon_view = n
+			_maybe_set_sim_views()
 			return
+
+func _maybe_set_sim_views() -> void:
+	if _simulation == null:
+		return
+	if _town_view == null or _dungeon_view == null:
+		return
+	if _simulation.has_method("set_views"):
+		_simulation.call("set_views", _town_view, _dungeon_view)
 
 
 func _resolve_room_popup() -> void:
@@ -631,6 +665,7 @@ func _resolve_town_view() -> void:
 		var n := get_node_or_null(p) as Control
 		if n != null:
 			_town_view = n
+			_maybe_set_sim_views()
 			return
 
 

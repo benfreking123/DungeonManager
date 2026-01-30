@@ -97,6 +97,9 @@ func _ensure_config_loaded() -> void:
 	_load_names()
 	_load_bios()
 	_load_epithets()
+	# Explicitly free temporary Node to avoid leak warnings in headless CI.
+	if cfg != null and cfg is Object:
+		cfg.free()
 	_cfg_loaded = true
 
 func _load_names() -> void:

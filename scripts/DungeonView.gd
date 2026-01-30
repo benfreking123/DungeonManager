@@ -52,15 +52,9 @@ const THEME_TYPE := "DungeonView"
 # While dragging a room inventory item, we preview that room size.
 var _drag_room_type_id: String = ""
 
-# Lightweight "stamp" FX state for successful drops.
-const STAMP_DUR_S := 0.22
-var _stamp_room_rect: Rect2 = Rect2()
-var _stamp_room_t0: float = -999.0
-var _stamp_room_jitter: Vector2 = Vector2.ZERO
-
-var _stamp_slot_rect: Rect2 = Rect2()
-var _stamp_slot_t0: float = -999.0
-var _stamp_slot_jitter: Vector2 = Vector2.ZERO
+#
+# Stamps moved to DungeonStampFxService
+#
 
 var _preview_last_ok: bool = true
 var _preview_last_text: String = ""
@@ -69,6 +63,21 @@ var _preview_last_text: String = ""
 @onready var _dungeon_grid: Node = get_node_or_null("/root/DungeonGrid")
 @onready var _game_state: Node = get_node_or_null("/root/GameState")
 
+#
+# Services (owned by DungeonView)
+#
+const PlacementServiceScript := preload("res://scripts/services/DungeonPlacementService.gd")
+const SlotServiceScript := preload("res://scripts/services/DungeonSlotService.gd")
+const DrawServiceScript := preload("res://scripts/services/DungeonBlueprintDrawService.gd")
+const StampFxServiceScript := preload("res://scripts/services/DungeonStampFxService.gd")
+const ItemIconServiceScript := preload("res://scripts/services/ItemIconService.gd")
+
+var _placement: RefCounted = null
+var _slots: RefCounted = null
+var _drawsvc: RefCounted = null
+var _stamps: RefCounted = null
+var _icons: RefCounted = null
+
 
 func _ready() -> void:
 	# Control draws via _draw(). Call queue_redraw when state changes.
@@ -76,6 +85,12 @@ func _ready() -> void:
 		_dungeon_grid.layout_changed.connect(queue_redraw)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_process(true)
+	# Initialize services
+	_icons = ItemIconServiceScript.new()
+	_drawsvc = DrawServiceScript.new(self, _icons)
+	_placement = PlacementServiceScript.new(self, _dungeon_grid, _room_db, _game_state)
+	_slots = SlotServiceScript.new(self, _dungeon_grid)
+	_stamps = StampFxServiceScript.new()
 	queue_redraw()
 
 
@@ -83,39 +98,7 @@ func _now_s() -> float:
 	return float(Time.get_ticks_msec()) / 1000.0
 
 
-func _hash01(i: int) -> float:
-	# Fast, deterministic 0..1 hash for small integers.
-	return float(((i * 1103515245) ^ 0x9E3779B9) & 0xFFFF) / 65535.0
-
-
-func _hash_signed01(i: int) -> float:
-	# Map to -1..1
-	return (_hash01(i) * 2.0) - 1.0
-
-func _hash01_pair(a: int, b: int) -> float:
-	# Simple pair hash -> 0..1
-	return float((((a * 1103515245) ^ (b * 2654435761) ^ 0x9E3779B9) & 0xFFFF)) / 65535.0
-
-func _draw_noisy_line(a: Vector2, b: Vector2, col: Color, base_w: float, seed: int, amp_px: float, seg_px: float) -> void:
-	# Draw a "hand-drawn" wobbly line by splitting into short segments with slight perpendicular offsets and width variance.
-	var dir := b - a
-	var length := dir.length()
-	if length <= 0.001:
-		return
-	dir /= length
-	var perp := Vector2(-dir.y, dir.x)
-	var seg_len := maxf(4.0, seg_px)
-	var segments := int(ceil(length / seg_len))
-	for i in range(segments):
-		var t0 := float(i) / float(segments)
-		var t1 := float(i + 1) / float(segments)
-		var p0 := a + dir * (length * t0)
-		var p1 := a + dir * (length * t1)
-		var off_amt := _hash_signed01(seed * 131 + i * 17) * amp_px
-		var w_mult := 0.85 + _hash01_pair(seed, i) * 0.4
-		var w := maxf(1.0, base_w * w_mult)
-		var off := perp * off_amt
-		draw_line(p0 + off, p1 + off, col, w)
+# (hash/draw helpers moved into DrawService)
 
 func _composite_cells_for_type(type_id: String, anchor: Vector2i) -> Array[Vector2i]:
 	var off: Array = COMPOSITE_HALL_OFFSETS.get(type_id, []) as Array
@@ -129,31 +112,19 @@ func _composite_cells_for_type(type_id: String, anchor: Vector2i) -> Array[Vecto
 
 
 func _trigger_room_stamp(rect: Rect2) -> void:
-	_stamp_room_rect = rect
-	_stamp_room_t0 = _now_s()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(Time.get_ticks_usec())
-	_stamp_room_jitter = Vector2(rng.randf_range(-2.0, 2.0), rng.randf_range(-2.0, 2.0))
+	if _stamps != null:
+		_stamps.trigger_room(rect)
 	queue_redraw()
 
 
 func _trigger_slot_stamp(rect: Rect2) -> void:
-	_stamp_slot_rect = rect
-	_stamp_slot_t0 = _now_s()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(Time.get_ticks_usec()) ^ 0x9E3779B9
-	_stamp_slot_jitter = Vector2(rng.randf_range(-1.5, 1.5), rng.randf_range(-1.5, 1.5))
+	if _stamps != null:
+		_stamps.trigger_slot(rect)
 	queue_redraw()
 
 
-func _draw_stamp_rect(rect: Rect2, col: Color, t: float, jitter: Vector2) -> void:
-	# t: 0..1. Expands and fades.
-	var grow := lerpf(0.0, 8.0, t)
-	var a := lerpf(0.85, 0.0, t)
-	var r := rect.grow(grow)
-	r.position += jitter
-	draw_rect(r, Color(col.r, col.g, col.b, col.a * a), false, 2.0)
-	draw_rect(r.grow(-2.0), Color(col.r, col.g, col.b, col.a * a * 0.08), true)
+#
+# (stamp rect draw moved to StampFxService)
 
 
 func _preview_reason_text(reason_key: String) -> String:
@@ -179,106 +150,12 @@ func _update_preview_reason(ok: bool, reason_key: String) -> void:
 	preview_reason_changed.emit(text, ok)
 
 
-func _draw_dashed_line(a: Vector2, b: Vector2, col: Color, width: float, dash_len: float, gap_len: float) -> void:
-	var dir := b - a
-	var seg_len := dir.length()
-	if seg_len <= 0.001:
-		return
-	dir /= seg_len
-	var t := 0.0
-	while t < seg_len:
-		var seg_a := a + dir * t
-		var seg_b := a + dir * minf(t + dash_len, seg_len)
-		draw_line(seg_a, seg_b, col, width)
-		t += dash_len + gap_len
+#
+# (dashed/hatch rect helpers moved to DrawService)
 
 
-func _draw_dashed_rect(rect: Rect2, col: Color, width: float) -> void:
-	var dash := 8.0
-	var gap := 5.0
-	var tl := rect.position
-	var tr_p := rect.position + Vector2(rect.size.x, 0)
-	var bl := rect.position + Vector2(0, rect.size.y)
-	var br := rect.position + rect.size
-	_draw_dashed_line(tl, tr_p, col, width, dash, gap)
-	_draw_dashed_line(tr_p, br, col, width, dash, gap)
-	_draw_dashed_line(br, bl, col, width, dash, gap)
-	_draw_dashed_line(bl, tl, col, width, dash, gap)
-
-
-func _clip_code(p: Vector2, xmin: float, xmax: float, ymin: float, ymax: float) -> int:
-	var c := 0
-	if p.x < xmin:
-		c |= 1
-	elif p.x > xmax:
-		c |= 2
-	if p.y < ymin:
-		c |= 4
-	elif p.y > ymax:
-		c |= 8
-	return c
-
-
-func _clip_segment_to_rect(a: Vector2, b: Vector2, rect: Rect2) -> PackedVector2Array:
-	# Cohen–Sutherland clip against axis-aligned rect. Returns 0 or 2 points.
-	var xmin := rect.position.x
-	var xmax := rect.position.x + rect.size.x
-	var ymin := rect.position.y
-	var ymax := rect.position.y + rect.size.y
-
-	var p0 := a
-	var p1 := b
-	var out0 := _clip_code(p0, xmin, xmax, ymin, ymax)
-	var out1 := _clip_code(p1, xmin, xmax, ymin, ymax)
-
-	while true:
-		if (out0 | out1) == 0:
-			return PackedVector2Array([p0, p1])
-		if (out0 & out1) != 0:
-			return PackedVector2Array()
-
-		var out := out0 if out0 != 0 else out1
-		var x := 0.0
-		var y := 0.0
-
-		if (out & 4) != 0:
-			# Above
-			x = p0.x + (p1.x - p0.x) * (ymin - p0.y) / (p1.y - p0.y)
-			y = ymin
-		elif (out & 8) != 0:
-			# Below
-			x = p0.x + (p1.x - p0.x) * (ymax - p0.y) / (p1.y - p0.y)
-			y = ymax
-		elif (out & 2) != 0:
-			# Right
-			y = p0.y + (p1.y - p0.y) * (xmax - p0.x) / (p1.x - p0.x)
-			x = xmax
-		elif (out & 1) != 0:
-			# Left
-			y = p0.y + (p1.y - p0.y) * (xmin - p0.x) / (p1.x - p0.x)
-			x = xmin
-
-		if out == out0:
-			p0 = Vector2(x, y)
-			out0 = _clip_code(p0, xmin, xmax, ymin, ymax)
-		else:
-			p1 = Vector2(x, y)
-			out1 = _clip_code(p1, xmin, xmax, ymin, ymax)
-
-	return PackedVector2Array()
-
-
-func _draw_hatched_rect(rect: Rect2, col: Color) -> void:
-	# Subtle diagonal hatch inside the rect.
-	var hatch_col := Color(col.r, col.g, col.b, col.a * 0.18)
-	var spacing := 10.0
-	# Create \-direction lines and clip to the rect.
-	for x in range(int(-rect.size.y), int(rect.size.x) + 1, int(spacing)):
-		var p0 := rect.position + Vector2(float(x), rect.size.y)
-		var p1 := rect.position + Vector2(float(x) + rect.size.y, 0.0)
-		var clipped := _clip_segment_to_rect(p0, p1, rect)
-		if clipped.size() == 2:
-			draw_line(clipped[0], clipped[1], hatch_col, 1.0)
+#
+# (clip + hatch helpers moved to DrawService)
 
 
 func _tcol(name: String, fallback: Color) -> Color:
@@ -371,26 +248,10 @@ func _update_hover_slot() -> void:
 		return
 	if not _hover_in_bounds():
 		return
-
-	var room: Dictionary = _dungeon_grid.call("get_room_at", hover_cell) as Dictionary
-	if room.is_empty():
-		return
-	var slots: Array = room.get("slots", [])
-	if slots.is_empty():
-		return
-
-	var room_id: int = int(room.get("id", 0))
-	var pos: Vector2i = room.get("pos", Vector2i.ZERO)
-	var size: Vector2i = room.get("size", Vector2i.ONE)
-	var px := float(_cell_px())
-	var room_rect := Rect2(Vector2(pos.x, pos.y) * px, Vector2(size.x, size.y) * px)
-
-	for i in range(slots.size()):
-		var slot_rect := _slot_rect_local(room_rect, i)
-		if slot_rect.has_point(get_local_mouse_position()):
-			_hover_slot_room_id = room_id
-			_hover_slot_idx = i
-			return
+	var hit: Dictionary = _slot_at_local_pos(get_local_mouse_position()) if _slots == null else _slots.hit_test_slot(get_local_mouse_position())
+	_hover_slot_room_id = int(hit.get("room_id", 0))
+	_hover_slot_idx = int(hit.get("slot_idx", -1))
+	return
 
 
 func _slot_rect_local(room_rect: Rect2, slot_idx: int) -> Rect2:
@@ -408,9 +269,8 @@ func _try_uninstall_hover_slot() -> void:
 		return
 	if _dungeon_grid == null:
 		return
-	var item_id: String = String(_dungeon_grid.call("uninstall_item_from_slot", _hover_slot_room_id, _hover_slot_idx))
-	if item_id != "":
-		PlayerInventory.refund(item_id, 1)
+	if _slots != null:
+		_slots.uninstall(_hover_slot_room_id, _hover_slot_idx)
 	queue_redraw()
 
 
@@ -422,7 +282,14 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	if d.has("room_type_id"):
 		_drag_room_type_id = String(d.get("room_type_id", ""))
 		queue_redraw()
-		return _can_drop_room(d)
+		_update_hover_cell()
+		if not _hover_in_bounds():
+			return false
+		if _placement == null:
+			return false
+		var res: Dictionary = _placement.can_place(_drag_room_type_id, hover_cell)
+		_update_preview_reason(bool(res.get("ok", false)), String(res.get("reason", "")))
+		return bool(res.get("ok", false))
 
 	# Item slot drag
 	# Only allow changing installed items between days.
@@ -435,36 +302,14 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	if _dungeon_grid == null:
 		return false
 	# While dragging, hover state often doesn't update; compute slot under cursor using at_position.
-	var hit := _slot_at_local_pos(get_local_mouse_position())
+	var hit: Dictionary = _slot_at_local_pos(get_local_mouse_position()) if _slots == null else _slots.hit_test_slot(get_local_mouse_position())
 	var room_id: int = int(hit.get("room_id", 0))
 	var slot_idx: int = int(hit.get("slot_idx", -1))
 	if room_id == 0 or slot_idx == -1:
 		return false
-
-	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary
-	if room.is_empty():
+	if _slots == null:
 		return false
-	var slots: Array = room.get("slots", [])
-	if slot_idx < 0 or slot_idx >= slots.size():
-		return false
-	var slot: Dictionary = slots[slot_idx]
-	if String(slot.get("installed_item_id", "")) != "":
-		return false
-	var slot_kind := String(slot.get("slot_kind", ""))
-	# Map item->kind via ItemDB (supports traps/monsters/treasure).
-	var item_kind := ""
-	if ItemDB != null and ItemDB.has_method("get_item_kind"):
-		item_kind = String(ItemDB.call("get_item_kind", item_id))
-	var can_install := false
-	if slot_kind == "universal":
-		# Universal slots can accept any item type that can be installed into a room slot.
-		# Boss rooms use these for minion spawners, but they can also hold boss upgrades.
-		can_install = item_kind in ["trap", "monster", "treasure", "boss_upgrade"]
-	elif slot_kind == "boss_upgrade":
-		can_install = item_kind == "boss_upgrade"
-	else:
-		can_install = (slot_kind == item_kind)
-	return can_install and PlayerInventory.get_count(item_id) > 0
+	return _slots.can_install(item_id, room_id, slot_idx)
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
@@ -473,31 +318,38 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 	var d := data as Dictionary
 	# Room inventory drop
 	if d.has("room_type_id"):
-		_drop_room(d)
+		var type_id: String = String(d.get("room_type_id", ""))
+		_update_hover_cell()
+		var cell := hover_cell
+		if _placement != null and _hover_in_bounds():
+			var res: Dictionary = _placement.can_place(type_id, cell)
+			if bool(res.get("ok", false)) and _placement.drop_room(type_id, cell):
+				var size: Vector2i = res.get("size", Vector2i.ONE)
+				var px := float(_cell_px())
+				_trigger_room_stamp(Rect2(Vector2(cell.x, cell.y) * px, Vector2(size.x, size.y) * px))
+				_emit_build_status()
+				queue_redraw()
 		_drag_room_type_id = ""
 		return
 
 	var item_id := String(d.get("item_id", ""))
 	if item_id == "":
 		return
-	var hit := _slot_at_local_pos(get_local_mouse_position())
+	var hit: Dictionary = _slot_at_local_pos(get_local_mouse_position()) if _slots == null else _slots.hit_test_slot(get_local_mouse_position())
 	var room_id: int = int(hit.get("room_id", 0))
 	var slot_idx: int = int(hit.get("slot_idx", -1))
 	if room_id == 0 or slot_idx == -1:
 		return
 	if not _can_drop_data(Vector2.ZERO, data):
 		return
-	if not PlayerInventory.consume(item_id, 1):
-		return
-	_dungeon_grid.call("install_item_in_slot", room_id, slot_idx, item_id)
-	# Stamp FX on success path (we already validated empty slot + kind).
-	var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary
-	if not room.is_empty():
-		var pos: Vector2i = room.get("pos", Vector2i.ZERO)
-		var size: Vector2i = room.get("size", Vector2i.ONE)
-		var px := float(_cell_px())
-		var room_rect := Rect2(Vector2(pos.x, pos.y) * px, Vector2(size.x, size.y) * px)
-		_trigger_slot_stamp(_slot_rect_local(room_rect, slot_idx))
+	if _slots != null and _slots.install(item_id, room_id, slot_idx):
+		var room: Dictionary = _dungeon_grid.call("get_room_by_id", room_id) as Dictionary
+		if not room.is_empty():
+			var pos: Vector2i = room.get("pos", Vector2i.ZERO)
+			var size: Vector2i = room.get("size", Vector2i.ONE)
+			var px := float(_cell_px())
+			var room_rect := Rect2(Vector2(pos.x, pos.y) * px, Vector2(size.x, size.y) * px)
+			_trigger_slot_stamp(_slot_rect_local(room_rect, slot_idx))
 	queue_redraw()
 
 
@@ -520,89 +372,34 @@ func _can_drop_room(d: Dictionary) -> bool:
 	if not _hover_in_bounds():
 		return false
 
-	return bool(_can_place_type_at(type_id, cell).get("ok", false))
+	if _placement == null:
+		return false
+	return bool(_placement.can_place(type_id, cell).get("ok", false))
 
 
 func _drop_room(d: Dictionary) -> void:
+	if _placement == null:
+		return
 	if not _can_drop_room(d):
 		return
 	var type_id: String = String(d.get("room_type_id", ""))
 	var cell := hover_cell
-	if not _hover_in_bounds():
-		_update_hover_cell()
-		cell = hover_cell
-
-	var res := _can_place_type_at(type_id, cell)
-	var size: Vector2i = res.get("size", Vector2i.ONE)
-	var cost: int = int(res.get("cost", 0))
-	var kind: String = String(res.get("kind", type_id))
-	var cells: Array = res.get("cells", [])
-
-	if not RoomInventory.consume(type_id, 1):
+	var res: Dictionary = _placement.can_place(type_id, cell)
+	if not bool(res.get("ok", false)):
 		return
-	var placed_ok := false
-	if COMPOSITE_HALL_OFFSETS.has(type_id):
-		# Composite hallway placement: stamp multiple 1x1 rooms but consume only one piece.
-		var group_id: int = int(_dungeon_grid.call("place_room_group", type_id, cells, kind, false))
-		placed_ok = (group_id != 0)
-	else:
-		var id: int = int(_dungeon_grid.call("place_room", type_id, cell, size, kind, false))
-		placed_ok = (id != 0)
-	if not placed_ok:
-		RoomInventory.refund(type_id, 1)
-		return
-	# Stamp FX on success.
-	var px := float(_cell_px())
-	_trigger_room_stamp(Rect2(Vector2(cell.x, cell.y) * px, Vector2(size.x, size.y) * px))
-	_game_state.call("set_power_used", int(_game_state.get("power_used")) + cost)
-	_emit_build_status()
-	queue_redraw()
+	if _placement.drop_room(type_id, cell):
+		var size: Vector2i = res.get("size", Vector2i.ONE)
+		var px := float(_cell_px())
+		_trigger_room_stamp(Rect2(Vector2(cell.x, cell.y) * px, Vector2(size.x, size.y) * px))
+		_emit_build_status()
+		queue_redraw()
 
 
 func _can_place_type_at(type_id: String, cell: Vector2i) -> Dictionary:
 	# Returns { ok: bool, reason: String, size: Vector2i, cost: int, kind: String, cells?: Array[Vector2i] }
-	if _room_db == null:
-		return { "ok": false, "reason": "missing_roomdb", "size": Vector2i.ONE, "cost": 0, "kind": "" }
-	var t: Dictionary = (_room_db.call("get_room_type", type_id) as Dictionary)
-	if t.is_empty():
-		return { "ok": false, "reason": "unknown_room_type", "size": Vector2i.ONE, "cost": 0, "kind": "" }
-
-	var size: Vector2i = t.get("size", Vector2i.ONE)
-	var cost: int = int(t.get("power_cost", 0))
-	var kind: String = String(t.get("kind", type_id))
-	var is_composite := COMPOSITE_HALL_OFFSETS.has(type_id)
-	var cells: Array[Vector2i] = []
-	if is_composite:
-		size = COMPOSITE_HALL_BBOX_SIZE
-		cells = _composite_cells_for_type(type_id, cell)
-		# Bounds check all footprint cells.
-		for c in cells:
-			if c.x < 0 or c.y < 0 or c.x >= _grid_w() or c.y >= _grid_h():
-				return { "ok": false, "reason": "out_of_bounds", "size": size, "cost": cost, "kind": kind, "cells": cells }
-
-	if cell.x < 0 or cell.y < 0 or cell.x + size.x > _grid_w() or cell.y + size.y > _grid_h():
-		return { "ok": false, "reason": "out_of_bounds", "size": size, "cost": cost, "kind": kind, "cells": cells }
-
-	if _dungeon_grid != null and kind in ["entrance", "boss", "treasure"] and int(_dungeon_grid.call("count_kind", kind)) > 0:
-		return { "ok": false, "reason": "unique_room_already_placed", "size": size, "cost": cost, "kind": kind, "cells": cells }
-
-	if _dungeon_grid == null:
-		return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind, "cells": cells }
-	if is_composite:
-		if not bool(_dungeon_grid.call("can_place_cells", cells)):
-			return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind, "cells": cells }
-	else:
-		if not bool(_dungeon_grid.call("can_place", type_id, cell, size)):
-			return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind, "cells": cells }
-
-	if _game_state == null:
-		return { "ok": false, "reason": "missing_gamestate", "size": size, "cost": cost, "kind": kind, "cells": cells }
-
-	var remaining: int = int(_game_state.get("power_capacity")) - int(_game_state.get("power_used"))
-	if cost > remaining:
-		return { "ok": false, "reason": "not_enough_power", "size": size, "cost": cost, "kind": kind, "cells": cells }
-
-	return { "ok": true, "reason": "ok", "size": size, "cost": cost, "kind": kind, "cells": cells }
+	if _placement == null:
+		return { "ok": false, "reason": "missing_service", "size": Vector2i.ONE, "cost": 0, "kind": "" }
+	return _placement.can_place(type_id, cell)
 
 
 func _slot_at_local_pos(local_pos: Vector2) -> Dictionary:
@@ -645,54 +442,13 @@ func _get_selected_room_def() -> Dictionary:
 
 func _can_place_selected_at(cell: Vector2i) -> Dictionary:
 	# Returns { ok: bool, reason: String, size: Vector2i, cost: int, kind: String }
-	var t := _get_selected_room_def()
-	if t.is_empty():
-		return { "ok": false, "reason": "unknown_room_type", "size": Vector2i.ONE, "cost": 0, "kind": "" }
-
-	var size: Vector2i = t.get("size", Vector2i.ONE)
-	var cost: int = t.get("power_cost", 0)
-	var kind: String = t.get("kind", selected_type_id)
-
-	if cell.x < 0 or cell.y < 0 or cell.x + size.x > _grid_w() or cell.y + size.y > _grid_h():
-		return { "ok": false, "reason": "out_of_bounds", "size": size, "cost": cost, "kind": kind }
-
-	if _dungeon_grid != null and kind in ["entrance", "boss", "treasure"] and int(_dungeon_grid.call("count_kind", kind)) > 0:
-		return { "ok": false, "reason": "unique_room_already_placed", "size": size, "cost": cost, "kind": kind }
-
-	if _dungeon_grid == null or not bool(_dungeon_grid.call("can_place", selected_type_id, cell, size)):
-		return { "ok": false, "reason": "overlap", "size": size, "cost": cost, "kind": kind }
-
-	if _game_state == null:
-		return { "ok": false, "reason": "missing_gamestate", "size": size, "cost": cost, "kind": kind }
-
-	if kind in ["entrance", "boss", "treasure"] and int(_dungeon_grid.call("count_kind", kind)) > 0:
-		return { "ok": false, "reason": "unique_room_already_placed", "size": size, "cost": cost, "kind": kind }
-
-	var remaining: int = int(_game_state.get("power_capacity")) - int(_game_state.get("power_used"))
-	if cost > remaining:
-		return { "ok": false, "reason": "not_enough_power", "size": size, "cost": cost, "kind": kind }
-
-	return { "ok": true, "reason": "ok", "size": size, "cost": cost, "kind": kind }
+	if _placement == null:
+		return { "ok": false, "reason": "missing_service", "size": Vector2i.ONE, "cost": 0, "kind": "" }
+	return _placement.can_place(selected_type_id, cell)
 
 
-func _try_place_at_hover() -> void:
-	if not _hover_in_bounds():
-		return
-	var res := _can_place_selected_at(hover_cell)
-	if not res["ok"]:
-		_emit_build_status()
-		return
-
-	var size: Vector2i = res["size"]
-	var cost: int = res["cost"]
-	var kind: String = res["kind"]
-
-	if _dungeon_grid == null:
-		return
-	var id: int = int(_dungeon_grid.call("place_room", selected_type_id, hover_cell, size, kind, false))
-	if id != 0:
-		_game_state.call("set_power_used", int(_game_state.get("power_used")) + cost)
-	_emit_build_status()
+#
+# (click-to-place removed; placement is via drag-and-drop)
 
 
 func _try_remove_at_hover() -> void:
@@ -757,106 +513,36 @@ func _emit_build_status() -> void:
 
 
 func _draw() -> void:
-	var gw := _grid_w()
-	var gh := _grid_h()
-	var px := _cell_px()
-	var w := gw * px
-	var h := gh * px
-
-	var grid_w := float(_tconst("grid_w", int(BlueprintTheme.GRID_W)))
-	var outline_w := float(_tconst("outline_w", int(BlueprintTheme.OUTLINE_W)))
-	var room_outline_w := float(_tconst("room_outline_w", int(ROOM_OUTLINE_W)))
-	var icon_w := float(_tconst("icon_w", int(ICON_W)))
-	var slot_outline_w := float(_tconst("slot_outline_w", 2))
-
-	var outline_col := _tcol("outline", BlueprintTheme.LINE)
-	var outline_dim_col := _tcol("outline_dim", BlueprintTheme.LINE_DIM)
 	var accent_ok := _tcol("accent_ok", BlueprintTheme.ACCENT_OK)
 	var accent_bad := _tcol("accent_bad", BlueprintTheme.ACCENT_BAD)
 	var accent_warn := _tcol("accent_warn", BlueprintTheme.ACCENT_WARN)
-	var slot_treasure := _tcol("slot_outline_treasure", Color(0.95, 0.78, 0.22, 0.95))
-	var slot_trap := _tcol("slot_outline_trap", Color(0.25, 0.58, 1.0, 0.95))
-	var slot_monster := _tcol("slot_outline_monster", Color(0.25, 0.9, 0.5, 0.95))
 
-	# Paper background behind the grid lines (inside the playable area rect).
-	if PAPER_BG_TEX != null:
-		# Slightly transparent so the blueprint ink stays readable.
-		draw_texture_rect(PAPER_BG_TEX, Rect2(Vector2.ZERO, Vector2(w, h)), false, Color(1, 1, 1, 0.92))
-
-	# Draw grid lines
-	for x in range(gw + 1):
-		var lx := x * px
-		var is_major := (x % MAJOR_EVERY == 0)
-		var col := _grid_col(is_major)
-		if is_major:
-			# Keep majors mostly straight but with subtle thickness variance and tiny wobble.
-			var w_major := maxf(1.0, grid_w * (0.95 + _hash01(x) * 0.10))
-			_draw_noisy_line(Vector2(lx, 0), Vector2(lx, h), col, w_major, x, 0.35, 26.0)
-		else:
-			# Minor lines: stronger wobble and width variance.
-			var w_minor := maxf(1.0, grid_w * (0.80 + _hash01(x) * 0.60))
-			_draw_noisy_line(Vector2(lx, 0), Vector2(lx, h), col, w_minor, x, 1.25, 18.0)
-
-	for y in range(gh + 1):
-		var ly := y * px
-		var is_major_y := (y % MAJOR_EVERY == 0)
-		var coly := _grid_col(is_major_y)
-		if is_major_y:
-			var w_major_y := maxf(1.0, grid_w * (0.95 + _hash01(y + 777) * 0.10))
-			_draw_noisy_line(Vector2(0, ly), Vector2(w, ly), coly, w_major_y, y + 1000, 0.35, 26.0)
-		else:
-			var w_minor_y := maxf(1.0, grid_w * (0.80 + _hash01(y + 10000) * 0.60))
-			_draw_noisy_line(Vector2(0, ly), Vector2(w, ly), coly, w_minor_y, y + 2000, 1.25, 18.0)
-
-	# Outline the playable area
-	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), outline_col, false, outline_w)
+	# Grid and backdrop
+	if _drawsvc != null:
+		_drawsvc.draw_grid()
 
 	# Render placed rooms (if DungeonGrid autoload exists).
 	if _dungeon_grid != null:
 		for r in _dungeon_grid.rooms:
-			_draw_room(r)
+			if _drawsvc != null:
+				_drawsvc.draw_room(r)
 
 	# Placement preview
 	if _hover_in_bounds():
 		var use_type: String = selected_type_id
 		if _drag_room_type_id != "":
 			use_type = _drag_room_type_id
-		var res := _can_place_type_at(use_type, hover_cell)
-		var size: Vector2i = res.get("size", Vector2i.ONE)
-		var ok: bool = res.get("ok", false)
-		var col := accent_ok if ok else accent_bad
-		var cells: Array = res.get("cells", [])
-		var rect := Rect2(
-			Vector2(hover_cell.x, hover_cell.y) * px,
-			Vector2(size.x, size.y) * px
-		)
-		_update_preview_reason(ok, String(res.get("reason", "")))
-		if cells is Array and not (cells as Array).is_empty():
-			for c in (cells as Array):
-				var cc := c as Vector2i
-				var r := Rect2(Vector2(cc.x, cc.y) * px, Vector2.ONE * px)
-				if ok:
-					draw_rect(r, col, false, 2.0)
-				else:
-					_draw_dashed_rect(r, col, 2.0)
-					_draw_hatched_rect(r, col)
-		else:
-			if ok:
-				draw_rect(rect, col, false, 2.0)
-			else:
-				_draw_dashed_rect(rect, col, 2.0)
-				_draw_hatched_rect(rect, col)
+		var res: Dictionary = _can_place_type_at(use_type, hover_cell)
+		_update_preview_reason(bool(res.get("ok", false)), String(res.get("reason", "")))
+		if _drawsvc != null:
+			_drawsvc.draw_preview(res, hover_cell)
 	else:
 		_update_preview_reason(true, "")
 
 	# Success stamps (room/item).
 	var now := _now_s()
-	if now - _stamp_room_t0 >= 0.0 and now - _stamp_room_t0 < STAMP_DUR_S:
-		var t := clampf((now - _stamp_room_t0) / STAMP_DUR_S, 0.0, 1.0)
-		_draw_stamp_rect(_stamp_room_rect, accent_ok, t, _stamp_room_jitter)
-	if now - _stamp_slot_t0 >= 0.0 and now - _stamp_slot_t0 < STAMP_DUR_S:
-		var t2 := clampf((now - _stamp_slot_t0) / STAMP_DUR_S, 0.0, 1.0)
-		_draw_stamp_rect(_stamp_slot_rect, accent_ok, t2, _stamp_slot_jitter)
+	if _stamps != null:
+		_stamps.draw(self, now, accent_ok)
 
 
 func _process(_delta: float) -> void:
@@ -865,108 +551,12 @@ func _process(_delta: float) -> void:
 		queue_redraw()
 		return
 	# While stamps are active, keep animating.
-	var now := _now_s()
-	if now - _stamp_room_t0 < STAMP_DUR_S or now - _stamp_slot_t0 < STAMP_DUR_S:
+	if _stamps != null and _stamps.has_active(_now_s()):
 		queue_redraw()
 
 
-func _draw_room(room: Dictionary) -> void:
-	var pos: Vector2i = room["pos"]
-	var size: Vector2i = room["size"]
-	var known: bool = room.get("known", true)
-	var px := float(_cell_px())
-
-	var rect := Rect2(
-		Vector2(pos.x, pos.y) * px,
-		Vector2(size.x, size.y) * px
-	)
-
-	var outline_col := _tcol("outline", BlueprintTheme.LINE) if known else _tcol("outline_dim", BlueprintTheme.LINE_DIM)
-	draw_rect(rect, outline_col, false, float(_tconst("room_outline_w", int(ROOM_OUTLINE_W))))
-
-	var center := rect.position + rect.size * 0.5
-	# Minimap: prefer installed item icons for rooms with installable slots.
-	var kind: String = String(room.get("kind", "hall"))
-
-	# Fog-of-war rendering: unknown rooms should not reveal trap/monster/treasure info.
-	# Treat unknown rooms as generic hallway for icon + hide slot markers/icons.
-	var show_details := known
-	var display_kind := kind if show_details else "hall"
-	var center_icon: Texture2D = null
-	if show_details and (kind == "trap" or kind == "monster" or kind == "treasure"):
-		var slots0: Array = room.get("slots", [])
-		if not slots0.is_empty():
-			var slot0: Dictionary = slots0[0]
-			var installed0 := String(slot0.get("installed_item_id", ""))
-			if installed0 != "":
-				# For traps, only show the icon when the trap is ready (off cooldown).
-				if kind != "trap" or _is_trap_slot_ready(int(room.get("id", 0)), 0, installed0):
-					center_icon = _get_item_icon(installed0)
-
-	if center_icon != null:
-		_draw_room_center_icon(center, center_icon)
-	else:
-		_draw_icon_stamp(center, display_kind, known)
-
-	# Slot markers
-	var slots: Array = room.get("slots", [])
-	if show_details and not slots.is_empty():
-		var slot_outline_w := float(_tconst("slot_outline_w", 2))
-		var slot_treasure := _tcol("slot_outline_treasure", Color(0.95, 0.78, 0.22, 0.95))
-		var slot_trap := _tcol("slot_outline_trap", Color(0.25, 0.58, 1.0, 0.95))
-		var slot_monster := _tcol("slot_outline_monster", Color(0.25, 0.9, 0.5, 0.95))
-		var slot_universal := _tcol("slot_outline_universal", Color(1.0, 1.0, 1.0, 0.95))
-		for i in range(slots.size()):
-			var slot: Dictionary = slots[i]
-			var slot_rect := _slot_rect_local(rect, i)
-			var installed := String(slot.get("installed_item_id", ""))
-			var sk := String(slot.get("slot_kind", ""))
-			var base_col := outline_col
-			if sk == "treasure":
-				base_col = slot_treasure
-			elif sk == "trap":
-				base_col = slot_trap
-			elif sk == "monster":
-				base_col = slot_monster
-			elif sk == "universal":
-				base_col = slot_universal
-			# Slightly dim empty slots.
-			var col := base_col if installed != "" else Color(base_col.r, base_col.g, base_col.b, base_col.a * 0.55)
-			draw_rect(slot_rect, col, false, float(slot_outline_w))
-			# Small fill if installed
-			if installed != "":
-				var show_icon := true
-				if sk == "trap":
-					show_icon = _is_trap_slot_ready(int(room.get("id", 0)), i, installed)
-				if show_icon:
-					var icon_tex: Texture2D = _get_item_icon(installed)
-					if icon_tex != null:
-						# ~50% larger than before (less shrink inside the 14x14 slot)
-						draw_texture_rect(icon_tex, slot_rect.grow(-1.0), true)
-					else:
-						draw_rect(slot_rect.grow(-3.0), col, true)
-
-	# Hover highlight on slot
-	if int(room.get("id", 0)) == _hover_slot_room_id and _hover_slot_idx != -1:
-		var slot_rect2 := _slot_rect_local(rect, _hover_slot_idx)
-		draw_rect(slot_rect2.grow(2.0), _tcol("accent_warn", BlueprintTheme.ACCENT_WARN), false, float(_tconst("slot_outline_w", 2)))
-
-	# Monster spawn icon/count (debug visual)
-	# (Removed: monster count dots; MonsterActor nodes are now the primary visual.)
-
-
-func _get_item_icon(item_id: String) -> Texture2D:
-	var r: Resource = ItemDB.get_any_item(item_id)
-	if r is TrapItem:
-		var tex := (r as TrapItem).icon
-		return tex if tex != null else _get_trap_glyph_icon(item_id)
-	if r is MonsterItem:
-		return (r as MonsterItem).icon
-	if r is TreasureItem:
-		return (r as TreasureItem).icon
-	if r is BossUpgradeItem:
-		return (r as BossUpgradeItem).icon
-	return null
+#
+# (room drawing moved to DrawService)
 
 
 func _is_trap_slot_ready(room_id: int, slot_idx: int, item_id: String) -> bool:
@@ -975,143 +565,6 @@ func _is_trap_slot_ready(room_id: int, slot_idx: int, item_id: String) -> bool:
 		return bool(Simulation.call("is_trap_slot_ready", int(room_id), int(slot_idx), String(item_id)))
 	# If we can't query state, default to showing the icon.
 	return true
-
-
-var _glyph_icons: Dictionary = {}
-
-
-func _get_trap_glyph_icon(item_id: String) -> Texture2D:
-	# Minimal set for traps; unknown traps fall back to a generic trap glyph.
-	match String(item_id):
-		"spike_trap":
-			return _get_glyph_icon("item:spike_trap")
-		"floor_pit":
-			return _get_glyph_icon("item:floor_pit")
-		"teleport_trap":
-			return _get_glyph_icon("item:teleport_trap")
-		"web_trap":
-			return _get_glyph_icon("item:web_trap")
-		"rearm_trap":
-			return _get_glyph_icon("item:rearm_trap")
-		_:
-			return _get_glyph_icon("item:trap")
-
-
-func _get_glyph_icon(key: String) -> Texture2D:
-	if _glyph_icons.has(key):
-		return _glyph_icons[key] as Texture2D
-	var tex := _render_glyph_icon(key, 24)
-	_glyph_icons[key] = tex
-	return tex
-
-
-func _render_glyph_icon(key: String, sz: int) -> Texture2D:
-	var img := Image.create(sz, sz, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-
-	var ink := ThemePalette.color("HUD", "ink", Color(0.18, 0.13, 0.08, 0.95))
-	var dim := ThemePalette.color("HUD", "ink_dim", Color(0.18, 0.13, 0.08, 0.45))
-
-	var c := Vector2(sz * 0.5, sz * 0.5)
-	var s := float(sz) * 0.35
-	var w := 2
-
-	match String(key):
-		"item:spike_trap":
-			# Emphasized X with small "spikes"
-			_img_draw_line(img, c + Vector2(-s, -s), c + Vector2(s, s), ink, w)
-			_img_draw_line(img, c + Vector2(-s, s), c + Vector2(s, -s), ink, w)
-			_img_draw_line(img, c + Vector2(0, -s), c + Vector2(0, -s * 0.35), dim, 1)
-			_img_draw_line(img, c + Vector2(0, s), c + Vector2(0, s * 0.35), dim, 1)
-		"item:floor_pit":
-			# Pit: outlined square with a dark center
-			var r := Rect2(c - Vector2(s * 0.9, s * 0.9), Vector2(s * 1.8, s * 1.8))
-			_img_draw_rect_outline(img, r, ink, w)
-			_img_draw_disc(img, c, int(round(s * 0.45)), dim)
-		"item:teleport_trap":
-			# Simple arrow
-			_img_draw_line(img, c + Vector2(-s * 0.9, 0), c + Vector2(s * 0.9, 0), ink, w)
-			_img_draw_line(img, c + Vector2(s * 0.9, 0), c + Vector2(s * 0.35, -s * 0.45), ink, w)
-			_img_draw_line(img, c + Vector2(s * 0.9, 0), c + Vector2(s * 0.35, s * 0.45), ink, w)
-		"item:web_trap":
-			# Web: asterisk-like spokes
-			for i in range(6):
-				var ang := TAU * float(i) / 6.0
-				var p := Vector2(cos(ang), sin(ang)) * (s * 0.9)
-				_img_draw_line(img, c, c + p, ink, 1)
-			_img_draw_disc(img, c, 2, ink)
-		"item:rearm_trap":
-			# Rearm: circle + small arrow head
-			_img_draw_circle_outline(img, c, s * 0.85, ink, 1, 22)
-			_img_draw_line(img, c + Vector2(0, -s * 0.85), c + Vector2(s * 0.35, -s * 0.55), ink, 1)
-			_img_draw_line(img, c + Vector2(0, -s * 0.85), c + Vector2(-s * 0.15, -s * 0.35), ink, 1)
-		"item:trap":
-			# Generic trap X
-			_img_draw_line(img, c + Vector2(-s, -s), c + Vector2(s, s), ink, w)
-			_img_draw_line(img, c + Vector2(-s, s), c + Vector2(s, -s), ink, w)
-		_:
-			_img_draw_disc(img, c, 2, ink)
-
-	return ImageTexture.create_from_image(img)
-
-
-func _img_plot(img: Image, x: int, y: int, col: Color) -> void:
-	if x < 0 or y < 0 or x >= img.get_width() or y >= img.get_height():
-		return
-	img.set_pixel(x, y, col)
-
-
-func _img_draw_disc(img: Image, center: Vector2, r: int, col: Color) -> void:
-	var cx := int(round(center.x))
-	var cy := int(round(center.y))
-	var rr := r * r
-	for y in range(-r, r + 1):
-		for x in range(-r, r + 1):
-			if x * x + y * y <= rr:
-				_img_plot(img, cx + x, cy + y, col)
-
-
-func _img_draw_line(img: Image, a: Vector2, b: Vector2, col: Color, width: int) -> void:
-	var dx := b.x - a.x
-	var dy := b.y - a.y
-	var steps := int(max(absf(dx), absf(dy)))
-	if steps <= 0:
-		_img_draw_disc(img, a, max(1, int(ceil(float(width) * 0.5))), col)
-		return
-	var r: int = max(1, int(ceil(float(width) * 0.5)))
-	for i in range(steps + 1):
-		var t := float(i) / float(steps)
-		var p := a.lerp(b, t)
-		_img_draw_disc(img, p, r, col)
-
-
-func _img_draw_rect_outline(img: Image, rect: Rect2, col: Color, width: int) -> void:
-	var tl := rect.position
-	var tr_p := rect.position + Vector2(rect.size.x, 0)
-	var bl := rect.position + Vector2(0, rect.size.y)
-	var br := rect.position + rect.size
-	_img_draw_line(img, tl, tr_p, col, width)
-	_img_draw_line(img, tr_p, br, col, width)
-	_img_draw_line(img, br, bl, col, width)
-	_img_draw_line(img, bl, tl, col, width)
-
-
-func _img_draw_circle_outline(img: Image, center: Vector2, radius: float, col: Color, width: int, segments: int) -> void:
-	var r: int = max(1, int(round(radius)))
-	var prev := center + Vector2(r, 0)
-	for i in range(1, segments + 1):
-		var ang := TAU * float(i) / float(segments)
-		var p := center + Vector2(cos(ang) * float(r), sin(ang) * float(r))
-		_img_draw_line(img, prev, p, col, width)
-		prev = p
-
-
-func _draw_room_center_icon(center: Vector2, tex: Texture2D) -> void:
-	# Keep these icons a stable pixel size (independent of cell size).
-	var px := float(ICON_BASE_CELL_PX)
-	# ~50% larger than before
-	var s := clampf(px * 1.05, 18.0, 36.0)
-	draw_texture_rect(tex, Rect2(center - Vector2(s * 0.5, s * 0.5), Vector2(s, s)), true)
 
 
 func cell_center_local(cell: Vector2i) -> Vector2:
@@ -1173,39 +626,5 @@ func entrance_cap_world_rect() -> Rect2:
 	return Rect2(world_tl, world_br - world_tl)
 
 
-func _draw_icon_stamp(center: Vector2, kind: String, known: bool) -> void:
-	var col := _tcol("outline", BlueprintTheme.LINE) if known else _tcol("outline_dim", BlueprintTheme.LINE_DIM)
-	# Keep these icons a stable pixel size (independent of cell size).
-	var s := float(ICON_BASE_CELL_PX) * 0.35
-
-	match kind:
-		"entrance":
-			# Down arrow
-			draw_line(center + Vector2(0, -s), center + Vector2(0, s), col, float(_tconst("icon_w", int(ICON_W))))
-			draw_line(center + Vector2(0, s), center + Vector2(-s * 0.6, s * 0.4), col, float(_tconst("icon_w", int(ICON_W))))
-			draw_line(center + Vector2(0, s), center + Vector2(s * 0.6, s * 0.4), col, float(_tconst("icon_w", int(ICON_W))))
-		"boss":
-			# Crown-like: three spikes
-			var iw := float(_tconst("icon_w", int(ICON_W)))
-			draw_line(center + Vector2(-s, s * 0.6), center + Vector2(-s * 0.6, -s * 0.4), col, iw)
-			draw_line(center + Vector2(-s * 0.6, -s * 0.4), center + Vector2(0, s * 0.2), col, iw)
-			draw_line(center + Vector2(0, s * 0.2), center + Vector2(s * 0.6, -s * 0.4), col, iw)
-			draw_line(center + Vector2(s * 0.6, -s * 0.4), center + Vector2(s, s * 0.6), col, iw)
-			draw_line(center + Vector2(-s, s * 0.6), center + Vector2(s, s * 0.6), col, iw)
-		"treasure":
-			# Chest: box + lid line
-			var iw := float(_tconst("icon_w", int(ICON_W)))
-			draw_rect(Rect2(center - Vector2(s, s * 0.6), Vector2(s * 2.0, s * 1.2)), col, false, iw)
-			draw_line(center + Vector2(-s, 0), center + Vector2(s, 0), col, iw)
-		"monster":
-			# Skull-ish: circle + eyes
-			draw_arc(center, s * 0.8, 0, TAU, 20, col, float(_tconst("icon_w", int(ICON_W))))
-			draw_circle(center + Vector2(-s * 0.3, -s * 0.1), s * 0.12, col)
-			draw_circle(center + Vector2(s * 0.3, -s * 0.1), s * 0.12, col)
-		"trap":
-			# X mark
-			draw_line(center + Vector2(-s, -s), center + Vector2(s, s), col, float(_tconst("icon_w", int(ICON_W))))
-			draw_line(center + Vector2(-s, s), center + Vector2(s, -s), col, float(_tconst("icon_w", int(ICON_W))))
-		_:
-			# Hall / default: small dot
-			draw_circle(center, s * 0.12, col)
+#
+# (icon stamp drawing moved to DrawService)
