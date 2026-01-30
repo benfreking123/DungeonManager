@@ -95,6 +95,7 @@ var GOAL_DEFS: Dictionary = {
 		],
 		"spawn_roll": { "base_weight": 0, "jitter": 1, "mult_min": 0.9, "mult_max": 1.2, "spike_chance": 0.10, "spike_bonus": 2 },
 		"params_roll": {},
+		"incompatible_with": ["no_flee_until_boss_dead"],
 	},
 	"flee_on_any_loot": {
 		"kind": "unique",
@@ -108,6 +109,7 @@ var GOAL_DEFS: Dictionary = {
 		],
 		"spawn_roll": { "base_weight": 1, "jitter": 2, "mult_min": 0.9, "mult_max": 1.3, "spike_chance": 0.12, "spike_bonus": 3 },
 		"params_roll": {},
+		"incompatible_with": ["no_leave_until_full_loot"],
 	},
 	"no_flee_until_boss_dead": {
 		"kind": "unique",
@@ -121,6 +123,7 @@ var GOAL_DEFS: Dictionary = {
 		],
 		"spawn_roll": { "base_weight": 2, "jitter": 1, "mult_min": 0.8, "mult_max": 1.4, "spike_chance": 0.08, "spike_bonus": 2 },
 		"params_roll": {},
+		"incompatible_with": ["flee_on_any_damage"],
 	},
 	"no_leave_until_full_loot": {
 		"kind": "unique",
@@ -134,6 +137,7 @@ var GOAL_DEFS: Dictionary = {
 		],
 		"spawn_roll": { "base_weight": 2, "jitter": 2, "mult_min": 0.8, "mult_max": 1.5, "spike_chance": 0.10, "spike_bonus": 3 },
 		"params_roll": {},
+		"incompatible_with": ["flee_on_any_loot"],
 	},
 	"exit_when_full_loot": {
 		"kind": "unique",
@@ -160,6 +164,7 @@ var GOAL_DEFS: Dictionary = {
 		],
 		"spawn_roll": { "base_weight": 1, "jitter": 2, "mult_min": 0.8, "mult_max": 1.5, "spike_chance": 0.08, "spike_bonus": 2 },
 		"params_roll": {},
+		"incompatible_with": ["boss_rush"],
 	},
 	"no_leave_until_kill_x_monsters": {
 		"kind": "unique",
@@ -199,6 +204,7 @@ var GOAL_DEFS: Dictionary = {
 		],
 		"spawn_roll": { "base_weight": 2, "jitter": 2, "mult_min": 0.8, "mult_max": 1.4, "spike_chance": 0.08, "spike_bonus": 2 },
 		"params_roll": {},
+		"incompatible_with": ["explore_all_before_boss"],
 	},
 	"greedy_then_leave": {
 		"kind": "unique",
@@ -214,6 +220,31 @@ var GOAL_DEFS: Dictionary = {
 		"params_roll": { "loot_target_min": 1, "loot_target_max": 3 },
 	},
 }
+
+# Expose incompatible goals map for systems that need it. Built from GOAL_DEFS.
+func get_incompatible_goals() -> Dictionary:
+	var out: Dictionary = {}
+	for k in GOAL_DEFS.keys():
+		var gid := String(k)
+		var def: Dictionary = GOAL_DEFS.get(gid, {}) as Dictionary
+		var arr: Array = def.get("incompatible_with", []) as Array
+		if arr.is_empty():
+			continue
+		if not out.has(gid):
+			out[gid] = []
+		for other in arr:
+			var oid := String(other)
+			if oid == "":
+				continue
+			# Add forward
+			if not (out[gid] as Array).has(oid):
+				(out[gid] as Array).append(oid)
+			# Add symmetric
+			if not out.has(oid):
+				out[oid] = []
+			if not (out[oid] as Array).has(gid):
+				(out[oid] as Array).append(gid)
+	return out
 
 # One-sentence dialogue strings, used for decision bubbles.
 const INTENT_DIALOGUE: Dictionary = {

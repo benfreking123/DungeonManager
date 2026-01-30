@@ -170,8 +170,24 @@ func on_room_enter(room: Dictionary, entering_adv: Node2D, adventurers: Array[No
 		st["cooldown_until_s"] = _now_s() + maxf(0.0, float(trap.cooldown_s))
 		_slot_state[k] = st
 
-		# Execute effect (implemented in later todo).
-		_execute_effect(room_id, slot_idx, trap, targets, entering_adv, adventurers, adv_last_room)
+		# Execute effect (supports optional per-trap delay).
+		var d := 0.0
+		# Safe access in case of older resources without delay_s (backward-compatible).
+		var v_delay: Variant = trap.get("delay_s")
+		if typeof(v_delay) == TYPE_FLOAT or typeof(v_delay) == TYPE_INT:
+			d = float(v_delay)
+		if d > 0.0001:
+			var tree := Engine.get_main_loop()
+			if tree is SceneTree:
+				var timer := (tree as SceneTree).create_timer(d)
+				timer.timeout.connect(func():
+					_execute_effect(room_id, slot_idx, trap, targets, entering_adv, adventurers, adv_last_room)
+				)
+			else:
+				# Fallback: execute immediately if we cannot obtain a SceneTree.
+				_execute_effect(room_id, slot_idx, trap, targets, entering_adv, adventurers, adv_last_room)
+		else:
+			_execute_effect(room_id, slot_idx, trap, targets, entering_adv, adventurers, adv_last_room)
 
 func _execute_effect(room_id: int, _slot_idx: int, trap: TrapItem, targets: Array[Node2D], _entering_adv: Node2D, _adventurers: Array[Node2D], _adv_last_room: Dictionary) -> void:
 	var valid: Array[Node2D] = []

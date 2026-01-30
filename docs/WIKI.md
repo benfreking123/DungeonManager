@@ -23,8 +23,6 @@ This file is a quick “what exists” index for everything meaningful to the pl
   - Keys are **item IDs** (trap/monster/treasure IDs and boss upgrade `upgrade_id` values)
 - **Room-piece inventory (placeable room types during BUILD)**: `res://autoloads/RoomInventory.gd`
   - Keys are **RoomType ids** (e.g. `hall`, `corridor`, `stairs`, `hall_plus`, `hall_t_left`, `monster`, `trap`, `boss`, `treasure`)
-- **Build inventory (alternate/older room count tracking)**: `res://autoloads/BuildInventory.gd`
-  - Keys are **RoomType ids**; not all room kinds are tracked by default
 - **UI that renders inventories**: `res://ui/RoomInventoryPanel.gd` (tabs: Rooms/Monsters/Traps/Boss/Treasure)
 - **Starting inventory profiles**:
   - Config files:

@@ -33,4 +33,7 @@ class_name TrapItem
 # If true, trap starts ready (no initial cooldown). If false, starts on cooldown.
 @export var start_ready: bool = true
 
-
+ # Optional delay before the trap effect is applied (seconds).
+ # Useful for multi-target traps to feel like a brief windup.
+@export var delay_s: float = 0.0
+ 

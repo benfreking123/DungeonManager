@@ -43,6 +43,7 @@ func _rebuild_from_config() -> void:
 
 
 func reset_all() -> void:
+	StartInventoryService.reload_from_disk()
 	_rebuild_from_config()
 
 

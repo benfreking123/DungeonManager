@@ -11,8 +11,8 @@ signal combat_started(room_id: int)
 signal combat_ended(room_id: int)
 signal adventurer_right_clicked(adv_id: int, screen_pos: Vector2)
 
-const SURFACE_SPEED := 64.0
-const DUNGEON_SPEED := 52.0
+const SURFACE_SPEED := 52.0
+const DUNGEON_SPEED := 38.0
 const SPAWN_SECONDS_PER_SIZE := 5.0
 const PARTY_SPAWN_INTERVAL := 0.1
 
@@ -1089,8 +1089,6 @@ func _on_adventurer_damaged(_amount: int, adv_id: int) -> void:
 	if _ability_system != null:
 		_ability_system.on_adv_damaged(int(adv_id))
 		_ability_system.on_attacked(int(adv_id))
-	if _ability_system != null:
-		_ability_system.on_adv_damaged(int(adv_id))
 
 
 func _on_boss_killed() -> void:

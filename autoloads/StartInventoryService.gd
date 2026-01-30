@@ -6,27 +6,53 @@ extends Node
 const BASE_PATH := "res://config/start_inventory/base.json"
 const TEST_PATH := "res://config/start_inventory/test.json"
 
+var _cache_profile: String = ""
+var _cached_items: Array = []
+var _cached_rooms: Array = []
+var _items_cached: bool = false
+var _rooms_cached: bool = false
+
+func reload_from_disk() -> void:
+	_cache_profile = ""
+	_cached_items = []
+	_cached_rooms = []
+	_items_cached = false
+	_rooms_cached = false
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug("StartInventoryService: caches cleared", "inventory")
 
 func get_merged_items() -> Array:
+	var prof := ConfigService.get_profile()
+	if _items_cached and _cache_profile == prof:
+		return _cached_items
 	var base := ConfigService.load_config(BASE_PATH)
 	var overlay := {}
-	if ConfigService.get_profile() == "test":
+	if prof == "test":
 		overlay = ConfigService.load_config(TEST_PATH)
 	var items_base: Array = base.get("items", []) if typeof(base.get("items", [])) == TYPE_ARRAY else []
 	var items_overlay: Array = overlay.get("items", []) if typeof(overlay.get("items", [])) == TYPE_ARRAY else []
 	var merged := _merge_sum(items_base, items_overlay)
-	return _validate_items(merged)
+	_cached_items = _validate_items(merged)
+	_items_cached = true
+	_cache_profile = prof
+	return _cached_items
 
 
 func get_merged_rooms() -> Array:
+	var prof := ConfigService.get_profile()
+	if _rooms_cached and _cache_profile == prof:
+		return _cached_rooms
 	var base := ConfigService.load_config(BASE_PATH)
 	var overlay := {}
-	if ConfigService.get_profile() == "test":
+	if prof == "test":
 		overlay = ConfigService.load_config(TEST_PATH)
 	var rooms_base: Array = base.get("rooms", []) if typeof(base.get("rooms", [])) == TYPE_ARRAY else []
 	var rooms_overlay: Array = overlay.get("rooms", []) if typeof(overlay.get("rooms", [])) == TYPE_ARRAY else []
 	var merged := _merge_sum(rooms_base, rooms_overlay)
-	return _validate_rooms(merged)
+	_cached_rooms = _validate_rooms(merged)
+	_rooms_cached = true
+	_cache_profile = prof
+	return _cached_rooms
 
 
 func to_item_counts(items: Array) -> Dictionary:

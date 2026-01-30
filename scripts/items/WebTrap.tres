@@ -13,4 +13,5 @@ trigger_amount = -1
 effect = "web_pause"
 value = 1
 start_ready = true
+delay_s = 0.4
 

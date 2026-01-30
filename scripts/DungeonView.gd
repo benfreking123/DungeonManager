@@ -83,6 +83,40 @@ func _now_s() -> float:
 	return float(Time.get_ticks_msec()) / 1000.0
 
 
+func _hash01(i: int) -> float:
+	# Fast, deterministic 0..1 hash for small integers.
+	return float(((i * 1103515245) ^ 0x9E3779B9) & 0xFFFF) / 65535.0
+
+
+func _hash_signed01(i: int) -> float:
+	# Map to -1..1
+	return (_hash01(i) * 2.0) - 1.0
+
+func _hash01_pair(a: int, b: int) -> float:
+	# Simple pair hash -> 0..1
+	return float((((a * 1103515245) ^ (b * 2654435761) ^ 0x9E3779B9) & 0xFFFF)) / 65535.0
+
+func _draw_noisy_line(a: Vector2, b: Vector2, col: Color, base_w: float, seed: int, amp_px: float, seg_px: float) -> void:
+	# Draw a "hand-drawn" wobbly line by splitting into short segments with slight perpendicular offsets and width variance.
+	var dir := b - a
+	var length := dir.length()
+	if length <= 0.001:
+		return
+	dir /= length
+	var perp := Vector2(-dir.y, dir.x)
+	var seg_len := maxf(4.0, seg_px)
+	var segments := int(ceil(length / seg_len))
+	for i in range(segments):
+		var t0 := float(i) / float(segments)
+		var t1 := float(i + 1) / float(segments)
+		var p0 := a + dir * (length * t0)
+		var p1 := a + dir * (length * t1)
+		var off_amt := _hash_signed01(seed * 131 + i * 17) * amp_px
+		var w_mult := 0.85 + _hash01_pair(seed, i) * 0.4
+		var w := maxf(1.0, base_w * w_mult)
+		var off := perp * off_amt
+		draw_line(p0 + off, p1 + off, col, w)
+
 func _composite_cells_for_type(type_id: String, anchor: Vector2i) -> Array[Vector2i]:
 	var off: Array = COMPOSITE_HALL_OFFSETS.get(type_id, []) as Array
 	if off.is_empty():
@@ -752,13 +786,27 @@ func _draw() -> void:
 	# Draw grid lines
 	for x in range(gw + 1):
 		var lx := x * px
-		var col := _grid_col(x % MAJOR_EVERY == 0)
-		draw_line(Vector2(lx, 0), Vector2(lx, h), col, grid_w)
+		var is_major := (x % MAJOR_EVERY == 0)
+		var col := _grid_col(is_major)
+		if is_major:
+			# Keep majors mostly straight but with subtle thickness variance and tiny wobble.
+			var w_major := maxf(1.0, grid_w * (0.95 + _hash01(x) * 0.10))
+			_draw_noisy_line(Vector2(lx, 0), Vector2(lx, h), col, w_major, x, 0.35, 26.0)
+		else:
+			# Minor lines: stronger wobble and width variance.
+			var w_minor := maxf(1.0, grid_w * (0.80 + _hash01(x) * 0.60))
+			_draw_noisy_line(Vector2(lx, 0), Vector2(lx, h), col, w_minor, x, 1.25, 18.0)
 
 	for y in range(gh + 1):
 		var ly := y * px
-		var col := _grid_col(y % MAJOR_EVERY == 0)
-		draw_line(Vector2(0, ly), Vector2(w, ly), col, grid_w)
+		var is_major_y := (y % MAJOR_EVERY == 0)
+		var coly := _grid_col(is_major_y)
+		if is_major_y:
+			var w_major_y := maxf(1.0, grid_w * (0.95 + _hash01(y + 777) * 0.10))
+			_draw_noisy_line(Vector2(0, ly), Vector2(w, ly), coly, w_major_y, y + 1000, 0.35, 26.0)
+		else:
+			var w_minor_y := maxf(1.0, grid_w * (0.80 + _hash01(y + 10000) * 0.60))
+			_draw_noisy_line(Vector2(0, ly), Vector2(w, ly), coly, w_minor_y, y + 2000, 1.25, 18.0)
 
 	# Outline the playable area
 	draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), outline_col, false, outline_w)
