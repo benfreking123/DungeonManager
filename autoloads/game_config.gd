@@ -105,6 +105,18 @@ func treasure_id_for_class(class_id: String) -> String:
 	# Base treasure never drops right now. Unknown/empty class ids drop nothing.
 	return String(TREASURE_ID_BY_CLASS.get(class_id, ""))
 
+# === Class spawn weighting (configurable) ===
+# Base weights before any treasure influence (sum arbitrary; UI normalizes to percentages).
+const CLASS_BASE_WEIGHTS := {
+	"warrior": 25,
+	"mage": 25,
+	"priest": 25,
+	"rogue": 25,
+}
+# Per installed class-themed treasure, add this percentage-equivalent to the class weight.
+# Example: 3 wizard treasures => +3.0 to mage weight.
+const CLASS_TREASURE_WEIGHT_PCT_PER_ITEM: float = 1.0
+
 
 # === History/Identity configuration ===
 # Days after a flee that a returnee will be scheduled for by default.

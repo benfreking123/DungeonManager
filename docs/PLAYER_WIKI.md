@@ -75,4 +75,3 @@ Adventurers also have internal stats. You can view these by right-clicking an ad
 - **Agility (AGI)**: Placeholder for future speed/dodge/pathing finesse.
 
 Stats can be modified by **traits** (e.g. `+1 Intelligence`, `+1 All Stats`).
-

@@ -16,6 +16,3 @@ Project defaults are also set in `project.godot` to use nearest-neighbor for Can
 - `assets/icons/` room stamps + UI glyph atlas
 - `assets/tiles/` (optional) minimal tileset primitives if we move from procedural lines to tiles
 - `assets/fonts/` (optional) pixel font
-
-
-

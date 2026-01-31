@@ -52,8 +52,8 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
   - `slots: Array[Dictionary]` (0..max; see below)
   - `max_monster_size_capacity: int` (monster rooms; default 3)
   - Optional composite placement metadata:
-    - `group_id: int`
-    - `group_type_id: String`
+	- `group_id: int`
+	- `group_type_id: String`
 
 ### Composite room groups (multi-cell “one piece” rooms)
 
@@ -62,8 +62,8 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
   - Some room types place as a **group of 1x1 rooms** but consume **one** inventory piece (e.g. `hall_plus`, `hall_t_left`).
   - Group placement uses `DungeonGrid.place_room_group(type_id, cells, kind, locked)` and returns a `group_id`.
   - Each stamped 1x1 room includes:
-    - `group_id: int` (shared)
-    - `group_type_id: String` (the original type id for refunding)
+	- `group_id: int` (shared)
+	- `group_type_id: String` (the original type id for refunding)
 - **Removal contract**:
   - Group removal uses `DungeonGrid.remove_room_group_at(cell)` and refunds a single piece for the group.
 
@@ -72,7 +72,7 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
 - **Type**: `Array[Dictionary]` with fixed length `RoomType.max_slots` when `kind in {trap, monster, treasure, boss}`
 - **Slot dictionary**:
   - `slot_kind: String` one of:
-    - `"trap"`, `"monster"`, `"treasure"`, `"boss_upgrade"`, `"universal"`, or `""`
+	- `"trap"`, `"monster"`, `"treasure"`, `"boss_upgrade"`, `"universal"`, or `""`
   - `installed_item_id: String` (empty string means empty)
 - **Slot-kind policy**:
   - `boss`: first 2 slots are `"universal"`, last slot is `"boss_upgrade"` (others `"universal"`)
@@ -229,7 +229,7 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
   - `ability_charges: int`
   - `s_contrib: int`
   - Identity fields (injected by `HistoryService.attach_profiles_for_new_members`):
-    - `profile_id: int`, `name: String`, `epithet: String`, `origin: String`, `bio: String`
+	- `profile_id: int`, `name: String`, `epithet: String`, `origin: String`, `bio: String`
 
 ## Runtime entities (DAY)
 
@@ -358,4 +358,3 @@ DungeonManager doesn’t have a `Player` object; “player state” is split acr
 ### Placement “why not” hint (live)
 - **Owner**: `scripts/DungeonView.gd` → emits `preview_reason_changed(text, ok)` which HUD displays near the cursor.
 - **Reasons**: overlap, out of bounds, not enough power, unique-room already placed.
-

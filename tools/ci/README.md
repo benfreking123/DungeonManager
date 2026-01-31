@@ -43,7 +43,3 @@ where.exe godot
 ```bash
 GODOT=/path/to/godot ./tools/run_ci.sh
 ```
-
-
-
-

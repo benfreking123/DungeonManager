@@ -1,8 +1,10 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://ckkf367liatal"]
 
 [ext_resource type="Script" path="res://ui/TownHistoryPanel.gd" id="1"]
 
 [node name="TownHistoryPanel" type="PanelContainer"]
+z_index = 4096
+z_as_relative = false
 custom_minimum_size = Vector2(420, 340)
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,9 +13,6 @@ offset_left = 18.0
 offset_top = 18.0
 offset_right = -18.0
 offset_bottom = -18.0
-z_index = 4096
-z_as_relative = false
-visible = false
 script = ExtResource("1")
 
 [node name="VBox" type="VBoxContainer" parent="."]
@@ -33,6 +32,22 @@ size_flags_horizontal = 3
 [node name="Close" type="Button" parent="VBox/Top"]
 layout_mode = 2
 text = "Close"
+
+[node name="TownInfo" type="VBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="StrengthRow" type="HBoxContainer" parent="VBox/TownInfo"]
+layout_mode = 2
+
+[node name="StrengthLabel" type="Label" parent="VBox/TownInfo/StrengthRow"]
+layout_mode = 2
+text = "Strength: 0(0)"
+
+[node name="TreasureRow" type="HBoxContainer" parent="VBox/TownInfo"]
+layout_mode = 2
+
+[node name="ClassChanceRow" type="HBoxContainer" parent="VBox/TownInfo"]
+layout_mode = 2
 
 [node name="List" type="ItemList" parent="VBox"]
 layout_mode = 2

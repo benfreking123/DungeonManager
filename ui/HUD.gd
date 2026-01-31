@@ -150,6 +150,8 @@ func _ready() -> void:
 	if has_method("set_power"):
 		set_power(GameState.power_used, GameState.power_capacity)
 
+	# (Strength display moved to TownHistoryPanel)
+
 
 func _resolve_topbar_nodes() -> void:
 	# Support old and new layouts:
@@ -218,6 +220,7 @@ func _resolve_topbar_nodes() -> void:
 			speed_4x = get_node_or_null("TopBar/HBox/Speed4x") as Button
 	if shop_button == null:
 		shop_button = get_node_or_null("TopBar/HBox/ShopButton") as Button
+	# (Strength label removed; now shown in TownHistoryPanel)
 
 
 func _refresh_day_label() -> void:
@@ -226,6 +229,10 @@ func _refresh_day_label() -> void:
 	# NOTE: `GameState` is an autoload Object; `"day_index" in GameState` does NOT work reliably.
 	var di := int(GameState.day_index)
 	day_label.text = "Day: %d" % di
+	# (Strength display handled by TownHistoryPanel)
+
+
+#
 
 
 func _on_action_pressed() -> void:
@@ -584,6 +591,9 @@ func _apply_paper_theme() -> void:
 			if _vignette != null:
 				# Vignette shader uses its own color uniform; keep node visible.
 				_vignette.color = Color(1, 1, 1, 1)
+
+
+#
 
 
 func _layout_paper_fx() -> void:

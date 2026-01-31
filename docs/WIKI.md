@@ -26,17 +26,17 @@ This file is a quick “what exists” index for everything meaningful to the pl
 - **UI that renders inventories**: `res://ui/RoomInventoryPanel.gd` (tabs: Rooms/Monsters/Traps/Boss/Treasure)
 - **Starting inventory profiles**:
   - Config files:
-    - Base: `res://config/start_inventory/base.json`
-    - Test overlay: `res://config/start_inventory/test.json`
+	- Base: `res://config/start_inventory/base.json`
+	- Test overlay: `res://config/start_inventory/test.json`
   - Toggle profile in editor: Project Settings → `game/start_inventory_profile` (`base` or `test`)
   - Merge rules:
-    - Scalars (e.g. `gold`): overlay overrides
-    - `items`: merged by `id`, quantities are summed
-    - `rooms`: merged by `id`, quantities are summed
+	- Scalars (e.g. `gold`): overlay overrides
+	- `items`: merged by `id`, quantities are summed
+	- `rooms`: merged by `id`, quantities are summed
   - Loader/merge: `res://autoloads/StartInventoryService.gd`
   - Runtime application:
-    - `res://autoloads/PlayerInventory.gd` builds item counts from merged config on startup and restart
-    - `res://autoloads/RoomInventory.gd` builds room-piece counts from merged config on startup and restart
+	- `res://autoloads/PlayerInventory.gd` builds item counts from merged config on startup and restart
+	- `res://autoloads/RoomInventory.gd` builds room-piece counts from merged config on startup and restart
 
 ## Dungeon layout (grid + slots)
 - **Dungeon grid state**: `res://autoloads/DungeonGrid.gd`
@@ -143,43 +143,43 @@ There isn’t currently a separate “Adventures” data category; the player-fa
 - **Traits** (config-driven stat mods + S impact)
   - Config: `res://autoloads/traits_config.gd`
   - Shape per trait:
-    - `label: String`
-    - `mods.flat: { stat_name: int }` (e.g. `attack_damage: 1`, `armor: 1`)
-    - `mods.pct: { stat_name: int }` (% change, e.g. `hp_max: 25`)
-    - `s_delta: int` (how the trait shifts the S budget, ±)
-    - `w: int` (selection weight for generator)
+	- `label: String`
+	- `mods.flat: { stat_name: int }` (e.g. `attack_damage: 1`, `armor: 1`)
+	- `mods.pct: { stat_name: int }` (% change, e.g. `hp_max: 25`)
+	- `s_delta: int` (how the trait shifts the S budget, ±)
+	- `w: int` (selection weight for generator)
   - Applied at spawn (percent first, then flat) in `res://scripts/services/PartyAdventureSystem.gd`.
 
 - **Abilities** (data-driven `.tres` + triggers, cooldown, charges)
   - Resource script: `res://scripts/resources/Ability.gd` (`Ability`)
   - Files: `res://assets/abilities/*.tres`
   - Fields:
-    - `ability_id: String`
-    - `trigger_name: String` (one of the triggers below)
-    - `cooldown_s: float` (0=no wait, -1=single-use/day regardless of charges)
-    - `charges_per_day: int`
-    - `s_delta: int`
-    - `params: Dictionary` (effect-specific)
+	- `ability_id: String`
+	- `trigger_name: String` (one of the triggers below)
+	- `cooldown_s: float` (0=no wait, -1=single-use/day regardless of charges)
+	- `charges_per_day: int`
+	- `s_delta: int`
+	- `params: Dictionary` (effect-specific)
   - Runtime system: `res://scripts/services/AbilitySystem.gd`
-    - Registers adventurer abilities on spawn and fires on triggers
-    - Minimal animation: scale “pop” + tint pulse via Tween
+	- Registers adventurer abilities on spawn and fires on triggers
+	- Minimal animation: scale “pop” + tint pulse via Tween
 
 - **Ability triggers** (string ids)
   - Movement/entry:
-    - `WhenMonster`, `WhenTrap`, `WhenBoss` (on entering such a room)
-    - `EnteringMonsterRoom`, `EnteringTrapRoom`, `EnteringBossRoom` (aliases)
+	- `WhenMonster`, `WhenTrap`, `WhenBoss` (on entering such a room)
+	- `EnteringMonsterRoom`, `EnteringTrapRoom`, `EnteringBossRoom` (aliases)
   - Combat:
-    - `WhenAttack` (just as an adventurer hits)
-    - `WhenAttacked` (when an adventurer takes damage)
-    - `PartyMemberDamaged` (any member of the party took damage)
+	- `WhenAttack` (just as an adventurer hits)
+	- `WhenAttacked` (when an adventurer takes damage)
+	- `PartyMemberDamaged` (any member of the party took damage)
   - Loot:
-    - `LootGathered` (party stole treasure)
-    - `FullLoot` (member inventory full)
+	- `LootGathered` (party stole treasure)
+	- `FullLoot` (member inventory full)
   - Misc:
-    - `WhenFlee` (upon initiating exit)
-    - `PartyMemberDeath` (alias of `PartyMemberDie`)
-    - `PartyMemberLow` (a party member HP ≤ 25%)
-    - `PartyMemberHalf` (a party member HP ≤ 50%)
+	- `WhenFlee` (upon initiating exit)
+	- `PartyMemberDeath` (alias of `PartyMemberDie`)
+	- `PartyMemberLow` (a party member HP ≤ 25%)
+	- `PartyMemberHalf` (a party member HP ≤ 50%)
 
 - **Ability cast time**
   - Each ability resource supports `cast_time_s` (float). If > 0, effect and animation occur after this delay; cooldown timing includes cast time.

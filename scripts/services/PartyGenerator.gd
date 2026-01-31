@@ -123,10 +123,12 @@ func generate_parties(strength_s: int, cfg: Node, goals_cfg: Node, day_seed: int
 	# Load traits and abilities index once per generation.
 	var traits_cfg: Node = load("res://autoloads/traits_config.gd").new()
 	var abilities_by_class := _index_abilities_by_class()
+	# Compute class spawn weights (treasure-biased) once per day
+	var class_weights := class_spawn_weights(cfg)
 
 	for pid in range(1, sizes.size() + 1):
 		var party_size := clampi(int(sizes[pid - 1]), 1, max_party_size)
-		var class_ids := _pick_party_classes(rng, party_size)
+		var class_ids := _pick_party_classes_weighted(rng, party_size, class_weights)
 		var member_ids: Array[int] = []
 
 		for ci in class_ids:
@@ -261,28 +263,99 @@ func _weighted_pick_int(rng: RandomNumberGenerator, weights: Dictionary, fallbac
 	return fallback
 
 
-func _pick_party_classes(rng: RandomNumberGenerator, party_size: int) -> Array[String]:
+func _pick_party_classes_weighted(rng: RandomNumberGenerator, party_size: int, weights: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	if party_size <= 0:
 		return out
+	# Sample with replacement by weight.
+	for _i in range(party_size):
+		out.append(_weighted_pick_from_classes(rng, weights))
+	return out
+
+
+func _weighted_pick_from_classes(rng: RandomNumberGenerator, weights: Dictionary) -> String:
+	# Fallback pool
 	var pool: Array[String] = []
 	for c0 in DEFAULT_CLASSES:
 		pool.append(String(c0))
-	# Strong bias: a 4-person party tends to be the classic 4.
-	if party_size == 4 and pool.size() == 4:
-		# Shuffle and return all 4.
-		for i in range(pool.size() - 1, 0, -1):
-			var j := rng.randi_range(0, i)
-			var tmp: String = pool[i]
-			pool[i] = pool[j]
-			pool[j] = tmp
-		for c in pool:
-			out.append(String(c))
-		return out
+	if weights == null or weights.is_empty():
+		return String(pool[rng.randi_range(0, pool.size() - 1)])
+	var total := 0.0
+	for k in weights.keys():
+		total += maxf(0.0, float(weights.get(k, 0)))
+	if total <= 0.0001:
+		return String(pool[rng.randi_range(0, pool.size() - 1)])
+	var roll := rng.randf() * total
+	var acc := 0.0
+	for k2 in weights.keys():
+		acc += maxf(0.0, float(weights.get(k2, 0)))
+		if roll <= acc:
+			return String(k2)
+	return String(pool[0])
 
-	# Otherwise sample with replacement.
-	for _i in range(party_size):
-		out.append(String(pool[rng.randi_range(0, pool.size() - 1)]))
+
+func class_spawn_weights(cfg: Node) -> Dictionary:
+	# Returns class_id -> weight (float). Base weights from config plus treasure bias.
+	var base_defaults: Dictionary = {
+		"warrior": 25.0,
+		"mage": 25.0,
+		"priest": 25.0,
+		"rogue": 25.0,
+	}
+	# Work on a mutable copy (config dictionaries may be read-only)
+	var weights: Dictionary = {}
+	for k in base_defaults.keys():
+		weights[String(k)] = float(base_defaults.get(k, 0))
+	var per_item := 1.0
+	if cfg != null and cfg.has_method("get"):
+		var maybe_any: Variant = cfg.get("CLASS_BASE_WEIGHTS")
+		if typeof(maybe_any) == TYPE_DICTIONARY and not (maybe_any as Dictionary).is_empty():
+			var cfg_base := maybe_any as Dictionary
+			weights.clear()
+			for k2 in cfg_base.keys():
+				weights[String(k2)] = float(cfg_base.get(k2, 0))
+		var v_any: Variant = cfg.get("CLASS_TREASURE_WEIGHT_PCT_PER_ITEM")
+		if typeof(v_any) == TYPE_FLOAT or typeof(v_any) == TYPE_INT:
+			per_item = float(v_any)
+	# Count installed treasure items by id across treasure rooms
+	var counts := _installed_treasure_counts()
+	# Bias: for each class, if a matching treasure id exists, add count * per_item
+	for cid in DEFAULT_CLASSES:
+		var w := float(weights.get(cid, 0))
+		var t_id := ""
+		if cfg != null and cfg.has_method("treasure_id_for_class"):
+			t_id = String(cfg.call("treasure_id_for_class", String(cid)))
+		if t_id != "":
+			var c := int(counts.get(t_id, 0))
+			if c > 0:
+				w += float(c) * per_item
+		weights[cid] = w
+	return weights
+
+
+func _installed_treasure_counts() -> Dictionary:
+	var out := {}
+	# Resolve nodes defensively since this is a RefCounted
+	var dg: Node = null
+	var ml := Engine.get_main_loop()
+	if ml is SceneTree:
+		var root := (ml as SceneTree).root
+		if root != null:
+			dg = root.get_node_or_null("DungeonGrid")
+	if dg == null:
+		return out
+	var rooms: Array = dg.get("rooms") as Array
+	for r0 in rooms:
+		var r := r0 as Dictionary
+		if String(r.get("kind", "")) != "treasure":
+			continue
+		var slots: Array = r.get("slots", [])
+		for s0 in slots:
+			var sd := s0 as Dictionary
+			var id := String(sd.get("installed_item_id", ""))
+			if id == "":
+				continue
+			out[id] = int(out.get(id, 0)) + 1
 	return out
 
 
