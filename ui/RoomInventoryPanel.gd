@@ -134,6 +134,24 @@ func select_tab(which: String) -> void:
 			if _tab_treasure != null: _tab_treasure.button_pressed = true
 
 
+func set_grid_interactable(enabled: bool) -> void:
+	# Enable/disable all grid item buttons while keeping tabs active.
+	var targets := [_room_grid, _monster_grid, _trap_grid, _boss_grid, _treasure_grid]
+	for grid in targets:
+		if grid == null:
+			continue
+		for c in grid.get_children():
+			# Try common Button APIs first.
+			if c is BaseButton:
+				(c as BaseButton).disabled = not enabled
+				continue
+			# Fall back to a generic property/method if the child isn't a Button.
+			if c.has_method("set_disabled"):
+				c.call("set_disabled", not enabled)
+			elif c.has_method("set"):
+				c.set("disabled", not enabled)
+
+
 func get_treasure_collect_target_global_pos() -> Vector2:
 	# Used for end-of-day loot collection animation.
 	# Aim for the Treasure tab button center (stable even if Treasure page isn't visible).

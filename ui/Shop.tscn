@@ -23,8 +23,8 @@ script = ExtResource("1_shop_gd")
 
 [node name="Panel" type="Control" parent="."]
 anchors_preset = 0
-offset_left = -801.0
-offset_right = -1.0
+offset_left = -1044.0
+offset_right = -244.0
 offset_bottom = 720.0
 mouse_filter = 1
 

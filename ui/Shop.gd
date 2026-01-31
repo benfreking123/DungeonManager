@@ -44,17 +44,24 @@ var _shop_seed: int = 0
 
 
 func _ready() -> void:
+	# Allow clicks outside the visible panel to pass through to underlying UI (e.g., inventory tabs).
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
 	if _close != null:
 		_close.pressed.connect(close)
 	resized.connect(_on_resized)
 	if _squares_container != null:
+		_squares_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_squares_container.visible = false
 	_cache_squares()
 	if _items_root != null:
+		_items_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_items_root.visible = false
 	_clear_items()
 	_ensure_popup()
+	# Ensure the background panel does not intercept clicks; only interactive children (Close/slots) should.
+	if _panel != null:
+		_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 func is_open() -> bool:
@@ -188,6 +195,9 @@ func _cache_squares() -> void:
 	# Collect BlackSquare..BlackSquare8 in order.
 	for c in _squares_root.get_children():
 		if c is TextureRect and String(c.name).begins_with("BlackSquare"):
+			# Ensure decorative squares never consume mouse input.
+			if c is Control:
+				(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_squares.append(c)
 	_squares.sort_custom(func(a: CanvasItem, b: CanvasItem) -> bool:
 		return _square_order(a.name) < _square_order(b.name)
@@ -398,6 +408,8 @@ func _reveal_item_for_square(sq: CanvasItem) -> void:
 
 	var slot := _slot_scene.instantiate() as Control
 	_items_root.add_child(slot)
+	# Slots should capture clicks only within their rect.
+	slot.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Place centered on the square's global rect.
 	var sq_rect := (sq as Control).get_global_rect() if sq is Control else Rect2(sq.global_position, Vector2(64, 64))

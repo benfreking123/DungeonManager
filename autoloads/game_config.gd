@@ -13,7 +13,7 @@ const TREASURE_ROOM_EFFECT_ID: String = "treasure_room_power_capacity_plus_1"
 const TREASURE_ROOM_POWER_CAPACITY_PER_TREASURE: int = 1
 
 # Base power capacity (before treasure-based scaling).
-const BASE_POWER_CAPACITY: int = 20
+const BASE_POWER_CAPACITY: int = 10
 
 # Party/adventure scaling
 const MAX_PARTIES: int = 5
@@ -36,14 +36,13 @@ const ADV_STAT_ROLL_DELTA: int = 1
 
 # Path decision “mistake” (epsilon-greedy) settings.
 # Higher Intelligence reduces this chance.
-const ADV_PATH_MISTAKE_CHANCE_BASE: float = 0.25
+const ADV_PATH_MISTAKE_CHANCE_BASE: float = 0.35
 # Floor so even geniuses can very rarely err (set to 0 for perfect play at high INT).
 const ADV_PATH_MISTAKE_MIN_CHANCE: float = 0.01
 
 # Strength scaling (day-based):
-# Strength is now computed from day number rather than treasure totals.
-const STRENGTH_DAY_BASE: int = 3
-const STRENGTH_DAY_GROWTH: float = 1.25
+# Strength is computed from day number via PARTY_SCALING(day).
+# The curve is exponential (doubles roughly every S_DOUBLING_DAYS).
 const STRENGTH_DAY_MAX: int = 999999
 
 # Daily Strength S scaling (exponential ~2x every 5 days)

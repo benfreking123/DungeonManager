@@ -445,9 +445,17 @@ func _resolve_shop() -> void:
 
 func _resolve_room_inventory_panel() -> void:
 	# This is the right-side room menu panel (inventory).
-	_room_inventory_panel = get_node_or_null("VBoxContainer/HBoxContainer/RoomInventoryPanel") as Control
-	if _room_inventory_panel == null:
-		_room_inventory_panel = get_node_or_null("RoomInventoryPanel") as Control
+	var paths := [
+		"VBoxContainer/HBoxContainer/VBoxContainer/RoomInventoryPanel", # current HUD.tscn
+		"VBoxContainer/HBoxContainer/RoomInventoryPanel",               # older/newer variants
+		"RoomInventoryPanel"                                            # flat fallback
+	]
+	_room_inventory_panel = null
+	for p in paths:
+		var n := get_node_or_null(p) as Control
+		if n != null:
+			_room_inventory_panel = n
+			break
 
 
 func _on_shop_opened() -> void:
@@ -455,17 +463,23 @@ func _on_shop_opened() -> void:
 	if _room_inventory_panel == null:
 		_resolve_room_inventory_panel()
 	if _room_inventory_panel != null:
+		# Default to Treasure tab when shop opens (deferred to avoid race with layout).
 		if _room_inventory_panel.has_method("select_tab"):
-			_room_inventory_panel.call("select_tab", "treasure")
-		elif _room_inventory_panel.has_method("lock_tabs_to"):
-			# Fallback: older behavior (locked).
-			_room_inventory_panel.call("lock_tabs_to", "treasure")
+			_room_inventory_panel.call_deferred("select_tab", "treasure")
+		# Disable item/room grid buttons while allowing tab changes.
+		if _room_inventory_panel.has_method("set_grid_interactable"):
+			_room_inventory_panel.call("set_grid_interactable", false)
 	_set_shop_interaction_mode(true)
+	# Extra enforcement after layout stabilizes.
+	_enforce_shop_inventory_selection()
 
 
 func _on_shop_closed() -> void:
 	if _room_inventory_panel != null and _room_inventory_panel.has_method("unlock_tabs"):
 		_room_inventory_panel.call("unlock_tabs")
+	# Re-enable item/room buttons after shop closes.
+	if _room_inventory_panel != null and _room_inventory_panel.has_method("set_grid_interactable"):
+		_room_inventory_panel.call("set_grid_interactable", true)
 	_set_shop_interaction_mode(false)
 	# Closing the shop returns to BUILD phase.
 	if GameState != null and GameState.phase == GameState.Phase.SHOP:
@@ -528,6 +542,33 @@ func _maybe_open_shop_for_phase(new_phase: int) -> void:
 		_shop.call("open_with_seed", shop_seed)
 	else:
 		_shop.call("open")
+	# Proactively select Treasure tab and disable grid items here as well (belt-and-suspenders with _on_shop_opened).
+	if _room_inventory_panel == null:
+		_resolve_room_inventory_panel()
+	if _room_inventory_panel != null:
+		if _room_inventory_panel.has_method("select_tab"):
+			_room_inventory_panel.call_deferred("select_tab", "treasure")
+		if _room_inventory_panel.has_method("set_grid_interactable"):
+			_room_inventory_panel.call("set_grid_interactable", false)
+	# Extra enforcement after Shop creation/open animation.
+	_enforce_shop_inventory_selection()
+
+func _enforce_shop_inventory_selection() -> void:
+	# Enforce selection a few times to survive any late layout/scene updates.
+	var delays := [0.01, 0.06, 0.15]
+	for d in delays:
+		var t := get_tree().create_timer(d)
+		t.timeout.connect(func():
+			if _room_inventory_panel == null:
+				_resolve_room_inventory_panel()
+			if _room_inventory_panel != null:
+				if Engine.has_singleton("DbgLog"):
+					DbgLog.info("Enforce Treasure tab on Shop open (panel ok)", "ui")
+				if _room_inventory_panel.has_method("select_tab"):
+					_room_inventory_panel.call("select_tab", "treasure")
+				if _room_inventory_panel.has_method("set_grid_interactable"):
+					_room_inventory_panel.call("set_grid_interactable", false)
+		)
 
 func _apply_paper_theme() -> void:
 	# Keep background nodes theme-driven (so changing the Theme updates everything).

@@ -1591,7 +1591,7 @@ func teleport_adv_to_random_room(adv_id: int, from_room_id: int = 0) -> void:
 
 	# Clear any current path; then retarget party from the new location.
 	if adv.has_method("set_path"):
-		adv.call("set_path", [])
+		adv.call("set_path", [] as Array[Vector2i])
 	var pid := int(adv.get("party_id"))
 	_retarget_party(pid, target_cell)
 
