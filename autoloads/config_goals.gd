@@ -307,10 +307,16 @@ const FLEE_DIALOGUE: Array[String] = [
 
 
 func get_intent_score() -> Dictionary:
+	# Prefer ai_tuning for centralized tuning; fallback to local constants.
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("get_intent_score"):
+		return ai_tuning.get_intent_score()
 	return INTENT_SCORE.duplicate(true)
 
 
 func get_intent_stability() -> Dictionary:
+	# Prefer ai_tuning for centralized tuning; fallback to local constants.
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("get_intent_stability"):
+		return ai_tuning.get_intent_stability()
 	return INTENT_STABILITY.duplicate(true)
 
 

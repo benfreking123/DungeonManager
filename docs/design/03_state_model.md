@@ -89,3 +89,9 @@ These are **sub-states inside** `InGame(Day)` and can be derived from runtime fl
 - **DAY interactions**: right-click adventurer to open inspect popup; pause/resume via HUD action button (speed=0).
 - **History**: toggle day event log panel via `H` (and via HUD/town UI).
 
+## Tuning sources (where behavior is configured)
+- `res://autoloads/ai_tuning.gd` (autoload `ai_tuning`): central knobs for adventurer/party behavior
+  - Path mistake rates vs INT, party leash distance, defection thresholds/caps, intent scoring/stability, hazard penalties,
+    flee-on-damage mapping, exit-with-loot scaling, loot pickup radius, and soft retarget cooldown.
+- `res://autoloads/config_goals.gd` (autoload `config_goals`): goal definitions and dialogue; its scoring/stability delegates to `ai_tuning` when present.
+- `res://autoloads/game_config.gd` (autoload `game_config`): general constants (power capacity, treasure IDs, etc.).

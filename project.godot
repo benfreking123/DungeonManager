@@ -31,6 +31,7 @@ game_config="*res://autoloads/game_config.gd"
 config_goals="*res://autoloads/config_goals.gd"
 config_shop="*res://autoloads/config_shop.gd"
 StolenStash="*res://autoloads/StolenStash.gd"
+ai_tuning="*res://autoloads/ai_tuning.gd"
 
 [display]
 

@@ -116,15 +116,13 @@ func _hazard_weight_penalty(room_id: int, room_kind: String) -> int:
 		return 0
 	if not bool(Simulation.call("is_room_hazard_remembered", int(room_id))):
 		return 0
-	match String(room_kind):
-		"trap":
-			# Keep this mild so parties don't "give up" on exploring.
-			return -1
-		"monster":
-			# Monster rooms are already base-weighted negative; only nudge further.
-			return -1
-		_:
-			return 0
+	# Prefer ai_tuning penalties by kind; fallback to legacy mild -1.
+	var kind := String(room_kind)
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("hazard_penalty_for"):
+		return int(ai_tuning.hazard_penalty_for(kind))
+	if kind == "trap" or kind == "monster":
+		return -1
+	return 0
 
 
 func _list_occupied_cells(dungeon_grid: Node) -> Array[Vector2i]:

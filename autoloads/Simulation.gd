@@ -484,6 +484,39 @@ func _process(delta: float) -> void:
 				_on_party_combat_ended(aid)
 
 			a.call("tick", dt)
+			# Ground loot pickup: allow adventurers to collect dropped treasure near them.
+			if _loot_system != null and not now_in_combat:
+				var rad := 18.0
+				if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("loot_pickup_radius"):
+					rad = float(ai_tuning.loot_pickup_radius())
+				var picked: Array[String] = _loot_system.call("collect_nearby_for_adv", a, rad)
+				if not picked.is_empty() and _party_adv != null:
+					var pid_pick := int(a.get("party_id"))
+					var aid_pick := int(a.get_instance_id())
+					var any_added := false
+					for tid in picked:
+						if _party_adv.add_stolen_for_adv(aid_pick, String(tid)):
+							any_added = true
+					if any_added:
+						# History: attribute loot to this adventurer if we can.
+						if _history != null and _party_adv.has_method("member_def_for_adv"):
+							var md_pick: Dictionary = _party_adv.call("member_def_for_adv", aid_pick) as Dictionary
+							var prof_id := int(md_pick.get("profile_id", 0))
+							if prof_id != 0:
+								_history.record_loot(prof_id, picked, 0, "ground")
+						# Ability trigger: notify LootGathered for the whole party.
+						if _ability_system != null:
+							var ids2: Array[int] = []
+							for a2 in _adventurers:
+								if is_instance_valid(a2) and int(a2.get("party_id")) == pid_pick:
+									ids2.append(int(a2.get_instance_id()))
+							if not ids2.is_empty():
+								_ability_system.on_loot_gathered(ids2)
+						# Ability trigger: FullLoot for members that reached capacity.
+						if _ability_system != null and _party_adv != null:
+							var full_ids: Array[int] = _party_adv.full_loot_member_ids(pid_pick)
+							if not full_ids.is_empty():
+								_ability_system.on_full_loot(full_ids)
 			alive.append(a)
 	_adventurers = alive
 
@@ -982,7 +1015,6 @@ func _find_room_inventory_panel() -> Node:
 		return null
 	return scene.find_child("RoomInventoryPanel", true, false)
 
-
 func _track_adv(adv: Node2D) -> void:
 	if adv == null or not is_instance_valid(adv):
 		return
@@ -1044,7 +1076,17 @@ func _on_adventurer_finished(adv: Node2D) -> void:
 	if from_cell == Vector2i(-1, -1):
 		return
 	var pid := int(adv.get("party_id"))
-	_retarget_party(pid, from_cell)
+	# Soft retarget cooldown to prevent instant flip after goal reached.
+	var delay := 0.5
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("retarget_cooldown_s"):
+		delay = float(ai_tuning.retarget_cooldown_s())
+	if adv.has_method("pause_for"):
+		adv.call("pause_for", delay)
+	var t := get_tree().create_timer(delay)
+	t.timeout.connect(func():
+		if _active:
+			_retarget_party(pid, from_cell)
+	)
 
 
 func _on_adventurer_damaged(_amount: int, adv_id: int) -> void:

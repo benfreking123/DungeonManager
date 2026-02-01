@@ -325,16 +325,16 @@ func on_adv_damaged(adv_id: int, hp: int = 0, hp_max: int = 0) -> void:
 		if hp_max > 0:
 			b.last_hp = int(hp)
 			b.last_hp_max = int(hp_max)
-		# Flee-on-damage: high morality hesitates before fleeing.
-		#  - morality >= 4: delay 2 rooms
-		#  - morality >= 2: delay 1 room
-		#  - else: flee immediately
+		# Flee-on-damage: delay from ai_tuning (low morality flees sooner); fallback to legacy mapping.
 		if b.has_goal("flee_on_any_damage") and not bool(b.flee_triggered):
 			var delay := 0
-			if b.morality >= 4:
-				delay = 2
-			elif b.morality >= 2:
-				delay = 1
+			if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("flee_delay_for_morality"):
+				delay = int(ai_tuning.flee_delay_for_morality(int(b.morality)))
+			else:
+				if b.morality >= 4:
+					delay = 2
+				elif b.morality >= 2:
+					delay = 1
 			b.flee_delay_rooms_remaining = maxi(b.flee_delay_rooms_remaining, delay)
 			if b.flee_delay_rooms_remaining <= 0:
 				_trigger_flee(int(adv_id), b)
@@ -429,7 +429,10 @@ func decide_party_intent(party_id: int) -> String:
 	var loot_known := _has_any_known_treasure_room_with_loot()
 
 	var stab: Dictionary = {}
-	if _goals_cfg != null and _goals_cfg.has_method("get_intent_stability"):
+	# Prefer ai_tuning for stability, fallback to config_goals for backward compatibility.
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("get_intent_stability"):
+		stab = ai_tuning.get_intent_stability() as Dictionary
+	elif _goals_cfg != null and _goals_cfg.has_method("get_intent_stability"):
 		stab = _goals_cfg.call("get_intent_stability") as Dictionary
 	var clamp_min := int(stab.get("clamp_member_min", -300))
 	var clamp_max := int(stab.get("clamp_member_max", 500))
@@ -562,7 +565,11 @@ func _score_intent_for_member(b: AdventurerBrain, intent: String, boss_known: bo
 	var is_explore := (intent == INTENT_EXPLORE)
 
 	var isc: Dictionary = {}
-	if _goals_cfg != null and _goals_cfg.has_method("get_intent_score"):
+	# Prefer ai_tuning for intent scoring, fallback to config_goals.
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("get_intent_score"):
+		var all_a: Dictionary = ai_tuning.get_intent_score() as Dictionary
+		isc = all_a.get(intent, {}) as Dictionary
+	elif _goals_cfg != null and _goals_cfg.has_method("get_intent_score"):
 		var all: Dictionary = _goals_cfg.call("get_intent_score") as Dictionary
 		isc = all.get(intent, {}) as Dictionary
 
@@ -610,9 +617,15 @@ func _score_intent_for_member(b: AdventurerBrain, intent: String, boss_known: bo
 	if b.has_goal("exit_when_full_loot") and full_loot and is_exit:
 		var bonus := int(isc.get("full_loot_exit_bonus", 260))
 		var resist := int(isc.get("full_loot_morality_resist_per_point", 35))
+		# Apply per-item resist decay from ai_tuning (more loot -> less resist).
+		var loot_params := {}
+		if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("exit_with_loot_params"):
+			loot_params = ai_tuning.exit_with_loot_params()
+		var per_item_resist_decay := int(loot_params.get("per_item_resist_decay", 0))
+		var n_items := int(b.stolen_treasure.size())
 		# morality [-5..+5]; only high morality resists.
-		var m := maxi(0, int(b.morality))
-		score += bonus - (m * resist)
+		var eff_m := maxi(0, int(b.morality) - per_item_resist_decay * n_items)
+		score += bonus - (eff_m * resist)
 
 	if b.has_goal("explore_all_before_boss") and not _boss_killed:
 		var fully_known := _is_dungeon_fully_known()
@@ -632,7 +645,21 @@ func _score_intent_for_member(b: AdventurerBrain, intent: String, boss_known: bo
 		if not started and b.stolen_treasure.is_empty() and not (b.has_goal("flee_on_any_damage") and b.took_any_damage):
 			score += int(isc.get("start_day_penalty", -1000))
 		# Exiting is more attractive once you have stolen something (they want to leave with it).
-		score += int(isc.get("has_any_loot_bonus", 10)) if not b.stolen_treasure.is_empty() else 0
+		var loot_bonus := 0
+		var loot_params2 := {}
+		if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("exit_with_loot_params"):
+			loot_params2 = ai_tuning.exit_with_loot_params()
+		# Base has-any bonus (fallback to config_goals intent score)
+		var has_any_bonus := int(loot_params2.get("has_any_bonus", int(isc.get("has_any_loot_bonus", 10))))
+		if not b.stolen_treasure.is_empty():
+			loot_bonus += has_any_bonus
+			# Per-item exit bonus (capped).
+			var per_item := int(loot_params2.get("per_item_bonus", 0))
+			var max_items := int(loot_params2.get("bonus_max_items", 0))
+			if per_item != 0 and max_items > 0:
+				var items := mini(int(b.stolen_treasure.size()), max_items)
+				loot_bonus += per_item * items
+		score += loot_bonus
 
 	# New goals (rolled params)
 	# flee_on_any_loot: once you have any loot, strongly prefer exit.
@@ -727,22 +754,34 @@ func _maybe_defect(party_id: int, from_cell: Vector2i, chosen_intent: String) ->
 			continue
 		var chosen_score := int(personal.get(chosen_intent, 0))
 		var pressure := best_score - chosen_score
-		if pressure < 60:
+		# Threshold from ai_tuning, with bias for very low morality.
+		var thresh := 60
+		if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("defect_pressure_threshold"):
+			thresh = int(ai_tuning.defect_pressure_threshold())
+		if int(b.morality) <= -5:
+			thresh = maxi(0, thresh - 10)
+		if pressure < thresh:
 			continue
 		# Low morality = more defection chance.
 		if b.morality > -1:
 			continue
-
 		var m_factor := float(clampi(-b.morality, 0, 5)) / 5.0 # -5 => 1.0, 0 => 0.0
 		var p_factor := clampf(float(pressure) / 200.0, 0.0, 1.0)
-		var chance := clampf(m_factor * p_factor, 0.0, 0.85)
+		var cap := 0.85
+		if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("defect_chance_cap"):
+			cap = float(ai_tuning.defect_chance_cap())
+		# At morality = -5, use full cap; else keep as-is.
+		var chance := clampf(m_factor * p_factor, 0.0, cap)
 		if _rng.randf() > chance:
 			continue
 
-		var cap := int(_cfg.get("SOFT_PARTY_CAP")) if _cfg != null else 15
-		if active_party_count() >= cap:
-			_soft_defy[aid] = { "intent": best_intent, "rooms_left": 3 }
-			DbgLog.info("Soft defy adv=%d party=%d intent=%s pressure=%d (cap=%d)" % [aid, pid, best_intent, pressure, cap], "party")
+		var soft_cap := int(_cfg.get("SOFT_PARTY_CAP")) if _cfg != null else 15
+		if active_party_count() >= soft_cap:
+			var rooms := 3
+			if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("soft_defy_rooms"):
+				rooms = int(ai_tuning.soft_defy_rooms())
+			_soft_defy[aid] = { "intent": best_intent, "rooms_left": rooms }
+			DbgLog.info("Soft defy adv=%d party=%d intent=%s pressure=%d (cap=%d)" % [aid, pid, best_intent, pressure, soft_cap], "party")
 			continue
 
 		# Hard split into micro-party.
@@ -772,7 +811,10 @@ func _maybe_defect(party_id: int, from_cell: Vector2i, chosen_intent: String) ->
 			var sc2_chosen := _score_intent_for_member(b2, chosen_intent, boss_known, loot_known)
 			if sc2_best - sc2_chosen < 60:
 				continue
-			if _rng.randf() < 0.5:
+			var recruit_ch := 0.5
+			if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("defect_recruit_chance"):
+				recruit_ch = float(ai_tuning.defect_recruit_chance())
+			if _rng.randf() < recruit_ch:
 				_move_adv_to_party(aid2, new_pid)
 		# Remove the original defector from the old party last (membership arrays update).
 		_move_adv_to_party(aid, new_pid)
@@ -817,6 +859,14 @@ func _intent_goal_cell(party_id: int, intent: String, from_cell: Vector2i) -> Ve
 			return _entrance_goal_cell(from_cell)
 		_:
 			return _explore_goal_cell(int(party_id), from_cell)
+
+
+# Public: allow Simulation (and other systems) to credit ground loot into a member's stolen stash.
+func add_stolen_for_adv(adv_id: int, item_id: String) -> bool:
+	var b: AdventurerBrain = _brains.get(int(adv_id), null) as AdventurerBrain
+	if b == null:
+		return false
+	return b.add_stolen(String(item_id))
 
 
 func _intent_goal_cell_for_adv(adv_id: int, intent: String, from_cell: Vector2i) -> Vector2i:
@@ -876,8 +926,17 @@ func _clamp_stat(v: int) -> int:
 func _epsilon_for_intelligence(intelligence: int) -> float:
 	var min_s := int(_cfg.get("ADV_STAT_MIN")) if _cfg != null else 8
 	var max_s := int(_cfg.get("ADV_STAT_MAX")) if _cfg != null else 12
-	var base := float(_cfg.get("ADV_PATH_MISTAKE_CHANCE_BASE")) if _cfg != null else 0.25
-	var floor := float(_cfg.get("ADV_PATH_MISTAKE_MIN_CHANCE")) if _cfg != null else 0.01
+	var base := 0.25
+	var floor := 0.01
+	# Prefer ai_tuning PATH_NOISE; fallback to game_config constants.
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null:
+		if ai_tuning.has_method("epsilon_base"):
+			base = float(ai_tuning.epsilon_base())
+		if ai_tuning.has_method("epsilon_floor"):
+			floor = float(ai_tuning.epsilon_floor())
+	elif _cfg != null:
+		base = float(_cfg.get("ADV_PATH_MISTAKE_CHANCE_BASE"))
+		floor = float(_cfg.get("ADV_PATH_MISTAKE_MIN_CHANCE"))
 	base = clampf(base, 0.0, 1.0)
 	floor = clampf(floor, 0.0, 1.0)
 	if base < floor:

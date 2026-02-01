@@ -7,6 +7,11 @@ This is the player-facing reference for what exists in the game right now: core 
 - **Power**: Rooms cost power to place. Your total power capacity can be increased by Treasure (depending on your current rules/tunables).
 - **Unique rooms**: Some rooms are “one only” (notably Entrance, Boss, Treasure).
 - **Slots**: Some rooms have slots. You can install items into matching slot types (Monster/Trap/Treasure/Boss Upgrade, plus “Universal” slots in the Boss room).
+- **Adventurer party behavior**:
+  - Parties generally travel together and regroup after fights; stragglers catch up.
+  - Adventurers can pick up treasure dropped on the ground. The more loot they carry, the more likely they are to leave with it.
+  - Adventurers pause briefly after reaching a goal before choosing the next target.
+  - Low-morality individuals may break off from the group if they strongly disagree with the party plan.
 
 ---
 

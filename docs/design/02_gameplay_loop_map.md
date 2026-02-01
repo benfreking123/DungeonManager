@@ -69,6 +69,7 @@ flowchart TD
 - **Outputs**:
   - **Fog**: room becomes “known” for the day’s exploration logic
   - **Steal**: party may steal treasure on entry; stolen items accumulate on adventurers until exit/death
+  - **Ground loot pickup**: adventurers also auto-pick nearby dropped treasure icons during movement (radius tuned in `ai_tuning.LOOT_PICKUP.radius_px`)
   - **Trap effects**: on entering trap/boss rooms, trap system may apply damage/effects
   - **Combat join**: entering monster/boss rooms joins combat if monsters exist; combat warmup then attacks tick
   - **Ability triggers**: “enter room”, “attacked”, “attack”, “loot gathered”, “flee”, etc. can fire abilities
@@ -94,6 +95,7 @@ flowchart TD
 - **Outputs**:
   - Adventurer exits the day; stolen treasure moves into stash (meta)
   - **Day event log** records exit reasons / dialogue / loot events (meta) and can be opened via the HUD/Town UI
+  - Exit tendency increases with loot carried (configurable in `ai_tuning.EXIT_WITH_LOOT`)
 
 ### DAY end → SHOP (Clear)
 - **Inputs**: “all adventurers gone” OR explicit end-day call
@@ -101,6 +103,10 @@ flowchart TD
   - Ground loot is collected/animated to the UI target (if any) and credited into inventory
   - `GameState.phase = SHOP`
   - A deterministic shop seed is derived from the day seed
+
+### Tuning entry points (simulation feel)
+- `res://autoloads/ai_tuning.gd`: pathing mistakes vs INT, party leash/cohesion, defection pressure/caps, intent stability, hazard penalties, flee-on-damage mapping, exit-with-loot, loot pickup radius, soft retarget cooldown after goals.
+- `res://autoloads/config_goals.gd`: goal definitions (base/unique), per-goal parameters, dialogue. Its scoring/stability functions delegate to `ai_tuning` when available.
 
 ### DAY end → RESULTS (Loss)
 - **Inputs**: boss killed

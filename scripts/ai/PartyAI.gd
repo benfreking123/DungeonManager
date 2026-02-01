@@ -15,7 +15,11 @@ var _party_regroup: Dictionary = {}
 # key: int (adv_instance_id or party_id) -> AdventurerAI
 var _ai_by_key: Dictionary = {}
 
-const PARTY_LEASH_CELLS := 2
+func _leash_cells() -> int:
+	# Prefer ai_tuning; fallback to legacy default.
+	if Engine.has_singleton("ai_tuning") and ai_tuning != null and ai_tuning.has_method("party_leash_cells"):
+		return int(ai_tuning.party_leash_cells())
+	return 2
 
 
 func setup(grid: Node, path_service: PathService) -> void:
@@ -67,7 +71,7 @@ func tick_regroup_and_paths(party_id: int, cells_by_adv: Dictionary) -> Dictiona
 				all_close = false
 				break
 			var d: int = abs(c.x - regroup.x) + abs(c.y - regroup.y)
-			if d > PARTY_LEASH_CELLS:
+			if d > _leash_cells():
 				all_close = false
 				break
 		if all_close:
@@ -100,7 +104,7 @@ func tick_regroup_and_paths(party_id: int, cells_by_adv: Dictionary) -> Dictiona
 		if c4 == Vector2i(-1, -1):
 			continue
 		var dist: int = abs(c4.x - leader.x) + abs(c4.y - leader.y)
-		if dist <= PARTY_LEASH_CELLS:
+		if dist <= _leash_cells():
 			continue
 		var p: Array[Vector2i] = []
 		if _path != null:

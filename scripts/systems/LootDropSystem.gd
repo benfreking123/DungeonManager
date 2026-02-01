@@ -73,6 +73,36 @@ func spawn_treasure_drop(world_pos: Vector2, treasure_item_id: String) -> void:
 	_active_loot.append({ "node": node, "item_id": treasure_item_id })
 
 
+# Collects any ground loot within radius of the given adventurer (same parent coordinate space).
+# Returns Array[String] of item_ids picked up.
+func collect_nearby_for_adv(adv: Node2D, radius_px: float) -> Array[String]:
+	var out: Array[String] = []
+	if adv == null or not is_instance_valid(adv):
+		return out
+	var r := maxf(0.0, float(radius_px))
+	var r2 := r * r
+	if _active_loot.is_empty():
+		return out
+	var keep: Array[Dictionary] = []
+	for d0 in _active_loot:
+		var d := d0 as Dictionary
+		var node: Node2D = d.get("node", null) as Node2D
+		var item_id := String(d.get("item_id", ""))
+		var picked := false
+		if node != null and is_instance_valid(node) and item_id != "":
+			# Compare in WorldCanvas-local space (both adv and node are children of it).
+			var dist2 := (node.position - adv.position).length_squared()
+			if dist2 <= r2:
+				out.append(item_id)
+				if is_instance_valid(node):
+					node.queue_free()
+				picked = true
+		if not picked:
+			keep.append(d)
+	_active_loot = keep
+	return out
+
+
 func has_loot() -> bool:
 	return not _active_loot.is_empty()
 

@@ -48,8 +48,17 @@ This file is a quick “what exists” index for everything meaningful to the pl
 - **Update rule**: Edit `DungeonGrid.gd` for rules/data model; edit `DungeonView.gd` / `BuildPanel.gd` for UX/input/rendering.
 
 ## Game config
-- **Source of truth**: `res://autoloads/game_config.gd` (autoload name: `game_config`)
-- **Update rule**: Edit constants in `res://autoloads/game_config.gd` (these are hard-coded tunables).
+- **Source of truth (general)**: `res://autoloads/game_config.gd` (autoload name: `game_config`)
+- **AI/Party/Pathing tuning (centralized)**: `res://autoloads/ai_tuning.gd` (autoload name: `ai_tuning`)
+  - Holds most adventurer/party behavior knobs (path noise, leash distance, defection thresholds, retarget cooldown, hazard penalties).
+  - Also mirrors intent scoring and stability formerly defined only in `config_goals.gd`.
+- **Goals config (data + dialogue)**: `res://autoloads/config_goals.gd` (autoload name: `config_goals`)
+  - Owns `GOAL_DEFS` (base/unique goals, spawn roll rules, params, dialogue).
+  - Its `get_intent_score()` and `get_intent_stability()` delegate to `ai_tuning` when available.
+- **Update rule**:
+  - For AI/party/pathing knobs and intent stability/scoring: edit `res://autoloads/ai_tuning.gd`.
+  - For global constants not related to AI (treasure IDs, base capacity, etc.): edit `res://autoloads/game_config.gd`.
+  - For goals and dialogue lines: edit `res://autoloads/config_goals.gd`.
 - **Notable player-facing tunables stored here**:
   - `ADV_DEATH_TREASURE_DROP_CHANCE`
   - `BASE_POWER_CAPACITY`
@@ -127,6 +136,26 @@ There isn’t currently a separate “Adventures” data category; the player-fa
 - **Adventurer actor (runtime)**
   - Scene: `res://scenes/Adventurer.tscn`
   - Scripts: `res://scripts/Adventurer.gd`, `res://scripts/AdventurerAI.gd`
+
+### Adventurer AI and Party behavior
+- High-level decision system:
+  - Party-level intent and per-member brains: `res://scripts/services/PartyAdventureSystem.gd`
+  - Party cohesion/leash and regroup: `res://scripts/ai/PartyAI.gd`
+  - Room scoring for exploration/boss/treasure (visited/hazard-aware): `res://scripts/AdventurerAI.gd`
+- Tuning knobs (edit in `res://autoloads/ai_tuning.gd`):
+  - `PATH_NOISE.base` / `PATH_NOISE.floor`: epsilon-greedy mistake chance (higher INT reduces mistakes)
+  - `PARTY.leash_cells`: max distance before stragglers leash to leader
+  - `PARTY.retarget_cooldown_s`: brief pause after reaching a goal before retargeting
+  - `PARTY.defect_pressure_threshold`, `PARTY.defect_chance_cap`, `PARTY.soft_defy_rooms`, `PARTY.defect_recruit_chance`
+  - `INTENT_SCORE`, `INTENT_STABILITY`: intent scoring multipliers and switch hysteresis
+  - `HAZARD_WEIGHT_PENALTIES`: soft avoidance of remembered traps/monsters
+  - `FLEE_ON_DAMAGE.delay_by_morality`: low morality flees sooner; high morality hesitates
+  - `EXIT_WITH_LOOT`: exit more attractive with more loot; morality resist decays per item
+  - `LOOT_PICKUP.radius_px`: radius to auto-pick ground loot icons
+- Notable runtime behaviors:
+  - Parties regroup after combat to room center before continuing.
+  - Parties pick up ground loot; carrying more loot biases them toward exiting.
+  - Low-morality members (esp. -5) are more likely to defect into micro-parties when pressure is high.
 
 - **Adventurer classes (data)**
   - **Registry**: `res://autoloads/ItemDB.gd` (`classes` dictionary)
