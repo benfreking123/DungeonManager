@@ -8,7 +8,7 @@ const ABILITIES_DIR := "res://assets/abilities"
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _abilities_by_id: Dictionary = {} # ability_id -> Ability Resource
 
-# adv_id -> { ability_id, charges_left:int, next_ready_s:float, cooldown_s:float, single_use:bool }
+# adv_id -> Array[{ ability_id, charges_left:int, next_ready_s:float, cooldown_s:float, single_use:bool }]
 var _state_by_adv: Dictionary = {}
 
 var _simulation: Node = null
@@ -33,7 +33,21 @@ func get_ability_def(ability_id: String) -> Ability:
 
 func get_adv_ability_state(adv_id: int) -> Dictionary:
 	# Read-only helper for UI/tooltips.
-	return _state_by_adv.get(int(adv_id), {}) as Dictionary
+	var st: Variant = _state_by_adv.get(int(adv_id), null)
+	if typeof(st) == TYPE_ARRAY:
+		var arr := st as Array
+		if not arr.is_empty():
+			return arr[0] as Dictionary
+	return st as Dictionary if st != null else {}
+
+
+func get_adv_ability_states(adv_id: int) -> Array:
+	# Read-only helper for UI/tooltips (multi-ability).
+	var st: Variant = _state_by_adv.get(int(adv_id), [])
+	if typeof(st) == TYPE_ARRAY:
+		return st as Array
+	var d := st as Dictionary
+	return [d] if d != null and not d.is_empty() else []
 
 
 func register_adv_ability(adv: Node2D, ability_id: String, charges_per_day: int) -> void:
@@ -46,13 +60,23 @@ func register_adv_ability(adv: Node2D, ability_id: String, charges_per_day: int)
 	if res == null:
 		return
 	var single_use := (float(res.cooldown_s) < 0.0)
-	_state_by_adv[aid] = {
+	var entry := {
 		"ability_id": ability_id,
 		"charges_left": maxi(0, int(charges_per_day)),
 		"cooldown_s": float(res.cooldown_s),
 		"next_ready_s": 0.0,
 		"single_use": single_use,
 	}
+	var cur: Variant = _state_by_adv.get(aid, [])
+	if typeof(cur) == TYPE_ARRAY:
+		var arr := cur as Array
+		arr.append(entry)
+		_state_by_adv[aid] = arr
+	elif typeof(cur) == TYPE_DICTIONARY:
+		var arr2: Array = [cur as Dictionary, entry]
+		_state_by_adv[aid] = arr2
+	else:
+		_state_by_adv[aid] = [entry]
 
 
 func on_adv_damaged(adv_id: int) -> void:
@@ -96,52 +120,63 @@ func on_attacked(adv_id: int) -> void:
 
 
 func _try_fire(adv_id: int, trigger_name: String) -> void:
-	var st: Dictionary = _state_by_adv.get(int(adv_id), {}) as Dictionary
-	if st.is_empty():
-		return
-	var ability_id := String(st.get("ability_id", ""))
-	var res: Ability = _abilities_by_id.get(ability_id, null) as Ability
-	if res == null:
-		return
-	if String(res.trigger_name) != String(trigger_name):
-		return
-	if int(st.get("charges_left", 0)) <= 0:
+	var st_arr := get_adv_ability_states(int(adv_id))
+	if st_arr.is_empty():
 		return
 	var now_s := float(Time.get_ticks_msec()) / 1000.0
-	if now_s < float(st.get("next_ready_s", 0.0)):
-		return
-	# If -1 cooldown, single-use for the day.
-	if bool(st.get("single_use", false)) and int(st.get("charges_left", 0)) <= 0:
-		return
+	var new_arr: Array = []
+	for st0 in st_arr:
+		var st := st0 as Dictionary
+		if st.is_empty():
+			continue
+		var ability_id := String(st.get("ability_id", ""))
+		var res: Ability = _abilities_by_id.get(ability_id, null) as Ability
+		if res == null:
+			new_arr.append(st)
+			continue
+		if String(res.trigger_name) != String(trigger_name):
+			new_arr.append(st)
+			continue
+		if int(st.get("charges_left", 0)) <= 0:
+			new_arr.append(st)
+			continue
+		if now_s < float(st.get("next_ready_s", 0.0)):
+			new_arr.append(st)
+			continue
+		# If -1 cooldown, single-use for the day.
+		if bool(st.get("single_use", false)) and int(st.get("charges_left", 0)) <= 0:
+			new_arr.append(st)
+			continue
 
-	# Consume charge immediately and set next_ready including cast time.
-	var left := maxi(0, int(st.get("charges_left", 0)) - 1)
-	st["charges_left"] = left
-	var cd := float(st.get("cooldown_s", 0.0))
-	var cast_t := float(res.cast_time_s)
-	if cd < 0.0:
-		# Single-use: block further use
-		st["next_ready_s"] = 1e18
-		st["charges_left"] = 0
-	else:
-		st["next_ready_s"] = now_s + maxf(0.0, cast_t + cd)
-	_state_by_adv[int(adv_id)] = st
+		# Consume charge immediately and set next_ready including cast time.
+		var left := maxi(0, int(st.get("charges_left", 0)) - 1)
+		st["charges_left"] = left
+		var cd := float(st.get("cooldown_s", 0.0))
+		var cast_t := float(res.cast_time_s)
+		if cd < 0.0:
+			# Single-use: block further use
+			st["next_ready_s"] = 1e18
+			st["charges_left"] = 0
+		else:
+			st["next_ready_s"] = now_s + maxf(0.0, cast_t + cd)
+		new_arr.append(st)
 
-	# Fire effect after cast time (or immediately if 0).
-	if cast_t <= 0.0 or _simulation == null:
-		_execute_effect(int(adv_id), res)
-		_emit_anim(int(adv_id), res)
-		return
-	var tree := (_simulation.get_tree() as SceneTree) if _simulation != null else null
-	if tree == null:
-		_execute_effect(int(adv_id), res)
-		_emit_anim(int(adv_id), res)
-		return
-	var timer := tree.create_timer(cast_t)
-	timer.timeout.connect(func():
-		_execute_effect(int(adv_id), res)
-		_emit_anim(int(adv_id), res)
-	)
+		# Fire effect after cast time (or immediately if 0).
+		if cast_t <= 0.0 or _simulation == null:
+			_execute_effect(int(adv_id), res)
+			_emit_anim(int(adv_id), res)
+		else:
+			var tree := (_simulation.get_tree() as SceneTree) if _simulation != null else null
+			if tree == null:
+				_execute_effect(int(adv_id), res)
+				_emit_anim(int(adv_id), res)
+			else:
+				var timer := tree.create_timer(cast_t)
+				timer.timeout.connect(func():
+					_execute_effect(int(adv_id), res)
+					_emit_anim(int(adv_id), res)
+				)
+	_state_by_adv[int(adv_id)] = new_arr
 
 
 func on_loot_gathered(party_adv_ids: Array[int]) -> void:

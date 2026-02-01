@@ -219,6 +219,19 @@ var GOAL_DEFS: Dictionary = {
 		"spawn_roll": { "base_weight": 2, "jitter": 2, "mult_min": 0.8, "mult_max": 1.4, "spike_chance": 0.08, "spike_bonus": 2 },
 		"params_roll": { "loot_target_min": 1, "loot_target_max": 3 },
 	},
+	"avoid_monsters": {
+		"kind": "unique",
+		"pickable": true,
+		"order": 210,
+		"label": "Avoids monsters when possible",
+		"dialogue": [
+			"Keep us away from monsters.",
+			"Avoid fights if we can.",
+			"Let us slip past the worst of it.",
+		],
+		"spawn_roll": { "base_weight": 2, "jitter": 2, "mult_min": 0.8, "mult_max": 1.4, "spike_chance": 0.08, "spike_bonus": 2 },
+		"params_roll": {},
+	},
 }
 
 # Expose incompatible goals map for systems that need it. Built from GOAL_DEFS.

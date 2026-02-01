@@ -708,6 +708,19 @@ func _score_intent_for_member(b: AdventurerBrain, intent: String, boss_known: bo
 				if is_exit:
 					score += 140
 
+	# avoid_monsters: prefer to steer away from monster-heavy paths when known.
+	if b.has_goal("avoid_monsters"):
+		var monsters_known := _has_any_known_monster_room()
+		if monsters_known:
+			if is_boss:
+				score -= 60
+			if is_loot:
+				score -= 30
+			if is_explore:
+				score -= 40
+			if is_exit:
+				score += 50
+
 	return score
 
 
@@ -1138,6 +1151,21 @@ func _has_any_known_treasure_room_with_loot() -> bool:
 			continue
 		if _room_has_installed_treasure(r):
 			return true
+	return false
+
+
+func _has_any_known_monster_room() -> bool:
+	if _grid == null:
+		return false
+	var rooms: Array = _grid.get("rooms") as Array
+	for r0 in rooms:
+		var r := r0 as Dictionary
+		if String(r.get("kind", "")) != "monster":
+			continue
+		var rid := int(r.get("id", 0))
+		if _fog != null and not _fog.is_room_known(rid):
+			continue
+		return true
 	return false
 
 

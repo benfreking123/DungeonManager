@@ -128,6 +128,8 @@ const NAME_CONFIG_DIR: String = "res://data/names/"
 const BIO_TEMPLATES_PATH: String = "res://data/bio_templates.json"
 const EPITHETS_PATH: String = "res://data/epithets.json"
 const DIALOGUE_CONFIG_PATH: String = "res://data/dialogue_rules.json"
+# Curated family/lineage names
+const FAMILY_NAMES_PATH: String = "res://data/names/families.json"
 # Hero/day-plan configuration
 const HERO_CONFIG_PATH: String = "res://config/hero_config.json"
 const DAY_PLAN_PATH: String = "res://config/day_plan.json"
@@ -172,3 +174,16 @@ const DIALOGUE_TOKEN_DEFAULTS := {
 const DIALOGUE_DEBUG_TOKEN_WARN: bool = false
 # Debug: verbose dialogue logging.
 const DIALOGUE_DEBUG_VERBOSE: bool = true
+
+# === Hero scheduling ===
+# Chance to spawn random heroes on days without a plan entry.
+const HERO_RANDOM_SPAWN_CHANCE: float = 0.35
+# Random hero count range when random spawn triggers.
+const HERO_RANDOM_COUNT_MIN: int = 1
+const HERO_RANDOM_COUNT_MAX: int = 2
+
+# === Surface regroup ===
+# Radius to consider party members regrouped at entrance.
+const SURFACE_REGROUP_RADIUS_PX: float = 22.0
+# Max seconds to wait before forcing entry.
+const SURFACE_REGROUP_TIMEOUT_S: float = 3.5

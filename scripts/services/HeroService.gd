@@ -4,13 +4,15 @@ class_name HeroService
 var _heroes_by_id: Dictionary = {}
 var _day_plan: Array = []
 var _loaded: bool = false
+var _seed_salt: int = 0xA5A5A5A5
+var _cfg_cached: Node = null
 
 
 func inject_heroes_into_generation(gen: Dictionary, day_index: int, cfg: Node, goals_cfg: Node) -> void:
 	_ensure_loaded(cfg)
-	if _heroes_by_id.is_empty() or _day_plan.is_empty():
+	if _heroes_by_id.is_empty():
 		return
-	var hero_ids: Array[String] = _hero_ids_for_day(day_index)
+	var hero_ids: Array[String] = _select_heroes_for_day(day_index, cfg)
 	if hero_ids.is_empty():
 		return
 
@@ -47,21 +49,13 @@ func inject_heroes_into_generation(gen: Dictionary, day_index: int, cfg: Node, g
 func get_upcoming_heroes(horizon_days: int = 3) -> Array:
 	_ensure_loaded(null)
 	var out: Array = []
-	if _day_plan.is_empty():
-		return out
 	var cur_day := 1
 	if GameState != null:
 		cur_day = int(GameState.day_index)
-	for entry0 in _day_plan:
-		var entry := entry0 as Dictionary
-		var day := int(entry.get("day", 0))
-		if day <= cur_day:
-			continue
-		var until := day - cur_day
-		if until > horizon_days:
-			continue
-		var ids: Array = entry.get("heroes", []) as Array
-		for hid0 in ids:
+	var end_day := cur_day + maxi(0, horizon_days)
+	for day in range(cur_day + 1, end_day + 1):
+		var ids2 := _select_heroes_for_day(day, _cfg_cached)
+		for hid0 in ids2:
 			var hid := String(hid0)
 			var hero := _heroes_by_id.get(hid, {}) as Dictionary
 			if hero.is_empty():
@@ -70,7 +64,7 @@ func get_upcoming_heroes(horizon_days: int = 3) -> Array:
 				"hero_id": hid,
 				"name": String(hero.get("name", "")),
 				"class_id": String(hero.get("class_id", "")),
-				"days_until": until,
+				"days_until": int(day - cur_day),
 			}
 			out.append(item)
 	return out
@@ -79,6 +73,8 @@ func get_upcoming_heroes(horizon_days: int = 3) -> Array:
 func _ensure_loaded(cfg: Node) -> void:
 	if _loaded:
 		return
+	if cfg != null:
+		_cfg_cached = cfg
 	_loaded = true
 	_heroes_by_id.clear()
 	_day_plan.clear()
@@ -143,6 +139,72 @@ func _hero_ids_for_day(day_index: int) -> Array[String]:
 	return out
 
 
+func _select_heroes_for_day(day_index: int, cfg: Node) -> Array[String]:
+	var out: Array[String] = []
+	var entry: Dictionary = {}
+	for entry0 in _day_plan:
+		var e := entry0 as Dictionary
+		if int(e.get("day", 0)) == int(day_index):
+			entry = e
+			break
+	if not entry.is_empty():
+		var ids: Array = entry.get("heroes", []) as Array
+		for hid0 in ids:
+			var hid := String(hid0)
+			if hid != "" and _heroes_by_id.has(hid) and not out.has(hid):
+				out.append(hid)
+		var random_count := int(entry.get("random_count", 0))
+		if random_count > 0:
+			var pool: Array = entry.get("hero_pool", []) as Array
+			if pool.is_empty():
+				pool = _heroes_by_id.keys()
+			out.append_array(_pick_random_heroes(day_index, pool, random_count, out))
+	else:
+		# Optional global random spawn if no plan entry exists.
+		var chance := 0.0
+		var cmin := 1
+		var cmax := 1
+		if cfg != null and cfg.has_method("get"):
+			chance = float(cfg.get("HERO_RANDOM_SPAWN_CHANCE"))
+			cmin = int(cfg.get("HERO_RANDOM_COUNT_MIN"))
+			cmax = int(cfg.get("HERO_RANDOM_COUNT_MAX"))
+		if chance > 0.0:
+			var rng := _rng_for_day(day_index)
+			if rng.randf() <= chance:
+				var count := clampi(rng.randi_range(cmin, cmax), 1, 5)
+				var pool2: Array = _heroes_by_id.keys()
+				out.append_array(_pick_random_heroes(day_index, pool2, count, out))
+	return out
+
+
+func _pick_random_heroes(day_index: int, pool: Array, count: int, exclude: Array) -> Array[String]:
+	var rng := _rng_for_day(day_index)
+	var ids: Array[String] = []
+	var filtered: Array[String] = []
+	for p0 in pool:
+		var pid := String(p0)
+		if pid == "" or not _heroes_by_id.has(pid):
+			continue
+		if exclude.has(pid):
+			continue
+		filtered.append(pid)
+	filtered.sort()
+	while ids.size() < count and not filtered.is_empty():
+		var idx := rng.randi_range(0, filtered.size() - 1)
+		var pick := String(filtered[idx])
+		filtered.remove_at(idx)
+		ids.append(pick)
+	if Engine.has_singleton("DbgLog") and not ids.is_empty():
+		DbgLog.debug("Hero random pick day=%d ids=%s" % [int(day_index), str(ids)], "heroes")
+	return ids
+
+
+func _rng_for_day(day_index: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(day_index) ^ int(_seed_salt)
+	return rng
+
+
 func _build_member_def_from_hero(hero: Dictionary, member_id: int, party_id: int, cfg: Node, goals_cfg: Node) -> Dictionary:
 	var class_id := String(hero.get("class_id", "warrior"))
 	var base_stats := hero.get("base_stats", {}) as Dictionary
@@ -155,6 +217,8 @@ func _build_member_def_from_hero(hero: Dictionary, member_id: int, party_id: int
 	var stat_mods: Dictionary = hero.get("stat_mods", {}) as Dictionary
 	var ability_id := String(hero.get("ability_id", ""))
 	var ability_charges := int(hero.get("ability_charges", 1))
+	var ability_ids: Array = hero.get("ability_ids", []) as Array
+	var ability_charges_by_id: Dictionary = hero.get("ability_charges_by_id", {}) as Dictionary
 	var stolen_cap := int(cfg.get("STOLEN_INV_CAP_DEFAULT")) if cfg != null else 2
 
 	var goal_weights: Dictionary = {}
@@ -188,6 +252,8 @@ func _build_member_def_from_hero(hero: Dictionary, member_id: int, party_id: int
 		"traits": traits,
 		"ability_id": ability_id,
 		"ability_charges": ability_charges,
+		"ability_ids": ability_ids,
+		"ability_charges_by_id": ability_charges_by_id,
 		"s_contrib": int(hero.get("s_contrib", 0)),
 		"name": String(hero.get("name", "")),
 		"origin": String(hero.get("origin", "")),

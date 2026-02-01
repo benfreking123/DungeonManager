@@ -71,6 +71,7 @@ var _history: HistoryService
 var _dialogue_service: DialogueService
 var _hero_service: Object = null
 var _dialogue_rules: Dictionary = {}
+var _party_regroup: Dictionary = {} # party_id -> { entrance_world, start_s }
 
 # adv_instance_id -> last reached cell (for retargeting / resume)
 var _adv_last_cell: Dictionary = {}
@@ -205,7 +206,7 @@ func _maybe_prepare_next_day_preview() -> void:
 	var di := int(GameState.day_index)
 	if di <= 0:
 		di = 1
-	var cfg := get_node_or_null("/root/game_config")
+	var cfg: Node = get_node_or_null("/root/game_config")
 	var goals_cfg := get_node_or_null("/root/config_goals")
 	if goals_cfg == null:
 		goals_cfg = preload("res://autoloads/config_goals.gd").new()
@@ -220,6 +221,7 @@ func start_day() -> void:
 	if _active:
 		return
 	_ending_day = false
+	_party_regroup.clear()
 	# Require a valid layout (entrance->boss path).
 	if _dungeon_grid != null:
 		var req: Dictionary = _dungeon_grid.call("validate_required_paths") as Dictionary
@@ -464,6 +466,12 @@ func get_history_events_filtered(filter: Dictionary) -> Array:
 	return _history.get_events(filter)
 
 
+func format_history_event(e: Dictionary) -> Dictionary:
+	if _history == null:
+		return { "text": String(e.get("type", "")) }
+	return _history.format_event(e)
+
+
 func _process(delta: float) -> void:
 	if not _active:
 		if _surface_preview != null and GameState != null and int(GameState.phase) == int(GameState.Phase.BUILD):
@@ -473,6 +481,7 @@ func _process(delta: float) -> void:
 	var dt: float = delta * GameState.speed
 
 	_tick_party_spawn(dt)
+	_tick_surface_regroup(dt)
 	_tick_spawners(dt)
 	if _combat != null:
 		_combat.call("tick", dt, room_spawners_by_room_id)
@@ -596,6 +605,7 @@ func _begin_party_spawn(gen: Dictionary) -> void:
 		"start_cell": start_cell,
 		"paths_by_party_id": {},
 	}
+	_party_regroup.clear()
 
 	_spawn_queue.clear()
 
@@ -617,6 +627,7 @@ func _begin_party_spawn(gen: Dictionary) -> void:
 		if _path_service != null:
 			path = _path_service.path(start_cell, goal, true)
 		paths_by_party_id[pid] = path
+		_party_regroup[pid] = { "entrance_world": entrance_world, "start_s": _now_s() }
 
 		var mids: Array = pd.get("member_ids", []) as Array
 		for i in range(mids.size()):
@@ -630,6 +641,8 @@ func _begin_party_spawn(gen: Dictionary) -> void:
 				"class_id": String(md.get("class_id", "")),
 				"ability_id": String(md.get("ability_id", "")),
 				"ability_charges": int(md.get("ability_charges", 1)),
+				"ability_ids": md.get("ability_ids", []) as Array,
+				"ability_charges_by_id": md.get("ability_charges_by_id", {}) as Dictionary,
 				"profile_id": int(md.get("profile_id", 0)),
 				"idx_in_party": i,
 			})
@@ -662,6 +675,11 @@ func _begin_party_spawn_from_surface_preview(gen: Dictionary) -> void:
 		"start_cell": start_cell,
 		"paths_by_party_id": paths_by_party_id,
 	}
+	_party_regroup.clear()
+	for pid_key in paths_by_party_id.keys():
+		var pid := int(pid_key)
+		if pid != 0:
+			_party_regroup[pid] = { "entrance_world": entrance_world, "start_s": _now_s() }
 	_spawn_queue.clear()
 	for e0 in spawn_queue:
 		_spawn_queue.append(e0 as Dictionary)
@@ -688,17 +706,27 @@ func _activate_reused_preview_adv(entry: Dictionary, entrance_world: Vector2, pa
 		_drain_party_bubble_events()
 	# Abilities (if any)
 	var ability_id := String(md.get("ability_id", ""))
-	if _ability_system != null and ability_id != "":
-		_ability_system.register_adv_ability(adv, ability_id, int(md.get("ability_charges", 1)))
+	if _ability_system != null:
+		var ability_ids: Array = md.get("ability_ids", []) as Array
+		var charges_by_id: Dictionary = md.get("ability_charges_by_id", {}) as Dictionary
+		if not ability_ids.is_empty():
+			for ab_id0 in ability_ids:
+				var ab_id := String(ab_id0)
+				if ab_id == "":
+					continue
+				var ch := int(charges_by_id.get(ab_id, int(md.get("ability_charges", 1))))
+				_ability_system.register_adv_ability(adv, ab_id, ch)
+		elif ability_id != "":
+			_ability_system.register_adv_ability(adv, ability_id, int(md.get("ability_charges", 1)))
 	# History: map adv_instance to profile_id for subsequent event logging.
 	if _history != null:
 		var prof_id := int(md.get("profile_id", 0))
 		if prof_id != 0:
 			_history.register_adv_profile_mapping(int(adv.get_instance_id()), prof_id)
 
-	# Switch from preview hold to normal surface->dungeon flow.
+	# Hold on surface until party regroups near entrance.
 	if adv.has_method("set_surface_hold"):
-		adv.call("set_surface_hold", false)
+		adv.call("set_surface_hold", true)
 	adv.set_meta("collision_radius", COLLISION_RADIUS_ADV)
 	adv.set("party_id", pid)
 
@@ -748,6 +776,8 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	var class_id: String = String(entry.get("class_id", ""))
 	var ability_id: String = String(entry.get("ability_id", ""))
 	var ability_charges: int = int(entry.get("ability_charges", 1))
+	var ability_ids: Array = entry.get("ability_ids", []) as Array
+	var ability_charges_by_id: Dictionary = entry.get("ability_charges_by_id", {}) as Dictionary
 	var idx_in_party: int = int(entry.get("idx_in_party", idx))
 
 	var spawn_world: Vector2 = _party_spawn_ctx.get("spawn_world", Vector2.ZERO)
@@ -785,8 +815,16 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	if _party_adv != null:
 		_party_adv.register_adventurer(adv, member_id)
 		_drain_party_bubble_events()
-	if _ability_system != null and ability_id != "":
-		_ability_system.register_adv_ability(adv, ability_id, ability_charges)
+	if _ability_system != null:
+		if not ability_ids.is_empty():
+			for ab_id0 in ability_ids:
+				var ab_id := String(ab_id0)
+				if ab_id == "":
+					continue
+				var ch2 := int(ability_charges_by_id.get(ab_id, ability_charges))
+				_ability_system.register_adv_ability(adv, ab_id, ch2)
+		elif ability_id != "":
+			_ability_system.register_adv_ability(adv, ability_id, ability_charges)
 	# History: map adv_instance to profile_id for subsequent event logging.
 	if _history != null:
 		var prof_id := int(entry.get("profile_id", 0))
@@ -794,6 +832,8 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 			_history.register_adv_profile_mapping(int(adv.get_instance_id()), prof_id)
 
 	adv.set_meta("collision_radius", COLLISION_RADIUS_ADV)
+	if adv.has_method("set_surface_hold"):
+		adv.call("set_surface_hold", true)
 	# Store the surface target in WorldCanvas-local space so camera transforms don't affect movement.
 	if _world_canvas != null:
 		var inv_wc2: Transform2D = _world_canvas.get_global_transform().affine_inverse()
@@ -812,6 +852,55 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	_adventurers.append(adv)
 	_track_adv(adv)
 	_adv_was_in_combat[int(adv.get_instance_id())] = false
+
+
+func _tick_surface_regroup(dt: float) -> void:
+	if _party_regroup.is_empty():
+		return
+	var cfg := get_node_or_null("/root/game_config")
+	var radius_px := 22.0
+	var timeout_s := 3.5
+	if cfg != null and cfg.has_method("get"):
+		var r: Variant = cfg.get("SURFACE_REGROUP_RADIUS_PX")
+		if r != null:
+			radius_px = float(r)
+		var t: Variant = cfg.get("SURFACE_REGROUP_TIMEOUT_S")
+		if t != null:
+			timeout_s = float(t)
+	var now_s := _now_s()
+	for pid_key in _party_regroup.keys():
+		var pid := int(pid_key)
+		var data := _party_regroup[pid_key] as Dictionary
+		var entrance_world := data.get("entrance_world", Vector2.ZERO) as Vector2
+		var start_s := float(data.get("start_s", 0.0))
+		if entrance_world == Vector2.ZERO:
+			continue
+		var total := 0
+		var arrived := 0
+		for a in _adventurers:
+			if a == null or not is_instance_valid(a):
+				continue
+			if int(a.get("party_id")) != pid:
+				continue
+			total += 1
+			var phase := int(a.get("phase"))
+			if phase != 0:
+				arrived += 1
+				continue
+			if a.global_position.distance_to(entrance_world) <= radius_px:
+				arrived += 1
+		if total <= 0:
+			_party_regroup.erase(pid_key)
+			continue
+		if arrived >= total or (timeout_s > 0.0 and (now_s - start_s) >= timeout_s):
+			for a2 in _adventurers:
+				if a2 == null or not is_instance_valid(a2):
+					continue
+				if int(a2.get("party_id")) != pid:
+					continue
+				if a2.has_method("set_surface_hold"):
+					a2.call("set_surface_hold", false)
+			_party_regroup.erase(pid_key)
 
 
 func _on_adventurer_right_clicked(adv_id: int, screen_pos: Vector2) -> void:
@@ -861,6 +950,8 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 				out["bio"] = String(md.get("bio", ""))
 				# Day-only: include per-day charges from member_def (if present).
 				out["ability_charges"] = int(md.get("ability_charges", 0))
+				out["ability_ids"] = md.get("ability_ids", []) as Array
+				out["ability_charges_by_id"] = md.get("ability_charges_by_id", {}) as Dictionary
 		if _party_adv != null and _party_adv.has_method("get_adv_tooltip"):
 			var t2: Dictionary = _party_adv.call("get_adv_tooltip", int(adv_id)) as Dictionary
 			for k2 in t2.keys():
@@ -878,42 +969,78 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 	if not traits.is_empty():
 		out["traits_pretty"] = _traits_pretty_lines(traits)
 
-	# Ability: add player-friendly details
-	var ability_id := String(out.get("ability_id", ""))
-	if ability_id != "":
-		var charges_per_day := int(out.get("ability_charges", 0))
-		var charges_left := -1
-		var trigger_name := ""
-		var cooldown_s := 0.0
-		var cast_time_s := 0.0
-		var summary := ""
-
-		var ab: Ability = null
+	# Ability: add player-friendly details (supports multi-ability)
+	var abilities: Array = []
+	if _ability_system != null and _ability_system.has_method("get_adv_ability_states"):
+		var states: Array = _ability_system.call("get_adv_ability_states", int(adv_id)) as Array
+		for st0 in states:
+			var st := st0 as Dictionary
+			if st.is_empty():
+				continue
+			var ability_id := String(st.get("ability_id", ""))
+			if ability_id == "":
+				continue
+			var charges_left := int(st.get("charges_left", -1))
+			var charges_per_day := int(out.get("ability_charges", 0))
+			var trigger_name := ""
+			var cooldown_s := 0.0
+			var cast_time_s := 0.0
+			var summary := ""
+			var ab: Ability = null
+			if _ability_system.has_method("get_ability_def"):
+				ab = _ability_system.call("get_ability_def", ability_id) as Ability
+			if ab != null:
+				trigger_name = String(ab.trigger_name)
+				cooldown_s = float(ab.cooldown_s)
+				cast_time_s = float(ab.cast_time_s)
+				if charges_per_day <= 0:
+					charges_per_day = int(ab.charges_per_day)
+				summary = _ability_summary(ab)
+			abilities.append({
+				"id": ability_id,
+				"name": _title_case_id(ability_id),
+				"trigger": trigger_name,
+				"cooldown_s": cooldown_s,
+				"cast_time_s": cast_time_s,
+				"charges_per_day": charges_per_day,
+				"charges_left": charges_left,
+				"summary": summary,
+			})
+	elif String(out.get("ability_id", "")) != "":
+		var ability_id2 := String(out.get("ability_id", ""))
+		var charges_per_day2 := int(out.get("ability_charges", 0))
+		var charges_left2 := -1
+		var trigger_name2 := ""
+		var cooldown_s2 := 0.0
+		var cast_time_s2 := 0.0
+		var summary2 := ""
+		var ab2: Ability = null
 		if _ability_system != null and _ability_system.has_method("get_ability_def"):
-			ab = _ability_system.call("get_ability_def", ability_id) as Ability
-		if ab != null:
-			trigger_name = String(ab.trigger_name)
-			cooldown_s = float(ab.cooldown_s)
-			cast_time_s = float(ab.cast_time_s)
-			if charges_per_day <= 0:
-				charges_per_day = int(ab.charges_per_day)
-			summary = _ability_summary(ab)
-
+			ab2 = _ability_system.call("get_ability_def", ability_id2) as Ability
+		if ab2 != null:
+			trigger_name2 = String(ab2.trigger_name)
+			cooldown_s2 = float(ab2.cooldown_s)
+			cast_time_s2 = float(ab2.cast_time_s)
+			if charges_per_day2 <= 0:
+				charges_per_day2 = int(ab2.charges_per_day)
+			summary2 = _ability_summary(ab2)
 		if _ability_system != null and _ability_system.has_method("get_adv_ability_state"):
-			var st: Dictionary = _ability_system.call("get_adv_ability_state", int(adv_id)) as Dictionary
-			if not st.is_empty():
-				charges_left = int(st.get("charges_left", -1))
-
-		out["ability"] = {
-			"id": ability_id,
-			"name": _title_case_id(ability_id),
-			"trigger": trigger_name,
-			"cooldown_s": cooldown_s,
-			"cast_time_s": cast_time_s,
-			"charges_per_day": charges_per_day,
-			"charges_left": charges_left,
-			"summary": summary,
-		}
+			var st2: Dictionary = _ability_system.call("get_adv_ability_state", int(adv_id)) as Dictionary
+			if not st2.is_empty():
+				charges_left2 = int(st2.get("charges_left", -1))
+		abilities.append({
+			"id": ability_id2,
+			"name": _title_case_id(ability_id2),
+			"trigger": trigger_name2,
+			"cooldown_s": cooldown_s2,
+			"cast_time_s": cast_time_s2,
+			"charges_per_day": charges_per_day2,
+			"charges_left": charges_left2,
+			"summary": summary2,
+		})
+	if not abilities.is_empty():
+		out["abilities"] = abilities
+		out["ability"] = abilities[0]
 	return out
 
 
@@ -1067,6 +1194,10 @@ func _remove_adv_from_tracking(adv_id: int) -> void:
 		if is_instance_valid(a) and int(a.get_instance_id()) != aid:
 			next.append(a)
 	_adventurers = next
+
+
+func _now_s() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
 
 
 func _loot_collect_target_world_pos() -> Vector2:

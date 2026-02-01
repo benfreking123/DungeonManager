@@ -68,10 +68,13 @@ func toggle() -> void:
 		_refresh()
 
 
-func _format_line(e: Dictionary) -> String:
+func _format_line(e: Dictionary, formatter: Object) -> String:
+	if formatter != null and formatter.has_method("format_history_event"):
+		var f1: Dictionary = formatter.call("format_history_event", e)
+		return String(f1.get("text", ""))
 	if _history_service != null and _history_service.has_method("format_event"):
-		var f: Dictionary = _history_service.format_event(e)
-		return String(f.get("text", ""))
+		var f2: Dictionary = _history_service.format_event(e)
+		return String(f2.get("text", ""))
 	return String(e.get("type", ""))
 
 
@@ -86,9 +89,10 @@ func _refresh() -> void:
 	var events: Array = []
 	var filter := _build_filter()
 	events = _apply_filter(sim, filter)
+	var formatter: Object = sim if (sim != null and sim.has_method("format_history_event")) else null
 	for e0 in events:
 		var e := e0 as Dictionary
-		_list.add_item(_format_line(e))
+		_list.add_item(_format_line(e, formatter))
 	if _count != null:
 		_count.text = "%d entries" % _list.item_count
 

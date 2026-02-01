@@ -6,6 +6,42 @@
       "rumors": [
         "A famed warrior is expected in a few days."
       ]
+    },
+    {
+      "day": 4,
+      "heroes": ["hero_starling"],
+      "rumors": [
+        "A sharp-eyed mage is asking about the dungeon."
+      ]
+    },
+    {
+      "day": 5,
+      "random_count": 1,
+      "hero_pool": ["hero_ironbane", "hero_starling", "hero_riven", "hero_morwyn", "hero_vex"],
+      "rumors": [
+        "Travelers whisper that a hero is on the road."
+      ]
+    },
+    {
+      "day": 6,
+      "heroes": ["hero_riven"],
+      "rumors": [
+        "A rogue with a long list of heists was seen in town."
+      ]
+    },
+    {
+      "day": 7,
+      "heroes": ["hero_morwyn"],
+      "rumors": [
+        "A priestess is said to be seeking the dungeon's truth."
+      ]
+    },
+    {
+      "day": 8,
+      "heroes": ["hero_vex"],
+      "rumors": [
+        "A rogue with a knack for traps is in town."
+      ]
     }
   ]
 }

@@ -57,6 +57,9 @@ var _epithets_path: String = ""
 var _names_data: Dictionary = {}
 var _bio_templates: Array = []
 var _epithet_rules: Dictionary = {}
+var _family_names: Array = []
+var _lineage_names: Array = []
+var _family_names_path: String = ""
 
 func _looks_like_generic_fallback_bio(bio: String) -> bool:
 	bio = String(bio).strip_edges()
@@ -99,9 +102,15 @@ func _ensure_config_loaded() -> void:
 	var v4: Variant = cfg.get("HISTORY_MAX_ENTRIES")
 	if v4 != null and v4 is int:
 		_history_cap = int(v4)
+	var v5: Variant = cfg.get("FAMILY_NAMES_PATH")
+	if v5 == null or String(v5) == "":
+		_family_names_path = "res://data/names/families.json"
+	else:
+		_family_names_path = String(v5)
 	_load_names()
 	_load_bios()
 	_load_epithets()
+	_load_family_names()
 	# Explicitly free temporary Node to avoid leak warnings in headless CI.
 	if cfg != null and cfg is Object:
 		cfg.free()
@@ -152,6 +161,23 @@ func _load_epithets() -> void:
 	if typeof(data) == TYPE_DICTIONARY:
 		_epithet_rules = data as Dictionary
 
+
+func _load_family_names() -> void:
+	_family_names.clear()
+	_lineage_names.clear()
+	if _family_names_path == "":
+		return
+	var f: FileAccess = FileAccess.open(_family_names_path, FileAccess.READ)
+	if f == null:
+		return
+	var txt: String = f.get_as_text()
+	f.close()
+	var data: Variant = JSON.parse_string(txt)
+	if typeof(data) == TYPE_DICTIONARY:
+		var d := data as Dictionary
+		_family_names = d.get("family_names", []) as Array
+		_lineage_names = d.get("lineage_names", []) as Array
+
 func set_history_cap(cap: int) -> void:
 	_history_cap = maxi(1, int(cap))
 	# Trim immediately if needed
@@ -175,16 +201,49 @@ func get_or_create_profile(member_def: Dictionary) -> int:
 	var provided_origin := String(member_def.get("origin", ""))
 	if provided_origin != "":
 		name_ep["origin"] = provided_origin
-	# Ensure origin is available to bio generation
-	var md_for_bio := member_def.duplicate(true)
-	md_for_bio["origin"] = String(name_ep.get("origin", "unknown"))
-	var bio_line := _generate_bio(md_for_bio, false)
-	var provided_bio := String(member_def.get("bio", ""))
-	if provided_bio != "":
-		bio_line = provided_bio
 	var gender := String(member_def.get("gender", ""))
 	if gender == "":
 		gender = _roll_gender()
+	var p := {
+		"profile_id": pid_new,
+		"name": name_ep.get("name", "Adventurer %d" % pid_new),
+		"epithet": name_ep.get("epithet", ""),
+		"origin": name_ep.get("origin", ""),
+		"bio": "",
+		"class_id": String(member_def.get("class_id", "")),
+		"gender": gender,
+		"family_id": 0,
+		"family_name": "",
+		"lineage_id": 0,
+		"lineage_name": "",
+		"parents": [],
+		"siblings": [],
+		"children": [],
+		"is_hero": bool(member_def.get("is_hero", false)),
+		"hero_id": String(member_def.get("hero_id", "")),
+		"class_history": [],
+		"morality_base": int(member_def.get("morality", 0)),
+		"quirks": [],
+		"flags": {},
+	}
+	_profiles_by_id[pid_new] = p
+	_assign_family_for_profile(pid_new, member_def)
+	# Ensure origin/family are available to bio generation
+	var md_for_bio := member_def.duplicate(true)
+	md_for_bio["origin"] = String(name_ep.get("origin", "unknown"))
+	var p2: Dictionary = _profiles_by_id.get(pid_new, {}) as Dictionary
+	md_for_bio["family_name"] = String(p2.get("family_name", ""))
+	md_for_bio["lineage_name"] = String(p2.get("lineage_name", ""))
+	md_for_bio["name"] = String(p2.get("name", ""))
+	var bio_line := _generate_bio(md_for_bio, false)
+	var hero_bios: Array = member_def.get("bio_templates", []) as Array
+	if not hero_bios.is_empty():
+		var picked := _pick_bio_from_list(hero_bios, md_for_bio)
+		if picked != "":
+			bio_line = picked
+	var provided_bio := String(member_def.get("bio", ""))
+	if provided_bio != "":
+		bio_line = provided_bio
 	if Engine.has_singleton("DbgLog"):
 		DbgLog.throttle(
 			"history_bio_create",
@@ -198,29 +257,8 @@ func get_or_create_profile(member_def: Dictionary) -> int:
 			"history",
 			DbgLog.Level.DEBUG
 		)
-	var p := {
-		"profile_id": pid_new,
-		"name": name_ep.get("name", "Adventurer %d" % pid_new),
-		"epithet": name_ep.get("epithet", ""),
-		"origin": name_ep.get("origin", ""),
-		"bio": bio_line,
-		"class_id": String(member_def.get("class_id", "")),
-		"gender": gender,
-		"family_id": 0,
-		"family_name": "",
-		"lineage_id": 0,
-		"parents": [],
-		"siblings": [],
-		"children": [],
-		"is_hero": bool(member_def.get("is_hero", false)),
-		"hero_id": String(member_def.get("hero_id", "")),
-		"class_history": [],
-		"morality_base": int(member_def.get("morality", 0)),
-		"quirks": [],
-		"flags": {},
-	}
-	_profiles_by_id[pid_new] = p
-	_assign_family_for_profile(pid_new, member_def)
+	p2["bio"] = bio_line
+	_profiles_by_id[pid_new] = p2
 	return pid_new
 
 
@@ -266,7 +304,6 @@ func attach_profiles_for_new_members(gen: Dictionary, day: int) -> void:
 		mdefs[mid] = md
 	gen["member_defs"] = mdefs
 	_seed_family_links_for_profiles(new_profile_ids)
-	_record_event({ "day": int(day), "type": TYPE_DAY_CHANGE, "payload": { "phase": "start" } })
 
 
 func attach_profiles_for_new_members_preview(gen: Dictionary) -> void:
@@ -429,6 +466,13 @@ func record_dialogue(profile_id: int, text: String, where: String = "", tags: Ar
 
 
 func record_day_change(day: int, phase: String) -> void:
+	# Avoid duplicate day-change entries.
+	if not _events.is_empty():
+		var last := _events[_events.size() - 1] as Dictionary
+		if String(last.get("type", "")) == TYPE_DAY_CHANGE and int(last.get("day", 0)) == int(day):
+			var p := last.get("payload", {}) as Dictionary
+			if String(p.get("phase", "")) == String(phase):
+				return
 	_record_event({ "day": int(day), "type": TYPE_DAY_CHANGE, "severity": "minor", "payload": { "phase": String(phase) } })
 
 
@@ -678,6 +722,10 @@ func _assign_family_for_profile(profile_id: int, member_def: Dictionary) -> void
 	var family_id := int(member_def.get("family_id", 0))
 	var family_name := String(member_def.get("family_name", ""))
 	var lineage_id := int(member_def.get("lineage_id", 0))
+	var lineage_name := String(member_def.get("lineage_name", ""))
+	if family_name == "":
+		if not _family_names.is_empty():
+			family_name = String(_family_names[_rng.randi() % _family_names.size()])
 	if family_name == "":
 		var nm := String(p.get("name", ""))
 		var parts := nm.split(" ")
@@ -688,14 +736,20 @@ func _assign_family_for_profile(profile_id: int, member_def: Dictionary) -> void
 		_next_family_id += 1
 	if lineage_id == 0:
 		lineage_id = family_id
+	if lineage_name == "":
+		if not _lineage_names.is_empty():
+			lineage_name = String(_lineage_names[_rng.randi() % _lineage_names.size()])
+		elif family_name != "":
+			lineage_name = family_name
 	p["family_id"] = family_id
 	p["family_name"] = family_name
 	p["lineage_id"] = lineage_id
+	p["lineage_name"] = lineage_name
 	_profiles_by_id[profile_id] = p
-	_ensure_family_record(family_id, family_name, lineage_id, profile_id)
+	_ensure_family_record(family_id, family_name, lineage_id, lineage_name, profile_id)
 
 
-func _ensure_family_record(family_id: int, family_name: String, lineage_id: int, profile_id: int) -> void:
+func _ensure_family_record(family_id: int, family_name: String, lineage_id: int, lineage_name: String, profile_id: int) -> void:
 	if family_id == 0:
 		return
 	var fam := _families_by_id.get(family_id, {}) as Dictionary
@@ -704,6 +758,7 @@ func _ensure_family_record(family_id: int, family_name: String, lineage_id: int,
 			"family_id": family_id,
 			"family_name": family_name,
 			"lineage_id": lineage_id,
+			"lineage_name": lineage_name,
 			"members": [],
 		}
 	var members: Array = fam.get("members", []) as Array
@@ -880,8 +935,13 @@ func _generate_name_and_epithet(member_def: Dictionary) -> Dictionary:
 func _generate_bio(member_def: Dictionary, returnee: bool) -> String:
 	var class_id := str(member_def.get("class_id", "adventurer"))
 	var tokens := {
+		"name": str(member_def.get("name", "")),
 		"class_id": class_id,
 		"origin": str(member_def.get("origin", "unknown")),
+		"family_name": str(member_def.get("family_name", "")),
+		"lineage_name": str(member_def.get("lineage_name", "")),
+		"relative_relation_word": str(member_def.get("relative_relation_word", "kin")),
+		"relative_event_text": str(member_def.get("relative_event_text", "")),
 		"fled": false,
 		"returnee": bool(returnee),
 		"kills": 0,
@@ -937,6 +997,21 @@ func _generate_bio(member_def: Dictionary, returnee: bool) -> String:
 		)
 	return "A %s seeking fortune." % class_id
 
+
+func _pick_bio_from_list(items: Array, tokens: Dictionary) -> String:
+	var cleaned: Array[String] = []
+	for it in items:
+		var s := String(it).strip_edges()
+		if s != "":
+			cleaned.append(s)
+	if cleaned.is_empty():
+		return ""
+	var raw := String(cleaned[_rng.randi() % cleaned.size()])
+	for k in tokens.keys():
+		var key := str(k)
+		raw = raw.replace("{%s}" % key, str(tokens.get(key, "")))
+	return raw
+
 func _tokens_match(tokens: Dictionary, cond: Dictionary) -> bool:
 	if cond.is_empty():
 		return true
@@ -954,6 +1029,8 @@ func _tokens_match(tokens: Dictionary, cond: Dictionary) -> bool:
 				return false
 		else:
 			# Some tokens may be missing; avoid casting null via String(...)
+			if str(want) == "*":
+				continue
 			if have == null:
 				return false
 			if str(have) != str(want):
