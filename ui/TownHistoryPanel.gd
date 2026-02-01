@@ -1,6 +1,7 @@
 extends PanelContainer
 
 @onready var _title: Label = $VBox/Top/Title
+@onready var _filter: OptionButton = $VBox/Top/Filter
 @onready var _close: Button = $VBox/Top/Close
 @onready var _list: ItemList = $VBox/List
 @onready var _count: Label = $VBox/Footer/Count
@@ -12,11 +13,29 @@ extends PanelContainer
 var _strength_service: StrengthService = null
 const CLASS_ICON_SIZE_PX := 32
 const TREASURE_ICON_SIZE_PX := 32
+const FILTER_ALL := 0
+const FILTER_MAJOR := 1
+const FILTER_DIALOGUE := 2
+const FILTER_PARTY := 3
+const FILTER_HERO := 4
+const FILTER_LINEAGE := 5
 
 func _ready() -> void:
 	visible = false
 	if _close != null:
 		_close.pressed.connect(close)
+	if _filter != null:
+		_filter.clear()
+		_filter.add_item("All", FILTER_ALL)
+		_filter.add_item("Major", FILTER_MAJOR)
+		_filter.add_item("Dialogue", FILTER_DIALOGUE)
+		_filter.add_item("Party", FILTER_PARTY)
+		_filter.add_item("Hero", FILTER_HERO)
+		_filter.add_item("Lineage", FILTER_LINEAGE)
+		_filter.selected = FILTER_ALL
+		_filter.item_selected.connect(func(_idx: int) -> void:
+			_refresh()
+		)
 	_history_service = preload("res://autoloads/HistoryService.gd").new()
 	_strength_service = preload("res://scripts/services/StrengthService.gd").new()
 	# Defer initial paint so ItemDB/DungeonGrid are ready.
@@ -65,15 +84,51 @@ func _refresh() -> void:
 	# NOTE: `GameState` is an autoload Object; `"day_index" in GameState` does NOT work reliably.
 	var di := int(GameState.day_index) if GameState != null else 1
 	var events: Array = []
-	if sim != null and sim.has_method("get_history_events"):
-		events = sim.call("get_history_events") as Array
-	elif _history_service != null and _history_service.has_method("get_events"):
-		events = _history_service.get_events({})
+	var filter := _build_filter()
+	events = _apply_filter(sim, filter)
 	for e0 in events:
 		var e := e0 as Dictionary
 		_list.add_item(_format_line(e))
 	if _count != null:
 		_count.text = "%d entries" % _list.item_count
+
+
+func _build_filter() -> Dictionary:
+	if _filter == null:
+		return {}
+	match int(_filter.selected):
+		FILTER_MAJOR:
+			return { "severities": ["major"] }
+		FILTER_DIALOGUE:
+			return { "types": ["dialogue"] }
+		FILTER_PARTY:
+			return { "types": ["dialogue"], "tags": ["party_intent"] }
+		FILTER_HERO:
+			return { "mode": "hero" }
+		FILTER_LINEAGE:
+			return { "types": ["dialogue"], "tags": ["lineage"] }
+		_:
+			return {}
+
+
+func _apply_filter(sim: Node, filter: Dictionary) -> Array:
+	var mode := String(filter.get("mode", ""))
+	if mode == "hero":
+		var out: Array = []
+		out.append_array(_get_events(sim, { "types": ["hero_arrived"] }))
+		out.append_array(_get_events(sim, { "types": ["dialogue"], "tags": ["hero"] }))
+		return out
+	return _get_events(sim, filter)
+
+
+func _get_events(sim: Node, filter: Dictionary) -> Array:
+	if sim != null and sim.has_method("get_history_events_filtered"):
+		return sim.call("get_history_events_filtered", filter) as Array
+	if sim != null and sim.has_method("get_history_events"):
+		return sim.call("get_history_events") as Array
+	if _history_service != null and _history_service.has_method("get_events"):
+		return _history_service.get_events(filter)
+	return []
 
 
 func _refresh_town_info() -> void:

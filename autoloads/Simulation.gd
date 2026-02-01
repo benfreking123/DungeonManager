@@ -68,6 +68,8 @@ var _party_adv: PartyAdventureSystem
 var _bubble_service: DialogueBubbleService
 var _ability_system: AbilitySystem
 var _history: HistoryService
+var _dialogue_service: DialogueService
+var _hero_service: Object = null
 var _dialogue_rules: Dictionary = {}
 
 # adv_instance_id -> last reached cell (for retargeting / resume)
@@ -138,6 +140,8 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_bubble_service = preload("res://scripts/services/DialogueBubbleService.gd").new()
 	_ability_system = preload("res://scripts/services/AbilitySystem.gd").new()
 	_history = preload("res://autoloads/HistoryService.gd").new()
+	_dialogue_service = preload("res://scripts/services/DialogueService.gd").new()
+	_hero_service = preload("res://scripts/services/HeroService.gd").new()
 
 	# Loot system (separate file): spawns on-ground treasure drops and collects at day end.
 	_loot_system = preload("res://scripts/systems/LootDropSystem.gd").new()
@@ -272,6 +276,10 @@ func start_day() -> void:
 		gen = _party_gen.generate_parties(strength_s, cfg, goals_cfg, day_seed, A_default)
 		_log_party_generation(strength_s, gen, A_default, day_seed)
 
+	# Hero injection (scheduled by day plan) before profiles are attached.
+	if _hero_service != null and _hero_service.has_method("inject_heroes_into_generation"):
+		_hero_service.call("inject_heroes_into_generation", gen, int(GameState.day_index), cfg, goals_cfg)
+
 	# History: attach profiles and inject scheduled returnees BEFORE initializing party/adventure system.
 	if _history != null:
 		var di2 := int(GameState.day_index) if GameState != null else 1
@@ -282,6 +290,8 @@ func start_day() -> void:
 				_history.set_history_cap(cap)
 		_history.attach_profiles_for_new_members(gen, di2)
 		_history.inject_returns_into_generation(gen, di2, cfg)
+		_record_hero_arrivals(gen, di2)
+		_ensure_dialogue_service(cfg)
 	_last_day_seed = int(gen.get("day_seed", day_seed))
 	if _party_adv != null:
 		_party_adv.setup(_dungeon_grid, _item_db, cfg, goals_cfg, _fog, _steal, _last_day_seed)
@@ -446,6 +456,12 @@ func get_history_events() -> Array:
 	if _history == null:
 		return []
 	return _history.get_events({})
+
+
+func get_history_events_filtered(filter: Dictionary) -> Array:
+	if _history == null:
+		return []
+	return _history.get_events(filter)
 
 
 func _process(delta: float) -> void:
@@ -1212,10 +1228,12 @@ func _retarget_party(party_id: int, from_cell: Vector2i) -> void:
 
 
 func _drain_party_bubble_events() -> void:
-	if _party_adv == null or _bubble_service == null:
+	if _party_adv == null or _dialogue_service == null:
 		return
 	var events: Array = _party_adv.consume_bubble_events()
 	if events.is_empty():
+		if Engine.has_singleton("DbgLog"):
+			DbgLog.throttle("bubble_events_empty", 1.0, "Bubble events empty", "dialogue", DbgLog.Level.DEBUG)
 		return
 	DbgLog.throttle(
 		"bubble_events",
@@ -1229,19 +1247,25 @@ func _drain_party_bubble_events() -> void:
 		if e.is_empty():
 			continue
 		var t := String(e.get("type", ""))
-		var text := String(e.get("text", ""))
-		if text == "":
-			continue
 		if t == "party_intent":
 			var leader := int(e.get("leader_adv_id", 0))
 			var adv := _find_adv_by_id(leader)
 			if adv != null:
-				_bubble_service.show_for_actor(adv, text, "party_intent:%d" % int(e.get("party_id", 0)))
-				if _history != null and _party_adv != null and _party_adv.has_method("member_def_for_adv"):
-					var md_hist: Dictionary = _party_adv.call("member_def_for_adv", leader) as Dictionary
-					var pid_hist := int(md_hist.get("profile_id", 0))
-					if pid_hist != 0:
-						_history.record_dialogue(pid_hist, text, "party", ["party_intent"])
+				var pid_hist := _profile_id_for_adv(leader)
+				if pid_hist != 0:
+					_dialogue_service.emit_event({
+						"event": "party_intent",
+						"actor": adv,
+						"profile_id": pid_hist,
+						"party_id": int(e.get("party_id", 0)),
+						"intent": String(e.get("intent", "")),
+						"where": "party",
+						"tags": ["party_intent"],
+						"cooldown_key": "party_intent:%d" % int(e.get("party_id", 0)),
+						"allow_callback": true,
+						"allow_call_forward": true,
+						"allow_lineage_banter": true,
+					})
 			else:
 				DbgLog.throttle(
 					"bubble_missing_leader:%d" % leader,
@@ -1253,12 +1277,21 @@ func _drain_party_bubble_events() -> void:
 		elif t == "defect":
 			var adv2 := _find_adv_by_id(int(e.get("adv_id", 0)))
 			if adv2 != null:
-				_bubble_service.show_for_actor(adv2, text, "defect")
-				if _history != null and _party_adv != null and _party_adv.has_method("member_def_for_adv"):
-					var md_hist2: Dictionary = _party_adv.call("member_def_for_adv", int(e.get("adv_id", 0))) as Dictionary
-					var pid_hist2 := int(md_hist2.get("profile_id", 0))
-					if pid_hist2 != 0:
-						_history.record_dialogue(pid_hist2, text, "party", ["defect"])
+				var pid_hist2 := _profile_id_for_adv(int(e.get("adv_id", 0)))
+				if pid_hist2 != 0:
+					var party_id := 0
+					if _party_adv != null and _party_adv.has_method("party_id_for_adv"):
+						party_id = int(_party_adv.call("party_id_for_adv", int(e.get("adv_id", 0))))
+					_dialogue_service.emit_event({
+						"event": "defect",
+						"actor": adv2,
+						"profile_id": pid_hist2,
+						"party_id": party_id,
+						"intent": String(e.get("intent", "")),
+						"where": "party",
+						"tags": ["defect"],
+						"cooldown_key": "defect",
+					})
 			else:
 				DbgLog.throttle(
 					"bubble_missing_defect:%d" % int(e.get("adv_id", 0)),
@@ -1270,12 +1303,22 @@ func _drain_party_bubble_events() -> void:
 		elif t == "flee":
 			var adv3 := _find_adv_by_id(int(e.get("adv_id", 0)))
 			if adv3 != null:
-				_bubble_service.show_for_actor(adv3, text, "flee")
-				if _history != null and _party_adv != null and _party_adv.has_method("member_def_for_adv"):
-					var md_hist3: Dictionary = _party_adv.call("member_def_for_adv", int(e.get("adv_id", 0))) as Dictionary
-					var pid_hist3 := int(md_hist3.get("profile_id", 0))
-					if pid_hist3 != 0:
-						_history.record_dialogue(pid_hist3, text, "party", ["flee"])
+				var pid_hist3 := _profile_id_for_adv(int(e.get("adv_id", 0)))
+				if pid_hist3 != 0:
+					var party_id3 := 0
+					if _party_adv != null and _party_adv.has_method("party_id_for_adv"):
+						party_id3 = int(_party_adv.call("party_id_for_adv", int(e.get("adv_id", 0))))
+					_dialogue_service.emit_event({
+						"event": "flee",
+						"actor": adv3,
+						"profile_id": pid_hist3,
+						"party_id": party_id3,
+						"intent": String(e.get("intent", "")),
+						"goal_id": String(e.get("goal_id", "")),
+						"where": "party",
+						"tags": ["flee"],
+						"cooldown_key": "flee",
+					})
 			else:
 				DbgLog.throttle(
 					"bubble_missing_flee:%d" % int(e.get("adv_id", 0)),
@@ -1330,6 +1373,36 @@ func _find_adv_by_id(adv_id: int) -> Node2D:
 		if is_instance_valid(a) and int(a.get_instance_id()) == adv_id:
 			return a
 	return null
+
+
+func _profile_id_for_adv(adv_id: int) -> int:
+	if _party_adv != null and _party_adv.has_method("member_def_for_adv"):
+		var md_hist: Dictionary = _party_adv.call("member_def_for_adv", int(adv_id)) as Dictionary
+		return int(md_hist.get("profile_id", 0))
+	return 0
+
+
+func _record_hero_arrivals(gen: Dictionary, day_index: int) -> void:
+	if _history == null:
+		return
+	var mdefs: Dictionary = gen.get("member_defs", {}) as Dictionary
+	for k in mdefs.keys():
+		var md := mdefs.get(k, {}) as Dictionary
+		if not bool(md.get("is_hero", false)):
+			continue
+		var pid := int(md.get("profile_id", 0))
+		if pid == 0:
+			continue
+		var hero_id := String(md.get("hero_id", ""))
+		_history.record_hero_arrival(pid, hero_id, day_index)
+
+
+func _ensure_dialogue_service(cfg: Node) -> void:
+	if _dialogue_service == null:
+		return
+	_dialogue_service.setup(_history, _bubble_service, cfg, _hero_service)
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug("DialogueService setup complete", "dialogue")
 
 
 func get_monsters_in_radius(center_world: Vector2, radius_px: float) -> Array:

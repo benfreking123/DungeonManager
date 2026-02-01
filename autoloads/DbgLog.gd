@@ -19,6 +19,10 @@ var enabled: Dictionary = {
 	"fog": { "enabled": true, "level": Level.DEBUG },
 	"theft": { "enabled": true, "level": Level.DEBUG },
 	"ui": { "enabled": true, "level": Level.DEBUG },
+	"dialogue": { "enabled": true, "level": Level.DEBUG },
+	"history": { "enabled": true, "level": Level.DEBUG },
+	"heroes": { "enabled": true, "level": Level.DEBUG },
+	"services": { "enabled": true, "level": Level.DEBUG },
 	# Combat/encounter + boss-upgrade detail logs (safe to turn off in one place).
 	"combat": { "enabled": true, "level": Level.INFO },
 	"boss_upgrades": { "enabled": true, "level": Level.INFO },

@@ -1,0 +1,11 @@
+{
+  "days": [
+    {
+      "day": 3,
+      "heroes": ["hero_ironbane"],
+      "rumors": [
+        "A famed warrior is expected in a few days."
+      ]
+    }
+  ]
+}

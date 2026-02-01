@@ -128,5 +128,47 @@ const NAME_CONFIG_DIR: String = "res://data/names/"
 const BIO_TEMPLATES_PATH: String = "res://data/bio_templates.json"
 const EPITHETS_PATH: String = "res://data/epithets.json"
 const DIALOGUE_CONFIG_PATH: String = "res://data/dialogue_rules.json"
+# Hero/day-plan configuration
+const HERO_CONFIG_PATH: String = "res://config/hero_config.json"
+const DAY_PLAN_PATH: String = "res://config/day_plan.json"
 # Max in-memory history entries (session-only).
 const HISTORY_MAX_ENTRIES: int = 500
+
+# === Dialogue tuning ===
+# Per-profile/day dialogue cap (all events combined).
+const DIALOGUE_MAX_PER_PROFILE_PER_DAY: int = 12
+# Per-party/day dialogue cap (party_intent and similar).
+const DIALOGUE_MAX_PER_PARTY_PER_DAY: int = 8
+# Per-profile/event cap (e.g., only 1 flee line per day).
+const DIALOGUE_MAX_PER_EVENT_PER_PROFILE: int = 4
+# Default event cooldown if not specified below.
+const DIALOGUE_EVENT_COOLDOWN_S: float = 1.0
+# Per-event cooldown overrides (seconds).
+const DIALOGUE_EVENT_COOLDOWN_BY_EVENT := {
+	"party_intent": 2.0,
+	"flee": 4.0,
+	"defect": 4.0,
+	"callback": 4.0,
+	"call_forward": 4.0,
+	"lineage_banter": 4.0,
+}
+# Chance gates for optional dialogue types.
+const DIALOGUE_CHANCE_CALLBACK: float = 0.45
+const DIALOGUE_CHANCE_CALL_FORWARD: float = 0.5
+const DIALOGUE_CHANCE_LINEAGE_BANTER: float = 0.35
+const DIALOGUE_CHANCE_FAMILY_FLAVOR: float = 0.3
+# Missing token defaults (used in dialogue templates).
+const DIALOGUE_TOKEN_DEFAULTS := {
+	"name": "someone",
+	"hero_name": "a hero",
+	"hero_class": "warrior",
+	"days_until_hero": "soon",
+	"relative_name": "my kin",
+	"relative_relation_word": "kin",
+	"family_name": "my family",
+	"last_event_text": "that last raid",
+}
+# Debug: log missing token replacements.
+const DIALOGUE_DEBUG_TOKEN_WARN: bool = false
+# Debug: verbose dialogue logging.
+const DIALOGUE_DEBUG_VERBOSE: bool = true

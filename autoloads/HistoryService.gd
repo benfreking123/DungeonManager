@@ -30,9 +30,12 @@ const TYPE_RETURNED := "returned"
 const TYPE_DIED := "died"
 const TYPE_LOOT := "loot_gained"
 const TYPE_DIALOGUE := "dialogue"
+const TYPE_HERO_ARRIVED := "hero_arrived"
 
 var _profiles_by_id: Dictionary = {}            # profile_id -> profile dict
 var _next_profile_id: int = 1
+var _families_by_id: Dictionary = {}            # family_id -> family dict
+var _next_family_id: int = 1
 
 var _events: Array[Dictionary] = []              # chronological list of events
 var _history_cap: int = 500                      # default; may be overridden via cfg later
@@ -64,6 +67,8 @@ func _looks_like_generic_fallback_bio(bio: String) -> bool:
 func reset_session(history_cap: int = 500) -> void:
 	_profiles_by_id.clear()
 	_next_profile_id = 1
+	_families_by_id.clear()
+	_next_family_id = 1
 	_events.clear()
 	_return_schedules_by_day.clear()
 	_adv_to_profile_id.clear()
@@ -164,10 +169,22 @@ func get_or_create_profile(member_def: Dictionary) -> int:
 	var pid_new := _next_profile_id
 	_next_profile_id += 1
 	var name_ep := _generate_name_and_epithet(member_def)
+	var provided_name := String(member_def.get("name", ""))
+	if provided_name != "":
+		name_ep["name"] = provided_name
+	var provided_origin := String(member_def.get("origin", ""))
+	if provided_origin != "":
+		name_ep["origin"] = provided_origin
 	# Ensure origin is available to bio generation
 	var md_for_bio := member_def.duplicate(true)
 	md_for_bio["origin"] = String(name_ep.get("origin", "unknown"))
 	var bio_line := _generate_bio(md_for_bio, false)
+	var provided_bio := String(member_def.get("bio", ""))
+	if provided_bio != "":
+		bio_line = provided_bio
+	var gender := String(member_def.get("gender", ""))
+	if gender == "":
+		gender = _roll_gender()
 	if Engine.has_singleton("DbgLog"):
 		DbgLog.throttle(
 			"history_bio_create",
@@ -187,12 +204,23 @@ func get_or_create_profile(member_def: Dictionary) -> int:
 		"epithet": name_ep.get("epithet", ""),
 		"origin": name_ep.get("origin", ""),
 		"bio": bio_line,
+		"class_id": String(member_def.get("class_id", "")),
+		"gender": gender,
+		"family_id": 0,
+		"family_name": "",
+		"lineage_id": 0,
+		"parents": [],
+		"siblings": [],
+		"children": [],
+		"is_hero": bool(member_def.get("is_hero", false)),
+		"hero_id": String(member_def.get("hero_id", "")),
 		"class_history": [],
 		"morality_base": int(member_def.get("morality", 0)),
 		"quirks": [],
 		"flags": {},
 	}
 	_profiles_by_id[pid_new] = p
+	_assign_family_for_profile(pid_new, member_def)
 	return pid_new
 
 
@@ -201,16 +229,21 @@ func attach_profiles_for_new_members(gen: Dictionary, day: int) -> void:
 	_ensure_config_loaded()
 	_member_to_profile_id.clear()
 	var mdefs: Dictionary = gen.get("member_defs", {}) as Dictionary
+	var new_profile_ids: Array[int] = []
 	for k in mdefs.keys():
 		var mid := int(k)
 		var md := mdefs.get(k, {}) as Dictionary
 		var pid := get_or_create_profile(md)
+		new_profile_ids.append(pid)
 		_member_to_profile_id[mid] = pid
 		var p: Dictionary = _profiles_by_id.get(pid, {}) as Dictionary
 		md["profile_id"] = pid
 		md["name"] = String(p.get("name", ""))
 		md["epithet"] = String(p.get("epithet", ""))
 		md["origin"] = String(p.get("origin", ""))
+		md["gender"] = String(p.get("gender", ""))
+		md["family_id"] = int(p.get("family_id", 0))
+		md["family_name"] = String(p.get("family_name", ""))
 		var bio_str: String = String(p.get("bio", ""))
 		# If bio looks empty or placeholder fallback, regenerate now that we know class+origin.
 		var class_id := String(md.get("class_id", "adventurer"))
@@ -232,6 +265,7 @@ func attach_profiles_for_new_members(gen: Dictionary, day: int) -> void:
 		md["bio"] = bio_str
 		mdefs[mid] = md
 	gen["member_defs"] = mdefs
+	_seed_family_links_for_profiles(new_profile_ids)
 	_record_event({ "day": int(day), "type": TYPE_DAY_CHANGE, "payload": { "phase": "start" } })
 
 
@@ -241,16 +275,21 @@ func attach_profiles_for_new_members_preview(gen: Dictionary) -> void:
 	_ensure_config_loaded()
 	_member_to_profile_id.clear()
 	var mdefs: Dictionary = gen.get("member_defs", {}) as Dictionary
+	var new_profile_ids: Array[int] = []
 	for k in mdefs.keys():
 		var mid := int(k)
 		var md := mdefs.get(k, {}) as Dictionary
 		var pid := get_or_create_profile(md)
+		new_profile_ids.append(pid)
 		_member_to_profile_id[mid] = pid
 		var p: Dictionary = _profiles_by_id.get(pid, {}) as Dictionary
 		md["profile_id"] = pid
 		md["name"] = String(p.get("name", ""))
 		md["epithet"] = String(p.get("epithet", ""))
 		md["origin"] = String(p.get("origin", ""))
+		md["gender"] = String(p.get("gender", ""))
+		md["family_id"] = int(p.get("family_id", 0))
+		md["family_name"] = String(p.get("family_name", ""))
 		var bio_str: String = String(p.get("bio", ""))
 		# If bio looks empty or placeholder fallback, regenerate now that we know class+origin.
 		var class_id := String(md.get("class_id", "adventurer"))
@@ -267,6 +306,7 @@ func attach_profiles_for_new_members_preview(gen: Dictionary) -> void:
 		md["bio"] = bio_str
 		mdefs[mid] = md
 	gen["member_defs"] = mdefs
+	_seed_family_links_for_profiles(new_profile_ids)
 
 
 func record_adv_exit(adv_id: int, reason: String, day: int) -> void:
@@ -378,6 +418,7 @@ func record_dialogue(profile_id: int, text: String, where: String = "", tags: Ar
 	_record_event({
 		"day": _guess_current_day(),
 		"type": TYPE_DIALOGUE,
+		"severity": "flavor",
 		"payload": {
 			"profile_id": int(profile_id),
 			"text": text,
@@ -388,13 +429,14 @@ func record_dialogue(profile_id: int, text: String, where: String = "", tags: Ar
 
 
 func record_day_change(day: int, phase: String) -> void:
-	_record_event({ "day": int(day), "type": TYPE_DAY_CHANGE, "payload": { "phase": String(phase) } })
+	_record_event({ "day": int(day), "type": TYPE_DAY_CHANGE, "severity": "minor", "payload": { "phase": String(phase) } })
 
 
 func record_loot(profile_id: int, items: Array, total_value: int, where: String) -> void:
 	_record_event({
 		"day": _guess_current_day(),
 		"type": TYPE_LOOT,
+		"severity": "minor",
 		"payload": {
 			"profile_id": int(profile_id),
 			"items": items.duplicate(true),
@@ -408,9 +450,22 @@ func record_loot_summary_on_exit(profile_id: int, summary: Array) -> void:
 	_record_event({
 		"day": _guess_current_day(),
 		"type": TYPE_LOOT,
+		"severity": "minor",
 		"payload": {
 			"profile_id": int(profile_id),
 			"summary": summary.duplicate(true),
+		}
+	})
+
+
+func record_hero_arrival(profile_id: int, hero_id: String, day: int) -> void:
+	_record_event({
+		"day": int(day),
+		"type": TYPE_HERO_ARRIVED,
+		"severity": "major",
+		"payload": {
+			"profile_id": int(profile_id),
+			"hero_id": String(hero_id),
 		}
 	})
 
@@ -430,6 +485,10 @@ func get_events(filter: Dictionary = {}) -> Array[Dictionary]:
 	var type_set := {}
 	for t in types:
 		type_set[String(t)] = true
+	var sev: Array = filter.get("severities", []) as Array
+	var sev_set := {}
+	for s in sev:
+		sev_set[String(s)] = true
 	var day_min := int(filter.get("day_min", -999999))
 	var day_max := int(filter.get("day_max", 999999))
 	var profile_id := int(filter.get("profile_id", 0))
@@ -440,6 +499,8 @@ func get_events(filter: Dictionary = {}) -> Array[Dictionary]:
 		if day < day_min or day > day_max:
 			continue
 		if not type_set.is_empty() and not type_set.has(String(e.get("type", ""))):
+			continue
+		if not sev_set.is_empty() and not sev_set.has(String(e.get("severity", ""))):
 			continue
 		if profile_id != 0 and int((e.get("payload", {}) as Dictionary).get("profile_id", 0)) != profile_id:
 			continue
@@ -462,6 +523,100 @@ func get_events(filter: Dictionary = {}) -> Array[Dictionary]:
 	return out
 
 
+func get_profile(profile_id: int) -> Dictionary:
+	if profile_id == 0:
+		return {}
+	if not _profiles_by_id.has(int(profile_id)):
+		return {}
+	return (_profiles_by_id[int(profile_id)] as Dictionary).duplicate(true)
+
+
+func get_family(family_id: int) -> Dictionary:
+	if family_id == 0:
+		return {}
+	if not _families_by_id.has(int(family_id)):
+		return {}
+	return (_families_by_id[int(family_id)] as Dictionary).duplicate(true)
+
+
+func get_recent_context(profile_id: int, max_events: int = 5) -> Dictionary:
+	if profile_id == 0:
+		return {}
+	var found: Dictionary = {}
+	var count := 0
+	for i in range(_events.size() - 1, -1, -1):
+		var e := _events[i] as Dictionary
+		var p := e.get("payload", {}) as Dictionary
+		if int(p.get("profile_id", 0)) != int(profile_id):
+			continue
+		var t := str(e.get("type", ""))
+		if t == "":
+			continue
+		var formatted := format_event(e)
+		found["last_event_text"] = str(formatted.get("text", ""))
+		found["last_event_type"] = t
+		found["last_event_day"] = str(e.get("day", ""))
+		count += 1
+		if count >= max_events:
+			break
+	return found
+
+
+func get_recent_family_context(profile_id: int, max_events: int = 10) -> Dictionary:
+	if profile_id == 0:
+		return {}
+	var self_profile := _profiles_by_id.get(int(profile_id), {}) as Dictionary
+	if self_profile.is_empty():
+		return {}
+	var family_id := int(self_profile.get("family_id", 0))
+	if family_id == 0:
+		return {}
+	var members: Array = []
+	var fam := _families_by_id.get(family_id, {}) as Dictionary
+	if not fam.is_empty():
+		members = fam.get("members", []) as Array
+	if members.is_empty():
+		return {}
+	var count := 0
+	for i in range(_events.size() - 1, -1, -1):
+		var e := _events[i] as Dictionary
+		var p := e.get("payload", {}) as Dictionary
+		var pid := int(p.get("profile_id", 0))
+		if pid == 0 or pid == int(profile_id):
+			continue
+		if not members.has(pid):
+			continue
+		var t := String(e.get("type", ""))
+		if t == "":
+			continue
+		# Prefer major family beats.
+		if t != TYPE_DIED and t != TYPE_FLED and t != TYPE_RETURNED and t != TYPE_HERO_ARRIVED:
+			continue
+		var rel_profile := _profiles_by_id.get(pid, {}) as Dictionary
+		if rel_profile.is_empty():
+			continue
+		var rel_name := String(rel_profile.get("name", ""))
+		var rel_word := _relation_word(profile_id, pid)
+		var formatted := format_event(e)
+		var rel_event_type := t
+		if t == TYPE_RETURNED:
+			rel_event_type = "returned"
+		elif t == TYPE_HERO_ARRIVED:
+			rel_event_type = "hero"
+		return {
+			"relative_id": pid,
+			"relative_name": rel_name,
+			"relative_relation_word": rel_word,
+			"relative_event_type": rel_event_type,
+			"relative_event_text": String(formatted.get("text", "")),
+			"relative_hero_id": String(p.get("hero_id", "")),
+		}
+		count += 1
+		if count >= max_events:
+			break
+	return {}
+
+
 func format_event(e: Dictionary) -> Dictionary:
 	# Minimal formatter; can be expanded later.
 	var t := String(e.get("type", ""))
@@ -473,6 +628,10 @@ func format_event(e: Dictionary) -> Dictionary:
 	match t:
 		TYPE_DIALOGUE:
 			return { "text": ("%s: %s" % [name, String(p.get("text", ""))]).strip_edges(), "color": Color.WHITE, "icon": "🗨" }
+		TYPE_HERO_ARRIVED:
+			var hid := String(p.get("hero_id", ""))
+			var hero_label := (("Hero " + hid) if hid != "" else "Hero")
+			return { "text": ("%s arrived (%s)" % [name, hero_label]).strip_edges(), "color": Color.SKY_BLUE, "icon": "★" }
 		TYPE_FLED:
 			return { "text": ("%s fled" % name).strip_edges(), "color": Color.SALMON, "icon": "🏃" }
 		TYPE_EXITED:
@@ -502,10 +661,166 @@ func format_event(e: Dictionary) -> Dictionary:
 #
 
 func _record_event(e: Dictionary) -> void:
+	if not e.has("severity"):
+		e["severity"] = _severity_for_type(String(e.get("type", "")))
 	_events.append(e)
 	# Enforce ring buffer cap.
 	if _events.size() > _history_cap:
 		_events = _events.slice(_events.size() - _history_cap, _events.size())
+
+
+func _assign_family_for_profile(profile_id: int, member_def: Dictionary) -> void:
+	if profile_id == 0:
+		return
+	var p := _profiles_by_id.get(profile_id, {}) as Dictionary
+	if p.is_empty():
+		return
+	var family_id := int(member_def.get("family_id", 0))
+	var family_name := String(member_def.get("family_name", ""))
+	var lineage_id := int(member_def.get("lineage_id", 0))
+	if family_name == "":
+		var nm := String(p.get("name", ""))
+		var parts := nm.split(" ")
+		if parts.size() >= 2:
+			family_name = String(parts[parts.size() - 1])
+	if family_id == 0:
+		family_id = _next_family_id
+		_next_family_id += 1
+	if lineage_id == 0:
+		lineage_id = family_id
+	p["family_id"] = family_id
+	p["family_name"] = family_name
+	p["lineage_id"] = lineage_id
+	_profiles_by_id[profile_id] = p
+	_ensure_family_record(family_id, family_name, lineage_id, profile_id)
+
+
+func _ensure_family_record(family_id: int, family_name: String, lineage_id: int, profile_id: int) -> void:
+	if family_id == 0:
+		return
+	var fam := _families_by_id.get(family_id, {}) as Dictionary
+	if fam.is_empty():
+		fam = {
+			"family_id": family_id,
+			"family_name": family_name,
+			"lineage_id": lineage_id,
+			"members": [],
+		}
+	var members: Array = fam.get("members", []) as Array
+	if not members.has(profile_id):
+		members.append(profile_id)
+	fam["members"] = members
+	_families_by_id[family_id] = fam
+
+
+func _seed_family_links_for_profiles(profile_ids: Array[int]) -> void:
+	if profile_ids.is_empty():
+		return
+	var by_family: Dictionary = {}
+	for pid0 in profile_ids:
+		var pid := int(pid0)
+		var p := _profiles_by_id.get(pid, {}) as Dictionary
+		if p.is_empty():
+			continue
+		var fid := int(p.get("family_id", 0))
+		if fid == 0:
+			continue
+		if not by_family.has(fid):
+			by_family[fid] = []
+		(by_family[fid] as Array).append(pid)
+	for fid_key in by_family.keys():
+		var members: Array = by_family[fid_key] as Array
+		if members.size() < 2:
+			continue
+		# Siblings: all members of the family for this day are siblings by default.
+		for pid2_0 in members:
+			var pid2 := int(pid2_0)
+			var p2 := _profiles_by_id.get(pid2, {}) as Dictionary
+			if p2.is_empty():
+				continue
+			var sibs: Array = p2.get("siblings", []) as Array
+			for pid3_0 in members:
+				var pid3 := int(pid3_0)
+				if pid3 == pid2:
+					continue
+				if not sibs.has(pid3):
+					sibs.append(pid3)
+			p2["siblings"] = sibs
+			_profiles_by_id[pid2] = p2
+		# Occasional parent-child relation to create lineage flavor.
+		if members.size() >= 2 and _rng.randf() < 0.25:
+			var parent := int(members[0])
+			var child := int(members[1])
+			var p_parent := _profiles_by_id.get(parent, {}) as Dictionary
+			var p_child := _profiles_by_id.get(child, {}) as Dictionary
+			if not p_parent.is_empty() and not p_child.is_empty():
+				var kids: Array = p_parent.get("children", []) as Array
+				if not kids.has(child):
+					kids.append(child)
+				p_parent["children"] = kids
+				var parents: Array = p_child.get("parents", []) as Array
+				if not parents.has(parent):
+					parents.append(parent)
+				p_child["parents"] = parents
+				_profiles_by_id[parent] = p_parent
+				_profiles_by_id[child] = p_child
+
+
+func _roll_gender() -> String:
+	var opts := ["male", "female", "nonbinary"]
+	return String(opts[_rng.randi() % opts.size()])
+
+
+func _relation_word(profile_id: int, other_id: int) -> String:
+	var p := _profiles_by_id.get(int(profile_id), {}) as Dictionary
+	var o := _profiles_by_id.get(int(other_id), {}) as Dictionary
+	if p.is_empty() or o.is_empty():
+		return "kin"
+	var gender := String(o.get("gender", ""))
+	var parents: Array = p.get("parents", []) as Array
+	var children: Array = p.get("children", []) as Array
+	var siblings: Array = p.get("siblings", []) as Array
+	if children.has(other_id):
+		if gender == "female":
+			return "daughter"
+		if gender == "male":
+			return "son"
+		return "child"
+	if parents.has(other_id):
+		if gender == "female":
+			return "mother"
+		if gender == "male":
+			return "father"
+		return "parent"
+	if siblings.has(other_id):
+		if gender == "female":
+			return "sister"
+		if gender == "male":
+			return "brother"
+		return "sibling"
+	return "kin"
+
+
+func _severity_for_type(t: String) -> String:
+	match String(t):
+		TYPE_DIED:
+			return "major"
+		TYPE_HERO_ARRIVED:
+			return "major"
+		TYPE_DAY_CHANGE:
+			return "minor"
+		TYPE_DIALOGUE:
+			return "flavor"
+		TYPE_LOOT:
+			return "minor"
+		TYPE_FLED:
+			return "minor"
+		TYPE_EXITED:
+			return "minor"
+		TYPE_RETURNED:
+			return "minor"
+		_:
+			return "minor"
 
 
 func _generate_name_and_epithet(member_def: Dictionary) -> Dictionary:

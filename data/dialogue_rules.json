@@ -1,17 +1,106 @@
 {
   "rules": [
-    { "when": { "event": "return_spawn", "returnee": true }, "weight": 3, "values": ["I'm back for revenge.", "This time, I won't run.", "The dungeon owes me blood."], "tags": ["returnee","spawn"] },
-    { "when": { "event": "flee_exit", "fled": true }, "weight": 2, "values": ["Not today.", "Live to fight another day."], "tags": ["flee","exit"] },
-    { "when": { "event": "boss_sighted" }, "weight": 2, "values": ["There you are.", "Face me!"], "tags": ["boss","combat"] },
-    { "when": { "event": "party_intent", "intent": "explore" }, "weight": 2, "values": ["Let's explore the dungeon.", "Keep your eyes open.", "Scout ahead—quietly."] , "tags": ["party_intent","explore"] },
-    { "when": { "event": "party_intent", "intent": "loot" }, "weight": 2, "values": ["I smell treasure nearby.", "Let's grab what we can.", "Shiny things first."], "tags": ["party_intent","loot"] },
-    { "when": { "event": "party_intent", "intent": "boss" }, "weight": 2, "values": ["Straight to the boss.", "I want to kill the boss.", "No detours—boss now."], "tags": ["party_intent","boss"] },
-    { "when": { "event": "defect" }, "weight": 2, "values": ["I'm done following.", "You're going the wrong way.", "I'll take my chances alone."], "tags": ["defect"] },
-    { "when": { "*": true }, "weight": 1, "values": ["Let's move.", "Eyes open.", "Keep moving.", "Stay sharp.", "Quiet now."], "tags": ["generic"] }
-  ]
-}
-{
-  "returnee": [
-    { "weight": 2, "when": { "*": true }, "values": ["I'm back for revenge.", "That boss owes me a scar.", "Round two."] }
+    { "when": { "event": "party_intent", "intent": "explore" }, "weight": 2, "values": ["Let's explore the dungeon.", "Keep your eyes open.", "Scout ahead quietly."] },
+    { "when": { "event": "party_intent", "intent": "loot" }, "weight": 2, "values": ["I smell treasure nearby.", "Let's grab what we can.", "Shiny things first."] },
+    { "when": { "event": "party_intent", "intent": "boss" }, "weight": 2, "values": ["Straight to the boss.", "I want to kill the boss.", "No detours, boss now."] },
+    { "when": { "event": "party_intent", "intent": "exit" }, "weight": 2, "values": ["Back to the entrance.", "We leave now.", "Time to go."] },
+
+    { "when": { "event": "flee" }, "weight": 2, "values": ["Not today.", "Live to fight another day.", "I am out of here."] },
+    { "when": { "event": "defect" }, "weight": 2, "values": ["I'm done following.", "You're going the wrong way.", "I'll take my chances alone."] },
+
+    { "when": { "event": "callback" }, "weight": 2, "values": ["Remember {last_event_text}", "I still think about {last_event_text}"] },
+    { "when": { "event": "callback_family_loss" }, "weight": 2, "values": [
+      "My {relative_relation_word} {relative_name} died in this dungeon.",
+      "They took my {relative_relation_word} {relative_name}. I want answers.",
+      "This place killed my {relative_relation_word} {relative_name}.",
+      "I came because my {relative_relation_word} {relative_name} never returned.",
+      "My {relative_relation_word} {relative_name} fell here. I will not.",
+      "I owe my {relative_relation_word} {relative_name} a debt of vengeance.",
+      "My {relative_relation_word} {relative_name} died here. I will see why.",
+      "I want to honor {relative_name}. My {relative_relation_word} deserves that.",
+      "If I find what killed my {relative_relation_word} {relative_name}, I will end it.",
+      "They say my {relative_relation_word} {relative_name} was brave. I will be, too.",
+      "I am here for {relative_name}. This dungeon will remember.",
+      "My {relative_relation_word} {relative_name} died here. I seek the truth."
+    ] },
+    { "when": { "event": "callback_family_flee" }, "weight": 2, "values": [
+      "My {relative_relation_word} {relative_name} fled this dungeon.",
+      "{relative_name} ran from this place. I want to see it for myself.",
+      "My {relative_relation_word} {relative_name} barely escaped. I will be careful.",
+      "They say my {relative_relation_word} {relative_name} fled in fear.",
+      "If my {relative_relation_word} {relative_name} fled, this place is dangerous.",
+      "My {relative_relation_word} {relative_name} survived by running. I will not judge.",
+      "I want to know what made {relative_name} flee.",
+      "My {relative_relation_word} {relative_name} escaped. I want to face what they did not.",
+      "If {relative_name} fled, then caution is wisdom here.",
+      "My {relative_relation_word} {relative_name} ran. I came to learn why.",
+      "They call it cowardice. I call it survival, {relative_name}.",
+      "My {relative_relation_word} {relative_name} fled. I will choose my own path."
+    ] },
+    { "when": { "event": "callback_family_returned" }, "weight": 2, "values": [
+      "My {relative_relation_word} {relative_name} returned from this dungeon.",
+      "{relative_name} came back with scars and stories.",
+      "My {relative_relation_word} {relative_name} survived. I want to see how.",
+      "{relative_name} made it out. I will learn from that.",
+      "My {relative_relation_word} {relative_name} returned. I owe them courage.",
+      "They say {relative_name} walked out smiling. I want that truth.",
+      "My {relative_relation_word} {relative_name} came back stronger.",
+      "If {relative_name} returned, then this place can be beaten.",
+      "{relative_name} returned with loot. I want to match that.",
+      "My {relative_relation_word} {relative_name} returned. I will not shame them."
+    ] },
+    { "when": { "event": "callback_family_hero" }, "weight": 2, "values": [
+      "My {relative_relation_word} {relative_name} became a hero.",
+      "{relative_name} rose to legend. I want to live up to that.",
+      "They call my {relative_relation_word} {relative_name} a hero.",
+      "My {relative_relation_word} {relative_name} is the reason I am here.",
+      "I walk in {relative_name}'s shadow, and I will not falter.",
+      "My {relative_relation_word} {relative_name} earned glory here. I seek mine.",
+      "If {relative_name} could be a hero, so can I.",
+      "My {relative_relation_word} {relative_name} proved this place can be conquered.",
+      "I came to honor the hero {relative_name} became.",
+      "{relative_name} is a hero now. I want to understand why."
+    ] },
+    { "when": { "event": "callback_family_rivalry" }, "weight": 2, "values": [
+      "The {family_name} line does not back down.",
+      "My family expects more than survival.",
+      "The {family_name} name means something here.",
+      "If my kin can do it, I can do it better.",
+      "I am not the least of the {family_name}.",
+      "We compete, even with our own blood.",
+      "I want to surpass the stories of my family.",
+      "The {family_name} do not run from challenges.",
+      "I will not be the weak one in my family.",
+      "This is my chance to prove myself."
+    ] },
+    { "when": { "event": "callback_family_legacy" }, "weight": 2, "values": [
+      "The {family_name} have raided this dungeon for years.",
+      "My family has a legacy here, and I will not break it.",
+      "Our stories are carved into these halls.",
+      "The {family_name} were here before me, and I will add to the tale.",
+      "This dungeon is part of my family's history.",
+      "We come here because we always have.",
+      "The {family_name} know these halls by rumor and scar.",
+      "My lineage has a debt and a duty here.",
+      "I am the next chapter of my family's story.",
+      "Legacy is a weight, but I will carry it."
+    ] },
+    { "when": { "event": "callback_family_vow" }, "weight": 2, "values": [
+      "My family swore never to return. I broke that vow.",
+      "We promised to stay away, but I had to see it myself.",
+      "The {family_name} vowed to leave this place alone. I could not.",
+      "I carry a broken promise into these halls.",
+      "My family said never again. I said not yet.",
+      "The vow was fear. I choose to face it.",
+      "I should not be here, but the vow felt wrong.",
+      "I broke the family oath so I could understand it.",
+      "The {family_name} swore off this dungeon. I came anyway.",
+      "I am here to end the fear behind our vow."
+    ] },
+    { "when": { "event": "call_forward" }, "weight": 2, "values": ["I heard {hero_name} arrives in {days_until_hero} days.", "They say a {hero_class} named {hero_name} is coming soon."] },
+
+    { "when": { "event": "lineage_banter", "relative_relation": "sibling" }, "weight": 1, "values": ["My sibling {relative_name} would love this place.", "{relative_name} and I grew up on tales of this dungeon."] },
+
+    { "when": { "*": true }, "weight": 1, "values": ["Let's move.", "Eyes open.", "Keep moving.", "Stay sharp.", "Quiet now."] }
   ]
 }

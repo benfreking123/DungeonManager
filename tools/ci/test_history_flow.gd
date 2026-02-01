@@ -14,6 +14,7 @@ func _ready() -> void:
 		sim.call("start_day")
 	print("Right-click an adventurer to view identity tooltip (name/epithet/origin/bio).")
 	print("Force some damage/exit to log flee/exit; after RETURN_DAYS, a returnee should spawn with a dialogue line.")
+	print("If day_plan schedules a hero for this day, check history for hero_arrived entries.")
 	# Print a few history lines if available:
 	if sim.has_method("get_history_events"):
 		var events: Array = sim.call("get_history_events")

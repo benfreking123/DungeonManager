@@ -111,4 +111,3 @@ func roll_shop_offers(rng: RandomNumberGenerator, slot_count: int = 8) -> Array[
 			# Repeat from the shuffled pool if needed.
 			out.append(pool[rng.randi_range(0, pool.size() - 1)] as Dictionary)
 	return out
-

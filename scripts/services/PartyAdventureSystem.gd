@@ -346,11 +346,12 @@ func _trigger_flee(adv_id: int, b: AdventurerBrain) -> void:
 	b.flee_triggered = true
 	b.flee_delay_rooms_remaining = 0
 	_soft_defy[int(adv_id)] = { "intent": INTENT_EXIT, "rooms_left": 999999 }
-	var fline := ""
-	if _goals_cfg != null and _goals_cfg.has_method("pick_dialogue_for_flee"):
-		fline = String(_goals_cfg.call("pick_dialogue_for_flee", _rng, "flee_on_any_damage"))
-	if fline != "":
-		_bubble_events.append({ "type": "flee", "adv_id": int(adv_id), "text": fline })
+	_bubble_events.append({
+		"type": "flee",
+		"adv_id": int(adv_id),
+		"intent": INTENT_EXIT,
+		"goal_id": "flee_on_any_damage",
+	})
 
 
 func on_boss_killed() -> void:
@@ -497,13 +498,14 @@ func decide_party_intent(party_id: int) -> String:
 		var st: PartyState = _parties.get(pid, null) as PartyState
 		var leader := int(st.leader_adv_id) if st != null else 0
 		if leader != 0:
-			var text := ""
-			if _goals_cfg != null and _goals_cfg.has_method("pick_dialogue_for_intent"):
-				text = String(_goals_cfg.call("pick_dialogue_for_intent", _rng, chosen))
-			if text != "":
-				_bubble_events.append({ "type": "party_intent", "party_id": pid, "leader_adv_id": leader, "text": text })
-				# Only mark as emitted if we actually had a leader and emitted a bubble.
-				_last_party_intent_emitted[pid] = chosen
+			_bubble_events.append({
+				"type": "party_intent",
+				"party_id": pid,
+				"leader_adv_id": leader,
+				"intent": chosen,
+			})
+			# Only mark as emitted if we actually had a leader and emitted a bubble.
+			_last_party_intent_emitted[pid] = chosen
 
 	return chosen
 
@@ -789,11 +791,11 @@ func _maybe_defect(party_id: int, from_cell: Vector2i, chosen_intent: String) ->
 		_next_party_id += 1
 		DbgLog.info("Micro-party split: adv=%d from_party=%d -> new_party=%d intent=%s pressure=%d" % [aid, pid, new_pid, best_intent, pressure], "party")
 		# Bubble: defection line on the defector.
-		var dline := ""
-		if _goals_cfg != null and _goals_cfg.has_method("pick_dialogue_for_defect"):
-			dline = String(_goals_cfg.call("pick_dialogue_for_defect", _rng))
-		if dline != "":
-			_bubble_events.append({ "type": "defect", "adv_id": aid, "text": dline })
+		_bubble_events.append({
+			"type": "defect",
+			"adv_id": aid,
+			"intent": best_intent,
+		})
 		_create_micro_party(new_pid, [aid])
 		_parties[new_pid].intent = best_intent
 

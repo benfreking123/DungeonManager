@@ -1,0 +1,21 @@
+{
+  "heroes": [
+    {
+      "hero_id": "hero_ironbane",
+      "name": "Daria Ironbane",
+      "class_id": "warrior",
+      "strength": 12,
+      "morality": 2,
+      "traits": [],
+      "ability_id": "",
+      "ability_charges": 1,
+      "goals": ["kill_boss", "no_flee_until_boss_dead"],
+      "goal_params": {},
+      "base_stats": { "intelligence": 9, "strength": 12, "agility": 8 },
+      "stat_mods": {},
+      "gender": "female",
+      "family_name": "Ironbane",
+      "lineage_id": 1001
+    }
+  ]
+}
