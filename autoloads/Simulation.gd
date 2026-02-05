@@ -46,6 +46,7 @@ var _adv_last_room: Dictionary = {}
 var room_spawners_by_room_id: Dictionary = {}
 
 var _combat: RefCounted
+var _monster_behaviors: MonsterBehaviorService
 
 signal boss_killed()
 
@@ -125,7 +126,10 @@ func set_views(town_view: Control, dungeon_view: Control) -> void:
 	_monster_roster = preload("res://scripts/systems/MonsterRoster.gd").new()
 
 	_combat = preload("res://autoloads/Simulation_Combat.gd").new()
-	_combat.call("setup", _dungeon_view, _dungeon_grid, self, _monster_roster)
+	_monster_behaviors = preload("res://scripts/services/MonsterBehaviorService.gd").new()
+	if _monster_behaviors != null:
+		_monster_behaviors.setup(self)
+	_combat.call("setup", _dungeon_view, _dungeon_grid, self, _monster_roster, _monster_behaviors)
 	# Initialize AI services
 	_path_service = preload("res://scripts/nav/PathService.gd").new()
 	_path_service.setup(_dungeon_grid)
@@ -486,6 +490,7 @@ func _process(delta: float) -> void:
 	if _combat != null:
 		_combat.call("tick", dt, room_spawners_by_room_id)
 
+	var combat_end_parties: Dictionary = {}
 	var alive: Array[Node2D] = []
 	for a in _adventurers:
 		if is_instance_valid(a):
@@ -507,6 +512,16 @@ func _process(delta: float) -> void:
 			# If combat just ended, immediately retarget so parties keep exploring.
 			if was_in_combat and not now_in_combat:
 				_on_party_combat_ended(aid)
+				if _ability_system != null:
+					var pid_end := int(a.get("party_id"))
+					if not combat_end_parties.has(pid_end):
+						combat_end_parties[pid_end] = true
+						var ids_end: Array[int] = []
+						for a2 in _adventurers:
+							if is_instance_valid(a2) and int(a2.get("party_id")) == pid_end:
+								ids_end.append(int(a2.get_instance_id()))
+						if not ids_end.is_empty():
+							_ability_system.on_combat_end(ids_end)
 
 			a.call("tick", dt)
 			# Ground loot pickup: allow adventurers to collect dropped treasure near them.
@@ -731,13 +746,14 @@ func _activate_reused_preview_adv(entry: Dictionary, entrance_world: Vector2, pa
 	adv.set("party_id", pid)
 
 	# Targets: move to entrance, then follow party path.
+	var speed_mult := _adv_speed_mult(adv)
 	if _world_canvas != null:
 		var inv_wc2: Transform2D = _world_canvas.get_global_transform().affine_inverse()
-		adv.call("set_surface_target_local", inv_wc2 * entrance_world, SURFACE_SPEED)
+		adv.call("set_surface_target_local", inv_wc2 * entrance_world, SURFACE_SPEED * speed_mult)
 	else:
-		adv.call("set_surface_target", entrance_world, SURFACE_SPEED)
+		adv.call("set_surface_target", entrance_world, SURFACE_SPEED * speed_mult)
 	var path2: Array[Vector2i] = paths_by_party_id.get(pid, []) as Array[Vector2i]
-	adv.call("set_dungeon_targets", _dungeon_view, path2, DUNGEON_SPEED)
+	adv.call("set_dungeon_targets", _dungeon_view, path2, DUNGEON_SPEED * speed_mult)
 
 	# Wire day runtime callbacks/signals (same as normal spawn).
 	adv.call("set_on_reach_goal", Callable(self, "_on_adventurer_finished").bind(adv))
@@ -746,6 +762,8 @@ func _activate_reused_preview_adv(entry: Dictionary, entrance_world: Vector2, pa
 		adv.connect("damaged", Callable(self, "_on_adventurer_damaged").bind(int(adv.get_instance_id())))
 	if adv.has_signal("died"):
 		adv.connect("died", Callable(self, "_on_adventurer_died").bind(int(adv.get_instance_id())))
+	if adv.has_signal("entered_dungeon"):
+		adv.connect("entered_dungeon", Callable(self, "_on_adventurer_entered_dungeon"))
 	if adv.has_signal("right_clicked"):
 		adv.connect("right_clicked", Callable(self, "_on_adventurer_right_clicked"))
 
@@ -835,18 +853,21 @@ func _spawn_one_party_member(entry: Dictionary, idx: int) -> void:
 	if adv.has_method("set_surface_hold"):
 		adv.call("set_surface_hold", true)
 	# Store the surface target in WorldCanvas-local space so camera transforms don't affect movement.
+	var speed_mult2 := _adv_speed_mult(adv)
 	if _world_canvas != null:
 		var inv_wc2: Transform2D = _world_canvas.get_global_transform().affine_inverse()
-		adv.call("set_surface_target_local", inv_wc2 * entrance_world, SURFACE_SPEED)
+		adv.call("set_surface_target_local", inv_wc2 * entrance_world, SURFACE_SPEED * speed_mult2)
 	else:
-		adv.call("set_surface_target", entrance_world, SURFACE_SPEED)
-	adv.call("set_dungeon_targets", _dungeon_view, path, DUNGEON_SPEED)
+		adv.call("set_surface_target", entrance_world, SURFACE_SPEED * speed_mult2)
+	adv.call("set_dungeon_targets", _dungeon_view, path, DUNGEON_SPEED * speed_mult2)
 	adv.call("set_on_reach_goal", Callable(self, "_on_adventurer_finished").bind(adv))
 	adv.connect("cell_reached", Callable(self, "_on_adventurer_cell_reached").bind(adv))
 	if adv.has_signal("damaged"):
 		adv.connect("damaged", Callable(self, "_on_adventurer_damaged").bind(int(adv.get_instance_id())))
 	if adv.has_signal("died"):
 		adv.connect("died", Callable(self, "_on_adventurer_died").bind(int(adv.get_instance_id())))
+	if adv.has_signal("entered_dungeon"):
+		adv.connect("entered_dungeon", Callable(self, "_on_adventurer_entered_dungeon"))
 	if adv.has_signal("right_clicked"):
 		adv.connect("right_clicked", Callable(self, "_on_adventurer_right_clicked"))
 	_adventurers.append(adv)
@@ -908,6 +929,11 @@ func _on_adventurer_right_clicked(adv_id: int, screen_pos: Vector2) -> void:
 	if GameState != null and GameState.phase != GameState.Phase.DAY:
 		return
 	adventurer_right_clicked.emit(int(adv_id), screen_pos)
+
+
+func _on_adventurer_entered_dungeon(adv_id: int) -> void:
+	if _ability_system != null:
+		_ability_system.on_enter_dungeon(int(adv_id))
 
 
 func get_adv_tooltip_data(adv_id: int) -> Dictionary:
@@ -1006,7 +1032,7 @@ func get_adv_tooltip_data(adv_id: int) -> Dictionary:
 				"charges_left": charges_left,
 				"summary": summary,
 			})
-	elif String(out.get("ability_id", "")) != "":
+	if abilities.is_empty() and String(out.get("ability_id", "")) != "":
 		var ability_id2 := String(out.get("ability_id", ""))
 		var charges_per_day2 := int(out.get("ability_charges", 0))
 		var charges_left2 := -1
@@ -1194,6 +1220,17 @@ func _remove_adv_from_tracking(adv_id: int) -> void:
 		if is_instance_valid(a) and int(a.get_instance_id()) != aid:
 			next.append(a)
 	_adventurers = next
+
+
+func _adv_speed_mult(adv: Node) -> float:
+	if adv == null or not is_instance_valid(adv):
+		return 1.0
+	if adv.has_method("get_move_speed_mult"):
+		return float(adv.call("get_move_speed_mult"))
+	var v: Variant = adv.get("speed_mult")
+	if v is float or v is int:
+		return maxf(0.1, float(v))
+	return 1.0
 
 
 func _now_s() -> float:
@@ -1559,6 +1596,17 @@ func get_monsters_in_radius(center_world: Vector2, radius_px: float) -> Array:
 			var a2 := actor as Node2D
 			if a2.global_position.distance_to(center_world) <= radius_px:
 				out.append(m)
+	return out
+
+
+func get_adventurers_in_radius(center_world: Vector2, radius_px: float) -> Array:
+	var out: Array = []
+	var r2 := float(radius_px) * float(radius_px)
+	for a in _adventurers:
+		if a == null or not is_instance_valid(a):
+			continue
+		if a.global_position.distance_squared_to(center_world) <= r2:
+			out.append(a)
 	return out
 
 
@@ -2213,6 +2261,32 @@ func _spawn_monster_instance(room_id: int, mi: MonsterItem, idx: int) -> RefCoun
 	var mon := preload("res://scripts/systems/MonsterInstance.gd").new()
 	mon.call("setup_from_template", mi, room_id, room_id, actor)
 	return mon
+
+
+func spawn_monster_in_room(room_id: int, monster_id: String, count: int = 1, world_pos: Vector2 = Vector2.ZERO) -> void:
+	if room_id == 0:
+		return
+	if _monster_roster == null:
+		return
+	var mi := _make_monster_item(String(monster_id))
+	if mi == null:
+		return
+	var n := maxi(0, int(count))
+	for i in range(n):
+		var idx := int(_monster_roster.call("count_in_room", room_id))
+		var inst: Variant = _spawn_monster_instance(room_id, mi, idx)
+		if inst == null:
+			continue
+		_monster_roster.call("add", inst)
+		if world_pos != Vector2.ZERO:
+			var actor: Node2D = (inst as MonsterInstance).actor if inst is MonsterInstance else null
+			if actor != null and is_instance_valid(actor):
+				var offset := Vector2(-8.0 + float(i) * 8.0, 6.0 - float(i) * 4.0)
+				actor.global_position = world_pos + offset
+		if _combat != null:
+			_combat.call("on_monster_spawned", room_id)
+		_join_combat_for_adventurers_in_room(room_id)
+		DbgLog.log("Spawned %s in room_id=%d (split)" % [String(monster_id), room_id], "monsters")
 
 
 func _collect_collision_bodies() -> Array[Node2D]:

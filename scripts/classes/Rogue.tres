@@ -17,3 +17,4 @@ range = 40.0
 intelligence = 9
 strength = 9
 agility = 11
+speed_mult = 1.0

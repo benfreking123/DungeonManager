@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="MonsterItem" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/Monster.gd" id="1_mon"]
+[ext_resource type="Texture2D" uid="uid://e2sj75lt6af" path="res://assets/icons/monsters/Icon_Slime.tres" id="2_icon"]
+[ext_resource type="Resource" path="res://assets/threat/ThreatProfile_Melee.tres" id="3_prof"]
+
+[resource]
+script = ExtResource("1_mon")
+id = "slime_small"
+display_name = "Small Slime"
+rarity = "common"
+icon = ExtResource("2_icon")
+threat_profile = ExtResource("3_prof")
+max_hp = 3
+attack_damage = 1
+attack_interval = 1.0
+range = 40.0
+size = 0.5

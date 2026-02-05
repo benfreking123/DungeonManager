@@ -7,6 +7,7 @@
 script = ExtResource("1_treasure")
 id = "treasure_warrior"
 display_name = "Warrior Treasure"
+rarity = "uncommon"
 icon = ExtResource("2_icon")
 class_id = "warrior"
 

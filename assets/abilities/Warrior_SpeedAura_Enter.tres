@@ -1,0 +1,14 @@
+[gd_resource type="Resource" load_steps=2]
+
+[ext_resource type="Script" path="res://scripts/resources/Ability.gd" id=1]
+
+[resource]
+script = ExtResource("1")
+ability_id = "warrior_speed_aura"
+trigger_name = "EnterDungeon"
+trigger_names = [ "EnterDungeon", "CombatEnd" ]
+cooldown_s = 0.0
+charges_per_day = 1
+s_delta = 2
+params = { "radius_px": 120, "duration_s": 4.0, "speed_mult_add": 0.25 }
+cast_time_s = 0.0

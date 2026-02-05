@@ -4,6 +4,7 @@ class_name BossUpgradeItem
 @export var upgrade_id: String = ""
 @export var display_name: String = ""
 @export var icon: Texture2D
+@export_enum("common", "uncommon", "rare", "epic", "legendary") var rarity: String = "common"
 
 # Unique effect identifier used by the boss upgrade system.
 @export var effect_id: String = ""

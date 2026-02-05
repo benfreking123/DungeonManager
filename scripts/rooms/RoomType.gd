@@ -8,6 +8,7 @@ class_name RoomType
 @export var kind: String = ""
 @export var max_slots: int = 0
 @export var effect_id: String = ""
+@export_enum("common", "uncommon", "rare", "epic", "legendary") var rarity: String = "common"
 
 # Monster spawning knobs (used by monster rooms; also used by boss rooms for minion spawns).
 @export var monster_capacity: int = 3

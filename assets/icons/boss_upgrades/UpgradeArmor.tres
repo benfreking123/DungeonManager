@@ -11,6 +11,7 @@ region = Rect2(520, 512, 240, 192)
 script = ExtResource("1_up")
 upgrade_id = "armor"
 display_name = "Armor"
+rarity = "rare"
 icon = SubResource("AtlasTexture_icon")
 effect_id = "boss_upgrade_armor"
 value = 1.0

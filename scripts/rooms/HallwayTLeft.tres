@@ -6,6 +6,7 @@
 script = ExtResource("1_roomtype")
 id = "hall_t_left"
 label = "Hallway T (Left)"
+rarity = "uncommon"
 size = Vector2i(3, 3)
 power_cost = 1
 kind = "hall"

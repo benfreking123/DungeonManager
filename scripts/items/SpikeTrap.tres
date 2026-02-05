@@ -6,6 +6,7 @@
 script = ExtResource("1_x1n7k")
 id = "spike_trap"
 display_name = "Spike Trap"
+rarity = "common"
 proc_chance = 1.0
 cooldown_s = 10.0
 trigger_id = ""

@@ -18,7 +18,7 @@ func _ready() -> void:
 	# Print a few history lines if available:
 	if sim.has_method("get_history_events"):
 		var events: Array = sim.call("get_history_events")
-		var n := min(10, events.size())
+		var n: int = min(10, events.size())
 		for i in range(n):
 			var e := events[i] as Dictionary
 			print("Event: ", e)

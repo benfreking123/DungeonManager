@@ -6,6 +6,7 @@
 script = ExtResource("1_rearmtrap")
 id = "rearm_trap"
 display_name = "Rearm Trap"
+rarity = "rare"
 proc_chance = 1.0
 cooldown_s = 0.0
 trigger_id = ""

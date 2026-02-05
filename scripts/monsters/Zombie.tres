@@ -8,6 +8,7 @@
 script = ExtResource("1_44ep5")
 id = "zombie"
 display_name = "Zombie"
+rarity = "uncommon"
 icon = ExtResource("2_zicon")
 threat_profile = ExtResource("3_prof")
 max_hp = 5

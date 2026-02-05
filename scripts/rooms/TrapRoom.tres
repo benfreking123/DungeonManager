@@ -6,6 +6,7 @@
 script = ExtResource("1_roomtype")
 id = "trap"
 label = "Trap (2x2)"
+rarity = "uncommon"
 size = Vector2i(2, 2)
 power_cost = 2
 kind = "trap"

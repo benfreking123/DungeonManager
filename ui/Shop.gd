@@ -25,6 +25,7 @@ const ROOM_GLYPH_ICON_PX := 32
 # Ensure slots are large enough to hold a 64x64 icon, a 32px spacer, and a 48px price row.
 const SHOP_SLOT_SIZE_ITEM := Vector2(72, 150)
 const SHOP_SLOT_SIZE_ROOM := Vector2(40, 48)
+const StrengthServiceClass := preload("res://scripts/services/StrengthService.gd")
 
 var _is_open: bool = false
 var _tween: Tween = null
@@ -385,9 +386,19 @@ func _roll_offers() -> void:
 	var cfg := get_node_or_null("/root/config_shop")
 	if cfg == null or not cfg.has_method("roll_shop_offers"):
 		return
+	var strength_s := 0
+	var gs := get_node_or_null("/root/GameState")
+	var cfg_node := get_node_or_null("/root/game_config")
+	var strength_service := StrengthServiceClass.new()
+	if gs != null and strength_service != null:
+		var day_idx := int(gs.get("day_index"))
+		if day_idx <= 0:
+			day_idx = 1
+		if strength_service.has_method("compute_strength_s_for_day"):
+			strength_s = int(strength_service.call("compute_strength_s_for_day", day_idx, cfg_node))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(_shop_seed)
-	_offers = cfg.call("roll_shop_offers", rng, 8) as Array[Dictionary]
+	_offers = cfg.call("roll_shop_offers", rng, 8, strength_s) as Array[Dictionary]
 	# Assign offers in stable square order (BlackSquare..BlackSquare8).
 	_cache_squares()
 	for i in range(mini(_squares.size(), _offers.size())):

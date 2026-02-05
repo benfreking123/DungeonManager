@@ -8,6 +8,7 @@
 script = ExtResource("1_mon")
 id = "boss"
 display_name = "Boss"
+rarity = "legendary"
 icon = ExtResource("2_icon")
 threat_profile = ExtResource("3_prof")
 max_hp = 20

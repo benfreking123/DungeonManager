@@ -6,6 +6,7 @@
 script = ExtResource("1_teleporttrap")
 id = "teleport_trap"
 display_name = "Teleport Trap"
+rarity = "rare"
 proc_chance = 1.0
 cooldown_s = 10.0
 trigger_id = ""

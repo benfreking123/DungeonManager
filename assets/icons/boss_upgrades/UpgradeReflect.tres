@@ -11,6 +11,7 @@ region = Rect2(280, 528, 240, 192)
 script = ExtResource("1_up")
 upgrade_id = "reflect"
 display_name = "Reflect"
+rarity = "epic"
 icon = SubResource("AtlasTexture_icon")
 effect_id = "boss_upgrade_reflect"
 value = 1.0

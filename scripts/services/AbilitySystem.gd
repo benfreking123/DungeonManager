@@ -107,6 +107,15 @@ func on_enter_room(adv_id: int, room_kind: String) -> void:
 			_try_fire(adv_id, "WhenTrap")
 
 
+func on_enter_dungeon(adv_id: int) -> void:
+	_try_fire(adv_id, "EnterDungeon")
+
+
+func on_combat_end(party_adv_ids: Array[int]) -> void:
+	for aid in party_adv_ids:
+		_try_fire(int(aid), "CombatEnd")
+
+
 func on_flee(adv_id: int) -> void:
 	_try_fire(adv_id, "WhenFlee")
 
@@ -134,7 +143,16 @@ func _try_fire(adv_id: int, trigger_name: String) -> void:
 		if res == null:
 			new_arr.append(st)
 			continue
-		if String(res.trigger_name) != String(trigger_name):
+		var trigger_ok := false
+		var trig_list: Array = res.trigger_names
+		if not trig_list.is_empty():
+			for t0 in trig_list:
+				if String(t0) == String(trigger_name):
+					trigger_ok = true
+					break
+		else:
+			trigger_ok = (String(res.trigger_name) == String(trigger_name))
+		if not trigger_ok:
 			new_arr.append(st)
 			continue
 		if int(st.get("charges_left", 0)) <= 0:
@@ -205,6 +223,8 @@ func _execute_effect(adv_id: int, ab: Ability) -> void:
 			_whirlwind_fx(int(adv_id), float(ab.cast_time_s) + 0.25)
 		"warrior_reflect":
 			_reflect_sparkle(int(adv_id))
+		"warrior_speed_aura":
+			_warrior_speed_aura(int(adv_id), ab.params)
 		# Mage
 		"mage_aoe_freeze":
 			_mage_aoe_freeze(int(adv_id), int(ab.params.get("radius_px", 60)), float(ab.params.get("stun_s", 1.0)))
@@ -268,6 +288,29 @@ func _party_member_ids_for_adv(adv_id: int) -> Array[int]:
 			out.append(int(v))
 		return out
 	return [int(adv_id)]
+
+
+func _warrior_speed_aura(adv_id: int, params: Dictionary) -> void:
+	if _simulation == null:
+		return
+	var adv: Node2D = null
+	if _simulation.has_method("_find_adv_by_id"):
+		adv = _simulation.call("_find_adv_by_id", int(adv_id)) as Node2D
+	if adv == null or not is_instance_valid(adv):
+		return
+	var radius_px := float(params.get("radius_px", 120.0))
+	var duration_s := float(params.get("duration_s", 4.0))
+	var bonus := float(params.get("speed_mult_add", 0.25))
+	var mult := 1.0 + maxf(0.0, bonus)
+	var targets: Array = []
+	if _simulation.has_method("get_adventurers_in_radius"):
+		targets = _simulation.call("get_adventurers_in_radius", adv.global_position, radius_px) as Array
+	for t in targets:
+		var a := t as Node2D
+		if a == null or not is_instance_valid(a):
+			continue
+		if a.has_method("apply_speed_buff"):
+			a.call("apply_speed_buff", mult, duration_s)
 
 
 func _priest_aoe_heal(adv_id: int, heal: int) -> void:
@@ -457,7 +500,10 @@ func _load_abilities() -> void:
 	_abilities_by_id.clear()
 	var dir := DirAccess.open(ABILITIES_DIR)
 	if dir == null:
+		if Engine.has_singleton("DbgLog"):
+			DbgLog.warn("AbilitySystem: missing abilities dir %s" % ABILITIES_DIR, "services")
 		return
+	var loaded := 0
 	dir.list_dir_begin()
 	while true:
 		var file_name := dir.get_next()
@@ -471,9 +517,14 @@ func _load_abilities() -> void:
 		var res := load(res_path)
 		var ab := res as Ability
 		if ab == null:
+			if Engine.has_singleton("DbgLog"):
+				DbgLog.debug("AbilitySystem: failed load %s" % res_path, "services")
 			continue
 		var id := String(ab.ability_id)
 		if id == "":
 			continue
 		_abilities_by_id[id] = ab
+		loaded += 1
 	dir.list_dir_end()
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug("AbilitySystem: loaded abilities=%d" % loaded, "services")

@@ -6,6 +6,7 @@
 script = ExtResource("1_0u8m6")
 id = "floor_pit"
 display_name = "Floor Pit"
+rarity = "uncommon"
 proc_chance = 1.0
 cooldown_s = 10.0
 trigger_id = ""

@@ -1,0 +1,37 @@
+{
+  "offers": [
+    { "id": "trap_spike", "kind": "item", "target_id": "spike_trap", "cost": { "treasure_rogue": 1 } },
+    { "id": "trap_pit", "kind": "item", "target_id": "floor_pit", "cost": { "treasure_rogue": 1, "treasure_warrior": 1 } },
+    { "id": "trap_teleport", "kind": "item", "target_id": "teleport_trap", "cost": { "treasure_mage": 1, "treasure_rogue": 1 } },
+    { "id": "trap_web", "kind": "item", "target_id": "web_trap", "cost": { "treasure_mage": 1 } },
+    { "id": "trap_rearm", "kind": "item", "target_id": "rearm_trap", "cost": { "treasure_priest": 1, "treasure_mage": 1 } },
+
+    { "id": "mon_skeleton", "kind": "item", "target_id": "skeleton", "cost": { "treasure_warrior": 1 } },
+    { "id": "mon_slime", "kind": "item", "target_id": "slime", "cost": { "treasure_mage": 1 } },
+    { "id": "mon_zombie", "kind": "item", "target_id": "zombie", "cost": { "treasure_priest": 1 } },
+    { "id": "mon_ogre", "kind": "item", "target_id": "ogre", "cost": { "treasure_warrior": 1, "treasure_priest": 1 } },
+
+    { "id": "boss_upgrade_health", "kind": "item", "target_id": "health", "cost": { "treasure_warrior": 1, "treasure_priest": 1 } },
+    { "id": "boss_upgrade_damage", "kind": "item", "target_id": "damage", "cost": { "treasure_warrior": 1, "treasure_mage": 1 } },
+    { "id": "boss_upgrade_armor", "kind": "item", "target_id": "armor", "cost": { "treasure_warrior": 2 } },
+    { "id": "boss_upgrade_attack_speed", "kind": "item", "target_id": "attack_speed", "cost": { "treasure_rogue": 2 } },
+    { "id": "boss_upgrade_double_strike", "kind": "item", "target_id": "double_strike", "cost": { "treasure_mage": 2, "treasure_rogue": 1 } },
+    { "id": "boss_upgrade_reflect", "kind": "item", "target_id": "reflect", "cost": { "treasure_priest": 2, "treasure_warrior": 1 } },
+    { "id": "boss_upgrade_glop", "kind": "item", "target_id": "glop", "cost": { "treasure_mage": 1, "treasure_priest": 1 } },
+
+    { "id": "room_hall", "kind": "room", "target_id": "hall", "cost": { "treasure_base": 1 } },
+    { "id": "room_corridor", "kind": "room", "target_id": "corridor", "cost": { "treasure_base": 1 } },
+    { "id": "room_hall_plus", "kind": "room", "target_id": "hall_plus", "cost": { "treasure_mage": 1 } },
+    { "id": "room_hall_t_left", "kind": "room", "target_id": "hall_t_left", "cost": { "treasure_rogue": 1 } },
+    { "id": "room_monster", "kind": "room", "target_id": "monster", "cost": { "treasure_warrior": 1, "treasure_rogue": 1 } },
+    { "id": "room_trap", "kind": "room", "target_id": "trap", "cost": { "treasure_rogue": 1, "treasure_mage": 1 } },
+    { "id": "room_trap_2x1", "kind": "room", "target_id": "trap_2x1", "cost": { "treasure_rogue": 1 } },
+    { "id": "room_trap_3x2", "kind": "room", "target_id": "trap_3x2", "cost": { "treasure_rogue": 2, "treasure_mage": 1 } },
+    { "id": "room_treasure", "kind": "room", "target_id": "treasure", "cost": { "treasure_base": 2, "treasure_mage": 1 } },
+
+    { "id": "room_stairs", "kind": "room", "target_id": "stairs", "cost": { "treasure_base": 1 }, "enabled": false },
+    { "id": "room_entrance", "kind": "room", "target_id": "entrance", "cost": { "treasure_base": 1 }, "enabled": false },
+    { "id": "room_boss", "kind": "room", "target_id": "boss", "cost": { "treasure_base": 3 }, "enabled": false },
+    { "id": "mon_boss", "kind": "item", "target_id": "boss", "cost": { "treasure_base": 3 }, "enabled": false }
+  ]
+}

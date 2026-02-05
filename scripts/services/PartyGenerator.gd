@@ -402,6 +402,8 @@ func _index_abilities_by_class() -> Dictionary:
 	}
 	var dir := DirAccess.open("res://assets/abilities")
 	if dir == null:
+		if Engine.has_singleton("DbgLog"):
+			DbgLog.warn("PartyGen: abilities dir missing at res://assets/abilities", "party_gen")
 		return out
 	dir.list_dir_begin()
 	while true:
@@ -416,6 +418,8 @@ func _index_abilities_by_class() -> Dictionary:
 		var res := load(res_path)
 		var ab := res as Ability
 		if ab == null:
+			if Engine.has_singleton("DbgLog"):
+				DbgLog.debug("PartyGen: ability load failed %s" % res_path, "party_gen")
 			continue
 		var id := String(ab.ability_id)
 		if id.begins_with("warrior_"):
@@ -427,6 +431,16 @@ func _index_abilities_by_class() -> Dictionary:
 		elif id.begins_with("priest_"):
 			(out["priest"] as Array).append(id)
 	dir.list_dir_end()
+	if Engine.has_singleton("DbgLog"):
+		DbgLog.debug(
+			"PartyGen: abilities indexed warrior=%d mage=%d rogue=%d priest=%d" % [
+				(out["warrior"] as Array).size(),
+				(out["mage"] as Array).size(),
+				(out["rogue"] as Array).size(),
+				(out["priest"] as Array).size(),
+			],
+			"party_gen"
+		)
 	return out
 
 

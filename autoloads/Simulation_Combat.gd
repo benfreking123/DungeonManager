@@ -38,14 +38,16 @@ var _dungeon_grid: Node
 var _simulation: Node
 var _threat: RefCounted
 var _monster_roster: RefCounted
+var _monster_behaviors: RefCounted
 
 
-func setup(dungeon_view: Control, dungeon_grid: Node, simulation: Node, monster_roster: RefCounted) -> void:
+func setup(dungeon_view: Control, dungeon_grid: Node, simulation: Node, monster_roster: RefCounted, monster_behaviors: RefCounted) -> void:
 	_dungeon_view = dungeon_view
 	_dungeon_grid = dungeon_grid
 	_simulation = simulation
 	_threat = preload("res://scripts/systems/ThreatSystem.gd").new()
 	_monster_roster = monster_roster
+	_monster_behaviors = monster_behaviors
 
 
 func reset() -> void:
@@ -201,6 +203,7 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 
 	# remove dead monsters
 	var any_alive := false
+	var spawned_on_death := false
 	for mon in monsters:
 		var mi := mon as MonsterInstance
 		if mi == null:
@@ -212,11 +215,14 @@ func _tick_one_combat(room_id: int, combat: Dictionary, dt: float, room_spawners
 		if mi.is_boss():
 				if _simulation != null and _simulation.has_signal("boss_killed"):
 					_simulation.emit_signal("boss_killed")
+		if _monster_behaviors != null and _monster_behaviors.has_method("on_monster_died"):
+			if bool(_monster_behaviors.call("on_monster_died", mi, { "room_id": room_id, "combat": combat })):
+				spawned_on_death = true
 		if mi.actor != null and is_instance_valid(mi.actor):
 			mi.actor.queue_free()
 		_monster_roster.call("remove", mi.instance_id)
 
-	if not any_alive:
+	if not any_alive and not spawned_on_death:
 		# Notify Simulation: attribute monster clears to participants (first pass).
 		if _simulation != null and _simulation.has_method("_on_monster_room_cleared"):
 			var adv_ids: Array[int] = []
@@ -593,6 +599,17 @@ func _tick_monster_attacks(room_id: int, combat: Dictionary, dt: float) -> void:
 	combat["adv_recently_hit"] = adv_hit
 
 
+func _adv_speed_mult(adv: Node2D) -> float:
+	if adv == null or not is_instance_valid(adv):
+		return 1.0
+	if adv.has_method("get_move_speed_mult"):
+		return float(adv.call("get_move_speed_mult"))
+	var v: Variant = adv.get("speed_mult")
+	if v is float or v is int:
+		return maxf(0.1, float(v))
+	return 1.0
+
+
 func _dungeon_local_to_world(local_pos: Vector2) -> Vector2:
 	if _dungeon_view == null:
 		return local_pos
@@ -682,7 +699,8 @@ func _animate_combat_positions(combat: Dictionary, dt: float) -> void:
 		if room_rect != Rect2():
 			target_local = _clamp_to_room_rect(combat, target_local)
 		var target_world := _dungeon_local_to_world(target_local)
-		adv.global_position = adv.global_position.move_toward(target_world, COMBAT_MOVE_SPEED * dt)
+		var speed_mult := _adv_speed_mult(adv)
+		adv.global_position = adv.global_position.move_toward(target_world, COMBAT_MOVE_SPEED * speed_mult * dt)
 		# Enforce room bounds.
 		if room_rect != Rect2():
 			var adv_local := _dungeon_world_to_local(adv.global_position)

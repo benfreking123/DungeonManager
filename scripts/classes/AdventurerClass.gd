@@ -19,3 +19,4 @@ class_name AdventurerClass
 @export var intelligence: int = 10
 @export var strength: int = 10
 @export var agility: int = 10
+@export var speed_mult: float = 1.0

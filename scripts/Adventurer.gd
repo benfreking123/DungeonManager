@@ -7,6 +7,7 @@ extends Node2D
 signal died(world_pos: Vector2, class_id: String)
 signal damaged(amount: int)
 signal right_clicked(adv_id: int, screen_pos: Vector2)
+signal entered_dungeon(adv_id: int)
 
 enum Phase { SURFACE, DUNGEON, DONE }
 
@@ -27,6 +28,7 @@ var _on_reach_goal: Callable
 var _time_accum: float = 0.0
 var _wiggle_seed: float = 0.0
 var _pause_until_s: float = 0.0
+var _entered_dungeon_emitted: bool = false
 
 signal cell_reached(cell: Vector2i)
 
@@ -41,6 +43,9 @@ var armor: int = 0
 var intelligence: int = 10
 var strength: int = 10
 var agility: int = 10
+var speed_mult: float = 1.0
+var speed_buff_mult: float = 1.0
+var speed_buff_until_s: float = 0.0
 
 var in_combat: bool = false
 var combat_room_id: int = 0
@@ -90,6 +95,24 @@ func pause_for(duration_s: float) -> void:
 	_pause_until_s = maxf(_pause_until_s, now_s + d)
 
 
+func apply_speed_buff(mult: float, duration_s: float) -> void:
+	var m := maxf(0.1, float(mult))
+	var d := maxf(0.0, float(duration_s))
+	if d <= 0.0:
+		return
+	speed_buff_mult = maxf(speed_buff_mult, m)
+	var now_s := float(Time.get_ticks_msec()) / 1000.0
+	speed_buff_until_s = maxf(speed_buff_until_s, now_s + d)
+
+
+func get_move_speed_mult() -> float:
+	var now_s := float(Time.get_ticks_msec()) / 1000.0
+	if speed_buff_until_s > 0.0 and now_s > speed_buff_until_s:
+		speed_buff_mult = 1.0
+		speed_buff_until_s = 0.0
+	return maxf(0.1, speed_mult * speed_buff_mult)
+
+
 func apply_class(c: AdventurerClass) -> void:
 	if c == null:
 		return
@@ -103,6 +126,7 @@ func apply_class(c: AdventurerClass) -> void:
 	intelligence = int(c.intelligence)
 	strength = int(c.strength)
 	agility = int(c.agility)
+	speed_mult = float(c.speed_mult)
 	queue_redraw()
 
 
@@ -122,6 +146,9 @@ func tick(dt: float) -> void:
 			_move_toward_local(_surface_target_local, _surface_speed, dt)
 			if (not _surface_hold) and position.distance_to(_surface_target_local) <= 2.0:
 				phase = Phase.DUNGEON
+				if not _entered_dungeon_emitted:
+					_entered_dungeon_emitted = true
+					entered_dungeon.emit(int(get_instance_id()))
 		Phase.DUNGEON:
 			if in_combat:
 				return

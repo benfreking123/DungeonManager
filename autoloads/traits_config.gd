@@ -68,6 +68,12 @@ const TRAITS := {
 		"s_delta": 1,
 		"w": 7,
 	},
+	"+10pct_speed": {
+		"label": "+10% Speed",
+		"mods": { "flat": {}, "pct": { "speed_mult": 10 } },
+		"s_delta": 1,
+		"w": 6,
+	},
 	"+1_all_stats": {
 		"label": "+1 All Stats",
 		"mods": { "flat": { "intelligence": 1, "strength": 1, "agility": 1 }, "pct": {} },

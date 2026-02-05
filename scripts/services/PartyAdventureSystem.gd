@@ -246,22 +246,21 @@ func register_adventurer(adv: Node2D, member_id: int) -> void:
 			var td: Dictionary = traits_cfg.get_trait_def(tid) if traits_cfg != null else {}
 			var pct: Dictionary = (td.get("mods", {}) as Dictionary).get("pct", {}) as Dictionary
 			for stat_key in pct.keys():
-				var percent := int(pct.get(stat_key, 0))
-				if percent == 0:
+				var percent := float(pct.get(stat_key, 0))
+				if is_zero_approx(percent):
 					continue
 				var sk := String(stat_key)
 				if not _has_property(adv, sk):
 					continue
 				var v: Variant = adv.get(sk)
-				var cur_val := 0
-				if v is int:
-					cur_val = int(v)
-				elif v is float:
-					cur_val = int(round(float(v)))
+				var is_int := (v is int)
+				var cur_val := 0.0
+				if v is int or v is float:
+					cur_val = float(v)
 				else:
 					continue
-				var new_val := int(round(float(cur_val) * (1.0 + float(percent) / 100.0)))
-				adv.set(sk, new_val)
+				var new_val := cur_val * (1.0 + percent / 100.0)
+				adv.set(sk, int(round(new_val)) if is_int else new_val)
 				if sk == "hp_max":
 					adv.set("hp", int(adv.get("hp_max")))
 		# Flat modifiers
@@ -270,21 +269,21 @@ func register_adventurer(adv: Node2D, member_id: int) -> void:
 			var td2: Dictionary = traits_cfg.get_trait_def(tid2) if traits_cfg != null else {}
 			var flat: Dictionary = (td2.get("mods", {}) as Dictionary).get("flat", {}) as Dictionary
 			for stat_key2 in flat.keys():
-				var delta := int(flat.get(stat_key2, 0))
-				if delta == 0:
+				var delta := float(flat.get(stat_key2, 0))
+				if is_zero_approx(delta):
 					continue
 				var sk2 := String(stat_key2)
 				if not _has_property(adv, sk2):
 					continue
 				var v2: Variant = adv.get(sk2)
-				var cur_val2 := 0
-				if v2 is int:
-					cur_val2 = int(v2)
-				elif v2 is float:
-					cur_val2 = int(round(float(v2)))
+				var is_int2 := (v2 is int)
+				var cur_val2 := 0.0
+				if v2 is int or v2 is float:
+					cur_val2 = float(v2)
 				else:
 					continue
-				adv.set(sk2, cur_val2 + delta)
+				var new_val2 := cur_val2 + delta
+				adv.set(sk2, int(round(new_val2)) if is_int2 else new_val2)
 				if sk2 == "hp_max":
 					adv.set("hp", int(adv.get("hp_max")))
 		# Explicitly free temporary traits config Node to avoid leak warnings in headless CI.

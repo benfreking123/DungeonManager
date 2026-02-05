@@ -6,6 +6,7 @@
 script = ExtResource("1_roomtype")
 id = "boss"
 label = "Boss"
+rarity = "epic"
 size = Vector2i(3, 3)
 power_cost = 0
 kind = "boss"

@@ -9,6 +9,8 @@ enum AbilityTrigger {
 	EnteringMonsterRoom,
 	EnteringTrapRoom,
 	EnteringBossRoom,
+	EnterDungeon,
+	CombatEnd,
 	LootGathered,
 	FullLoot,
 	WhenMonster,
@@ -32,11 +34,14 @@ enum AbilityTrigger {
 	"EnteringMonsterRoom",
 	"EnteringTrapRoom",
 	"EnteringBossRoom",
+	"EnterDungeon",
+	"CombatEnd",
 	"LootGathered",
 	"FullLoot",
 	"WhenAttack",
 	"WhenAttacked"
 ) var trigger_name: String = "WhenDamaged"
+@export var trigger_names: Array[String] = []
 @export var cooldown_s: float = 0.0 # 0=no wait; -1 = single-use/day regardless of charges
 @export var charges_per_day: int = 1
 @export var s_delta: int = 0

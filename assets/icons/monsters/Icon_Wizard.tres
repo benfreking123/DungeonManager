@@ -1,0 +1,12 @@
+[gd_resource type="AtlasTexture" load_steps=3 format=3 uid="uid://bb55kmh7bhc7h"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_5pkuw"]
+load_path = "res://.godot/imported/ChatGPT Image Feb 5, 2026, 12_54_17 PM.png-6a9438a6217c1be7e4174f7daeebd8fd.ctex"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_s64rt"]
+atlas = SubResource("CompressedTexture2D_5pkuw")
+region = Rect2(217.862, 63.002, 247.566, 239.58)
+
+[resource]
+atlas = SubResource("AtlasTexture_s64rt")
+region = Rect2(744, 352, 224, 224)

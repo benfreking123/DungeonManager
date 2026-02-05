@@ -4,6 +4,7 @@ class_name MonsterItem
 @export var id: String = ""
 @export var display_name: String = ""
 @export var icon: Texture2D
+@export_enum("common", "uncommon", "rare", "epic", "legendary") var rarity: String = "common"
 
 @export var threat_profile: ThreatProfile
 
